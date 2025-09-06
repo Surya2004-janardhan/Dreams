@@ -211,7 +211,7 @@ curl http://localhost:3000/filebase/download/base.mp4
 **Values needed:**
 
 ```
-INSTAGRAM_ACCOUNT_ID=your_instagram_business_id
+INSTAGRAM_ACCOUNT_ID=your_instagram_bus iness_id
 INSTAGRAM_ACCESS_TOKEN=your_long_lived_token
 ```
 
@@ -247,24 +247,34 @@ NOTIFICATION_EMAIL=recipient@email.com
 
 ---
 
-### 7. **Coqui TTS Server** 🗣️
+### 7. **ElevenLabs TTS API** 🗣️
 
-#### **Local TTS Setup**
+#### **ElevenLabs Setup**
 
-**Installation:**
+**Where to get:**
 
-```bash
-# Install Python TTS library
-pip install TTS
+1. Go to [ElevenLabs](https://elevenlabs.io/)
+2. Create account (free tier: 10,000 characters/month)
+3. Go to "Profile" > "API Key"
+4. **Copy your API key**
 
-# Start TTS server
-tts-server --model_name tts_models/en/ljspeech/tacotron2-DDC --port 5002
+**Get Voice IDs:**
+
+1. Go to "VoiceLab" in ElevenLabs dashboard
+2. Choose 2 different voices for Person A and Person B
+3. For each voice:
+   - Click on the voice
+   - Copy the "Voice ID" from the URL or settings
+   - Or use premade voices:
+     - Rachel: `21m00Tcm4TlvDq8ikWAM`
+     - Drew: `29vD33N1CtxCmqQRPOHJ`
+
+**Values needed:**
+
 ```
-
-**Value:**
-
-```
-COQUI_TTS_URL=http://localhost:5002
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_VOICE_ID_A=21m00Tcm4TlvDq8ikWAM
+ELEVENLABS_VOICE_ID_B=29vD33N1CtxCmqQRPOHJ
 ```
 
 ---
@@ -299,8 +309,10 @@ EMAIL_USER=your.automation@gmail.com
 EMAIL_APP_PASSWORD=abcd efgh ijkl mnop
 NOTIFICATION_EMAIL=notifications@yourdomain.com
 
-# TTS Server
-COQUI_TTS_URL=http://localhost:5002
+# ElevenLabs TTS
+ELEVENLABS_API_KEY=your_elevenlabs_api_key
+ELEVENLABS_VOICE_ID_A=21m00Tcm4TlvDq8ikWAM
+ELEVENLABS_VOICE_ID_B=29vD33N1CtxCmqQRPOHJ
 ```
 
 ---
@@ -316,7 +328,7 @@ COQUI_TTS_URL=http://localhost:5002
 - [ ] Filebase bucket created + base.mp4 uploaded
 - [ ] Instagram Business account + Graph API token
 - [ ] Gmail app password generated
-- [ ] Coqui TTS server installed
+- [ ] ElevenLabs account + API key + Voice IDs
 - [ ] All values filled in .env file
 
 ---
