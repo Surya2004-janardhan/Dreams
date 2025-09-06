@@ -383,39 +383,63 @@ const generateAudio = async (script) => {
 
   for (let i = 0; i < script.length; i++) {
     const line = script[i];
-    const voice =
+    // Use different voice IDs for Person A and Person B
+    const voiceId =
       line.speaker === "Person A"
-        ? "tts_models/en/ljspeech/tacotron2-DDC"
-        : "tts_models/en/ljspeech/glow-tts";
+        ? process.env.ELEVENLABS_VOICE_ID_A
+        : process.env.ELEVENLABS_VOICE_ID_B;
+
     const filename = `audio/line_${i}.mp3`;
 
-    // Using Coqui TTS API (assuming local installation)
-    const response = await axios.post(
-      "http://localhost:5002/api/tts",
-      {
+    try {
+      // Using ElevenLabs TTS API
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+        {
+          text: line.text,
+          model_id: "eleven_multilingual_v2", // Supports multiple languages including Telugu
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75,
+            style: 0.0,
+            use_speaker_boost: true,
+          },
+        },
+        {
+          headers: {
+            Accept: "audio/mpeg",
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+          },
+          responseType: "stream",
+        }
+      );
+
+      const writer = fs.createWriteStream(filename);
+      response.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on("finish", resolve);
+        writer.on("error", reject);
+      });
+
+      logger.info(
+        `Generated audio for line ${i} using ElevenLabs voice: ${voiceId}`
+      );
+
+      audioFiles.push({
+        line: i,
+        speaker: line.speaker,
+        file: filename,
         text: line.text,
-        voice: voice,
-        format: "mp3",
-      },
-      {
-        responseType: "stream",
-      }
-    );
-
-    const writer = fs.createWriteStream(filename);
-    response.data.pipe(writer);
-
-    await new Promise((resolve, reject) => {
-      writer.on("finish", resolve);
-      writer.on("error", reject);
-    });
-
-    audioFiles.push({
-      line: i,
-      speaker: line.speaker,
-      file: filename,
-      text: line.text,
-    });
+        voiceId: voiceId,
+      });
+    } catch (error) {
+      logger.error(`Error generating audio for line ${i}:`, error.message);
+      throw new Error(
+        `Failed to generate audio for line ${i}: ${error.message}`
+      );
+    }
   }
 
   return audioFiles;
