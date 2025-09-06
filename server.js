@@ -186,10 +186,11 @@ const executeWorkflow = async () => {
     const audioFiles = await generateAudio(script);
     currentWorkflow.results.audioFiles = audioFiles;
 
-    // Step 4: Get base video
+    // Step 4: Get base video from Filebase (existing uploaded video)
     currentWorkflow.currentStep = "video/base";
     const baseVideoUrl = await getBaseVideo();
     currentWorkflow.results.baseVideoUrl = baseVideoUrl;
+    logger.info(`Using existing base video from Filebase: base.mp4`);
 
     // Step 5: Generate images
     currentWorkflow.currentStep = "images/generate";
@@ -439,6 +440,9 @@ const getBaseVideo = async () => {
   };
 
   const url = s3.getSignedUrl("getObject", params);
+  logger.info(
+    `Retrieved base video URL from Filebase bucket: ${process.env.FILEBASE_BUCKET_NAME}/base.mp4`
+  );
   return url;
 };
 
@@ -480,6 +484,42 @@ app.get("/filebase/list", async (req, res) => {
   } catch (error) {
     logger.error("Filebase list error:", error);
     res.status(500).json({ error: "Failed to list files" });
+  }
+});
+
+// Verify base video exists in bucket
+app.get("/filebase/verify-base-video", async (req, res) => {
+  try {
+    const params = {
+      Bucket: process.env.FILEBASE_BUCKET_NAME,
+      Key: "base.mp4",
+    };
+
+    // Check if base.mp4 exists
+    await s3.headObject(params).promise();
+
+    // Get file info
+    const downloadUrl = await getFilebaseDownloadUrl("base.mp4");
+
+    res.json({
+      exists: true,
+      message: "Base video found in Filebase bucket",
+      fileName: "base.mp4",
+      bucket: process.env.FILEBASE_BUCKET_NAME,
+      downloadUrl: downloadUrl,
+    });
+  } catch (error) {
+    if (error.code === "NotFound") {
+      res.status(404).json({
+        exists: false,
+        message: "Base video (base.mp4) not found in bucket",
+        bucket: process.env.FILEBASE_BUCKET_NAME,
+        suggestion: "Upload a base.mp4 file to your Filebase bucket first",
+      });
+    } else {
+      logger.error("Base video verification error:", error);
+      res.status(500).json({ error: "Failed to verify base video" });
+    }
   }
 });
 
