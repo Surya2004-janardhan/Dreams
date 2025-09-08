@@ -1,14 +1,17 @@
-const axios = require('axios');
-require('dotenv').config();
+const axios = require("axios");
+require("dotenv").config();
 
 const testTTS = async () => {
-  const voiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel
-  const text = 'Hello, this is a test.';
-  
-  console.log('Testing ElevenLabs TTS...');
-  console.log('Voice ID:', voiceId);
-  console.log('API Key:', process.env.ELEVENLABS_API_KEY?.substring(0, 10) + '...');
-  
+  const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+  const text = "Hello, this is a test.";
+
+  console.log("Testing ElevenLabs TTS...");
+  console.log("Voice ID:", voiceId);
+  console.log(
+    "API Key:",
+    process.env.ELEVENLABS_API_KEY?.substring(0, 10) + "..."
+  );
+
   try {
     const response = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
@@ -26,19 +29,25 @@ const testTTS = async () => {
         headers: {
           "xi-api-key": process.env.ELEVENLABS_API_KEY,
           "Content-Type": "application/json",
-          "Accept": "audio/mpeg"
+          Accept: "audio/mpeg",
         },
         responseType: "arraybuffer",
       }
     );
-    
-    console.log('✓ TTS Success - Response size:', response.data.byteLength, 'bytes');
-    console.log('✓ Content-Type:', response.headers['content-type']);
-    
+
+    console.log(
+      "✓ TTS Success - Response size:",
+      response.data.byteLength,
+      "bytes"
+    );
+    console.log("✓ Content-Type:", response.headers["content-type"]);
   } catch (error) {
-    console.log('✗ TTS Error:', error.response?.status);
-    console.log('✗ Error message:', error.response?.data?.detail?.message || error.message);
-    console.log('✗ Full error data:', error.response?.data);
+    console.log("✗ TTS Error:", error.response?.status);
+    console.log(
+      "✗ Error message:",
+      error.response?.data?.detail?.message || error.message
+    );
+    console.log("✗ Full error data:", error.response?.data);
   }
 };
 
