@@ -3,7 +3,7 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const { google } = require("googleapis");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const say = require("say");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const multer = require("multer");
@@ -562,15 +562,9 @@ app.post("/audio/generate", async (req, res) => {
 });
 
 const generateAudio = async (script) => {
-  logger.info(`→ Generating audio for ${script.length} lines using Free TTS`);
+  logger.info(`→ Generating audio for ${script.length} lines using System TTS`);
   
   const audioFiles = [];
-
-  // Voice configurations for different speakers
-  const voiceConfigs = {
-    'Person A': { voice: 'US English Male', rate: 0.9, pitch: 1 },
-    'Person B': { voice: 'US English Female', rate: 1.0, pitch: 1.2 }
-  };
 
   for (let i = 0; i < script.length; i++) {
     const line = script[i];
@@ -583,47 +577,53 @@ const generateAudio = async (script) => {
       continue;
     }
 
-    const voiceConfig = voiceConfigs[line.speaker] || voiceConfigs['Person A'];
-    const filename = `audio/line_${i}.mp3`;
+    const filename = `audio/line_${i}.wav`;
+    const mp3filename = `audio/line_${i}.mp3`;
 
     try {
-      // Use ResponsiveVoice free TTS API
-      const ttsUrl = `https://responsivevoice.org/responsivevoice/getvoice.php`;
-      const params = new URLSearchParams({
-        t: cleanText,
-        tl: 'en',
-        sv: 'g3',
-        vn: 'US English Female',
-        pitch: voiceConfig.pitch,
-        rate: voiceConfig.rate,
-        vol: 1
-      });
-
       logger.info(`  → Generating TTS for line ${i}: ${line.speaker}`);
 
-      const response = await axios.get(`${ttsUrl}?${params}`, {
-        responseType: 'stream',
-        timeout: 30000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+      // Use system TTS to generate audio
+      await new Promise((resolve, reject) => {
+        say.export(cleanText, null, 0.75, filename, (err) => {
+          if (err) {
+            logger.warn(`System TTS failed for line ${i}:`, err.message);
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
       });
 
-      // Save the audio file
-      const writer = fs.createWriteStream(filename);
-      response.data.pipe(writer);
-
+      // Convert WAV to MP3 using ffmpeg
       await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
+        ffmpeg(filename)
+          .toFormat('mp3')
+          .audioCodec('mp3')
+          .audioBitrate(128)
+          .output(mp3filename)
+          .on('end', () => {
+            // Remove the temporary WAV file
+            try {
+              fs.unlinkSync(filename);
+            } catch (e) {
+              logger.warn(`Could not delete temp file ${filename}`);
+            }
+            resolve();
+          })
+          .on('error', (err) => {
+            logger.error(`FFmpeg conversion failed for line ${i}:`, err.message);
+            reject(err);
+          })
+          .run();
       });
 
       audioFiles.push({
         line: i,
         speaker: line.speaker,
-        file: filename,
+        file: mp3filename,
         text: cleanText,
-        voice: voiceConfig.voice,
+        voice: 'System TTS',
       });
 
       logger.info(`  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(0, 30)}..."`);
@@ -642,7 +642,7 @@ const generateAudio = async (script) => {
             .inputFormat('lavfi')
             .duration(duration)
             .audioCodec('mp3')
-            .output(filename)
+            .output(mp3filename)
             .on('end', () => {
               logger.info(`  ✓ Silent placeholder created for line ${i} (${duration}s)`);
               resolve();
@@ -654,7 +654,7 @@ const generateAudio = async (script) => {
         audioFiles.push({
           line: i,
           speaker: line.speaker,
-          file: filename,
+          file: mp3filename,
           text: cleanText,
           voice: 'Silent Placeholder',
         });
@@ -670,7 +670,7 @@ const generateAudio = async (script) => {
     throw new Error('No audio files were generated successfully');
   }
 
-  logger.info(`✓ Audio generation completed - ${audioFiles.length}/${script.length} files`);
+  logger.info(`✓ System TTS audio generation completed - ${audioFiles.length}/${script.length} files`);
   return audioFiles;
 };
 
