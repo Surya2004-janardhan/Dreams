@@ -21,7 +21,12 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const FormData = require("form-data");
 const { v4: uuidv4 } = require("uuid");
 const winston = require("winston");
+const mime = require("mime");
 require("dotenv").config();
+// ADD THESE LINES AT THE TOP WITH YOUR OTHER IMPORTS
+const { GoogleGenAI } = require("@google/genai");
+const { VertexAI } = require("@google-cloud/vertexai");
+const wav = require("wav");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -419,6 +424,7 @@ const getNextTask = async () => {
   });
 
   const rows = response.data.values;
+  // console.log("rows: ", rows);
   if (!rows || rows.length <= 1) return null;
 
   for (let i = 1; i < rows.length; i++) {
@@ -563,273 +569,299 @@ app.post("/audio/generate", async (req, res) => {
 });
 
 // Helper function to create silent audio placeholder
-const createSilentAudio = async (filename, durationSeconds = 2) => {
-  return new Promise((resolve, reject) => {
-    // Create a simple silent text that system TTS can handle
-    const silentText = "..."; // System will generate very brief audio for this
+// const createSilentAudio = async (filename, durationSeconds = 2) => {
+//   return new Promise((resolve, reject) => {
+//     // Create a simple silent text that system TTS can handle
+//     const silentText = "..."; // System will generate very brief audio for this
 
-    say.export(silentText, null, 1.0, filename, (err) => {
-      if (err) {
-        // If even this fails, create an empty file
-        fs.writeFileSync(filename, Buffer.alloc(1024)); // Minimal empty audio buffer
-      }
-      resolve(filename);
-    });
+//     say.export(silentText, null, 1.0, filename, (err) => {
+//       if (err) {
+//         // If even this fails, create an empty file
+//         fs.writeFileSync(filename, Buffer.alloc(1024)); // Minimal empty audio buffer
+//       }
+//       resolve(filename);
+//     });
+//   });
+// };
+
+// +++ REPLACEMENT FOR AUDIO GENERATION +++
+
+// Helper function to save raw PCM audio data to a WAV file
+// const saveWaveFile = (
+//   filename,
+//   pcmData,
+//   channels = 1,
+//   rate = 24000,
+//   sampleWidth = 2
+// ) => {
+//   return new Promise((resolve, reject) => {
+//     const writer = new wav.FileWriter(filename, {
+//       channels,
+//       sampleRate: rate,
+//       bitDepth: sampleWidth * 8,
+//     });
+//     writer.on("finish", resolve).on("error", reject);
+//     writer.write(pcmData);
+//     writer.end();
+//   });
+// };
+
+// +++ CORRECTED AUDIO GENERATION FUNCTION +++
+// +++ FINAL, CORRECTED AUDIO GENERATION FUNCTION +++
+
+// Helper functions for Google AI Studio TTS and WAV processing
+function saveBinaryFile(fileName, content) {
+  fs.writeFile(fileName, content, (err) => {
+    if (err) {
+      logger.error(`Error writing file ${fileName}:`, err);
+      return;
+    }
+    logger.info(`File ${fileName} saved to file system.`);
   });
-};
+}
 
-// Helper function to combine audio files into single conversation
-const combineAudioFiles = async (audioFiles, outputFile) => {
-  logger.info(
-    `→ Combining ${audioFiles.length} audio segments into conversation`
-  );
+function convertToWav(rawData, mimeType) {
+  const options = parseMimeType(mimeType);
+  const rawBuffer = Buffer.from(rawData, "base64");
+  const wavHeader = createWavHeader(rawBuffer.length, options);
+  return Buffer.concat([wavHeader, rawBuffer]);
+}
 
-  try {
-    // For Windows, we'll create a simple concatenation approach
-    // Since we can't use complex audio tools, we'll create one combined text
-    const conversationText = audioFiles
-      .map((file, index) => {
-        const pause = index > 0 ? "... " : ""; // Brief pause between speakers
-        return `${pause}${file.speaker} says: ${file.text}`;
-      })
-      .join(". ");
+function parseMimeType(mimeType) {
+  const [fileType, ...params] = mimeType.split(";").map((s) => s.trim());
+  const [_, format] = fileType.split("/");
 
-    // Generate the full conversation as one TTS file
-    await new Promise((resolve, reject) => {
-      say.export(conversationText, null, 0.95, outputFile, (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
-    });
+  const options = {
+    numChannels: 1,
+    sampleRate: 24000,
+    bitsPerSample: 16,
+  };
 
-    logger.info(`✓ Combined conversation audio: ${outputFile}`);
-  } catch (error) {
-    logger.error("Audio combination failed:", error.message);
-
-    // Fallback: copy the first valid audio file
-    const firstValidFile = audioFiles.find(
-      (f) => !f.isSilent && fs.existsSync(f.file)
-    );
-    if (firstValidFile) {
-      fs.copyFileSync(firstValidFile.file, outputFile);
-      logger.info(`✓ Used first valid audio as fallback: ${outputFile}`);
-    } else {
-      throw new Error("No valid audio files to combine");
+  if (format && format.startsWith("L")) {
+    const bits = parseInt(format.slice(1), 10);
+    if (!isNaN(bits)) {
+      options.bitsPerSample = bits;
     }
   }
+
+  for (const param of params) {
+    const [key, value] = param.split("=").map((s) => s.trim());
+    if (key === "rate") {
+      options.sampleRate = parseInt(value, 10);
+    }
+  }
+
+  return options;
+}
+
+function createWavHeader(dataLength, options) {
+  const { numChannels, sampleRate, bitsPerSample } = options;
+
+  // http://soundfile.sapp.org/doc/WaveFormat
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
+  const blockAlign = (numChannels * bitsPerSample) / 8;
+  const buffer = Buffer.alloc(44);
+
+  buffer.write("RIFF", 0); // ChunkID
+  buffer.writeUInt32LE(36 + dataLength, 4); // ChunkSize
+  buffer.write("WAVE", 8); // Format
+  buffer.write("fmt ", 12); // Subchunk1ID
+  buffer.writeUInt32LE(16, 16); // Subchunk1Size (PCM)
+  buffer.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
+  buffer.writeUInt16LE(numChannels, 22); // NumChannels
+  buffer.writeUInt32LE(sampleRate, 24); // SampleRate
+  buffer.writeUInt32LE(byteRate, 28); // ByteRate
+  buffer.writeUInt16LE(blockAlign, 32); // BlockAlign
+  buffer.writeUInt16LE(bitsPerSample, 34); // BitsPerSample
+  buffer.write("data", 36); // Subchunk2ID
+  buffer.writeUInt32LE(dataLength, 40); // Subchunk2Size
+
+  return buffer;
+}
+
+// Helper function to save raw PCM audio data to a WAV file
+const saveWaveFile = (
+  filename,
+  pcmData,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
+) => {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.FileWriter(filename, {
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+    writer.on("finish", resolve).on("error", reject);
+    writer.write(pcmData);
+    writer.end();
+  });
 };
 
 const generateAudio = async (script) => {
   logger.info(
-    `→ Generating single conversation audio file for ${script.length} lines`
+    `→ Generating audio with Google AI Studio TTS ONLY for ${script.length} lines`
   );
 
-  // Ensure directories exist
-  if (!fs.existsSync("temp")) fs.mkdirSync("temp");
   if (!fs.existsSync("audio")) fs.mkdirSync("audio");
 
-  const tempAudioFiles = [];
+  // Check for required API key with clear error message
+  const apiKey =
+    process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    const errorMsg =
+      "❌ GOOGLE_AI_STUDIO_API_KEY or GEMINI_API_KEY is required for TTS generation. Please set this environment variable with your Google AI Studio API key.";
+    logger.error(errorMsg);
+    throw new Error(errorMsg);
+  }
+
+  logger.info(
+    "✅ Google AI Studio API key found, proceeding with TTS generation..."
+  );
 
   try {
-    // Generate individual TTS files first
-    for (let i = 0; i < script.length; i++) {
-      const line = script[i];
-
-      // Clean the text
-      const cleanText = cleanLLMData.cleanText(line.text);
-
-      if (!cleanText || cleanText.length < 2) {
-        logger.warn(`Skipping empty/short line ${i}: "${line.text}"`);
-        continue;
-      }
-
-      const tempFilename = `temp/temp_line_${i}.wav`;
-
-      try {
-        logger.info(`  → Generating TTS for line ${i}: ${line.speaker}`);
-
-        // Use system TTS to generate individual line
-        await new Promise((resolve, reject) => {
-          // Use different voice speeds for Person A and Person B
-          const speed = line.speaker === "Person A" ? 0.9 : 1.0;
-
-          say.export(cleanText, null, speed, tempFilename, (err) => {
-            if (err) {
-              logger.warn(`System TTS failed for line ${i}:`, err.message);
-              reject(err);
-            } else {
-              resolve();
-            }
-          });
-        });
-
-        // Verify file was created
-        if (!fs.existsSync(tempFilename)) {
-          throw new Error("TTS file was not created");
-        }
-
-        tempAudioFiles.push({
-          index: i,
-          speaker: line.speaker,
-          file: tempFilename,
-          text: cleanText,
-          duration: Math.max(2, cleanText.length * 0.08), // Estimate duration
-        });
-
-        logger.info(
-          `  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(0, 30)}..."`
-        );
-      } catch (error) {
-        logger.warn(
-          `TTS failed for line ${i}, creating silent placeholder:`,
-          error.message
-        );
-
-        // Create silent placeholder
-        const duration = Math.max(2, Math.min(6, cleanText.length * 0.06));
-        const silentFile = await createSilentAudio(tempFilename, duration);
-
-        tempAudioFiles.push({
-          index: i,
-          speaker: line.speaker,
-          file: tempFilename,
-          text: cleanText,
-          duration: duration,
-          isSilent: true,
-        });
-      }
-    }
-
-    if (tempAudioFiles.length === 0) {
-      throw new Error("No audio files were generated successfully");
-    }
-
-    // Combine all audio files into a single conversation
-    const finalAudioFile = "audio/conversation.wav";
-    logger.info(
-      `→ Combining ${tempAudioFiles.length} audio files into single conversation`
+    return await generateAudioWithGoogleAIStudio(script);
+  } catch (error) {
+    logger.error("❌ Google AI Studio TTS generation failed:", error.message);
+    throw new Error(
+      `TTS generation failed: ${error.message}. Make sure your GOOGLE_AI_STUDIO_API_KEY is valid and has access to the TTS preview model.`
     );
+  }
+};
 
-    await combineAudioFiles(tempAudioFiles, finalAudioFile);
+// Google AI Studio TTS implementation - SINGLE REQUEST ONLY
+const generateAudioWithGoogleAIStudio = async (script) => {
+  logger.info(
+    `→ Generating SINGLE conversation audio with Google AI Studio TTS`
+  );
 
-    // Clean up temp files
-    tempAudioFiles.forEach((file) => {
-      try {
-        if (fs.existsSync(file.file)) {
-          fs.unlinkSync(file.file);
-        }
-      } catch (e) {
-        logger.warn(`Could not delete temp file: ${file.file}`);
-      }
+  try {
+    // Initialize Google AI Studio client
+    const apiKey =
+      process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY;
+    const ai = new GoogleGenAI({
+      apiKey: apiKey,
     });
 
-    // Return single audio file
-    const audioFiles = [
+    // Create the ENTIRE conversation as ONE script (mapping Person A/B to Speaker 1/2)
+    const fullConversation = script
+      .map((line) => {
+        const speaker = line.speaker === "Person A" ? "Speaker 1" : "Speaker 2";
+        return `${speaker}: ${cleanLLMData.cleanText(line.text)}`;
+      })
+      .join("\n");
+
+    logger.info(
+      "→ Calling Google AI Studio TTS API with SINGLE conversation..."
+    );
+    logger.info(
+      `→ Full conversation (${
+        fullConversation.length
+      } chars): ${fullConversation.substring(0, 150)}...`
+    );
+
+    // Configuration for the TTS model
+    const config = {
+      temperature: 1,
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        multiSpeakerVoiceConfig: {
+          speakerVoiceConfigs: [
+            {
+              speaker: "Speaker 1", // Person A
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Zephyr", // Clear, informative voice
+                },
+              },
+            },
+            {
+              speaker: "Speaker 2", // Person B
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Puck", // Upbeat, friendly voice
+                },
+              },
+            },
+          ],
+        },
+      },
+    };
+
+    const model = "gemini-2.5-pro-preview-tts";
+    const contents = [
       {
-        line: "all",
-        speaker: "Conversation",
-        file: finalAudioFile,
-        text: script.map((line) => line.text).join(" "),
-        voice: "System TTS Conversation",
-        totalDuration: tempAudioFiles.reduce((sum, f) => sum + f.duration, 0),
+        role: "user",
+        parts: [
+          {
+            text: `Read aloud as a natural conversation between two speakers:\n${fullConversation}`,
+          },
+        ],
       },
     ];
 
-    logger.info(`✓ Single conversation audio generated: ${finalAudioFile}`);
-    return audioFiles;
+    // Make SINGLE API call - no streaming to avoid rate limits
+    logger.info("→ Making SINGLE API request to avoid rate limits...");
+    const response = await ai.models.generateContent({
+      model,
+      config,
+      contents,
+    });
+
+    logger.info("→ Processing single response from Google AI Studio...");
+
+    // Process the single response
+    if (response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+      const inlineData =
+        response.response.candidates[0].content.parts[0].inlineData;
+      let fileExtension = mime.getExtension(inlineData.mimeType || "");
+      let buffer = Buffer.from(inlineData.data || "", "base64");
+
+      if (!fileExtension) {
+        fileExtension = "wav";
+        buffer = convertToWav(
+          inlineData.data || "",
+          inlineData.mimeType || "audio/L16;rate=24000"
+        );
+      }
+
+      const fullFileName = `audio/conversation.${fileExtension}`;
+
+      // Save the SINGLE conversation file
+      fs.writeFileSync(fullFileName, buffer);
+
+      logger.info(
+        `✓ SINGLE conversation audio saved: ${fullFileName} (${buffer.length} bytes)`
+      );
+
+      // Return single audio file result
+      return [
+        {
+          line: "all",
+          speaker: "Multi-speaker Conversation",
+          file: fullFileName,
+          text: script.map((line) => line.text).join(" "),
+          voice: "Google AI Studio TTS (Zephyr & Puck)",
+        },
+      ];
+    } else {
+      logger.error("No audio data found in API response");
+      throw new Error("Google AI Studio API did not return audio data");
+    }
   } catch (error) {
-    logger.error("Audio generation failed:", error.message);
+    if (error.message && error.message.includes("429")) {
+      logger.error(
+        "❌ Rate limit exceeded. Please wait before making another request."
+      );
+      throw new Error(
+        "Rate limit exceeded for Google AI Studio TTS. Please try again later."
+      );
+    }
+    logger.error("Google AI Studio TTS generation failed:", error);
     throw error;
   }
 };
-
-// Fallback function for individual audio files when Google AI Studio fails
-const generateAudioFallback = async (script) => {
-  logger.info(
-    `→ Fallback: Generating individual audio files for ${script.length} lines`
-  );
-
-  const audioFiles = [];
-
-  for (let i = 0; i < script.length; i++) {
-    const line = script[i];
-
-    // Clean the text and optimize for Telugu-English mix
-    let cleanText = cleanLLMData.cleanText(line.text);
-
-    if (!cleanText || cleanText.length < 2) {
-      logger.warn(`Skipping empty/short line ${i}: "${line.text}"`);
-      continue;
-    }
-
-    const filename = `audio/line_${i}.wav`;
-
-    try {
-      // Create a simple silent audio file as placeholder
-      const duration = Math.max(2, Math.min(6, cleanText.length * 0.06));
-      const sampleRate = 44100;
-      const channels = 2;
-      const bytesPerSample = 2;
-      const totalSamples = duration * sampleRate * channels;
-
-      // Create WAV header
-      const buffer = Buffer.alloc(44 + totalSamples * bytesPerSample);
-
-      // WAV header
-      buffer.write("RIFF", 0);
-      buffer.writeUInt32LE(36 + totalSamples * bytesPerSample, 4);
-      buffer.write("WAVE", 8);
-      buffer.write("fmt ", 12);
-      buffer.writeUInt32LE(16, 16);
-      buffer.writeUInt16LE(1, 20);
-      buffer.writeUInt16LE(channels, 22);
-      buffer.writeUInt32LE(sampleRate, 24);
-      buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
-      buffer.writeUInt16LE(channels * bytesPerSample, 32);
-      buffer.writeUInt16LE(bytesPerSample * 8, 34);
-      buffer.write("data", 36);
-      buffer.writeUInt32LE(totalSamples * bytesPerSample, 40);
-
-      // Fill with silence (zeros)
-      for (let j = 44; j < buffer.length; j++) {
-        buffer[j] = 0;
-      }
-
-      fs.writeFileSync(filename, buffer);
-
-      audioFiles.push({
-        line: i,
-        speaker: line.speaker,
-        file: filename,
-        text: cleanText,
-        voice: "Fallback Audio",
-      });
-
-      logger.info(
-        `  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(
-          0,
-          30
-        )}..." (${duration}s)`
-      );
-    } catch (error) {
-      logger.error(`Failed to create audio for line ${i}:`, error.message);
-      continue;
-    }
-  }
-
-  if (audioFiles.length === 0) {
-    throw new Error("No audio files were generated successfully");
-  }
-
-  logger.info(
-    `✓ Fallback audio generation completed - ${audioFiles.length}/${script.length} files`
-  );
-  return audioFiles;
-};
-
 // 5. GET /video/base - Get base background video from Cloudflare R2
 app.get("/video/base", async (req, res) => {
   try {
@@ -1103,48 +1135,110 @@ app.post("/images/generate", async (req, res) => {
   }
 });
 
-const generateImages = async (script) => {
-  const images = [];
+// +++ REPLACEMENT FOR IMAGE GENERATION +++
 
-  // Generate 3-4 key images based on script content
+const generateImages = async (script) => {
+  logger.info("→ Generating images with Google Vertex AI (Imagen 2)");
+
+  // Uses the NEW credentials specifically for AI services
+  const newCredentials = JSON.parse(
+    process.env.NEW_GOOGLE_CREDENTIALS_FOR_VERTEX
+  );
+  const vertex_ai = new VertexAI({
+    project: newCredentials.project_id,
+    location: "us-central1",
+    credentials: newCredentials,
+  });
+
+  const generativeModel = vertex_ai.getGenerativeModel({
+    model: "imagegeneration@006", // This is Imagen 2
+  });
+
+  const images = [];
   const keyPoints = script.slice(0, 4); // Take first 4 lines for image generation
 
   for (let i = 0; i < keyPoints.length; i++) {
-    const prompt = `Banking concept illustration: ${keyPoints[i].text}. Clean, professional, modern design.`;
+    const lineText = keyPoints[i].text;
+    const prompt = `A professional vector illustration for a financial education video, representing the concept of: "${lineText}". Style: Clean, minimalist, flat design with a corporate color palette (blues, greys, greens).`;
 
-    const response = await axios.post(
-      "https://api.stability.ai/v1/generation/stable-diffusion-v1-6/text-to-image",
-      {
-        text_prompts: [{ text: prompt }],
-        cfg_scale: 7,
-        height: 512,
-        width: 512,
-        steps: 20,
-        samples: 1,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        responseType: "json",
+    try {
+      const resp = await generativeModel.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      });
+      const [imageResponse] = resp.response.candidates;
+      if (!imageResponse.content?.parts[0]?.fileData) {
+        throw new Error("API did not return image data.");
       }
-    );
 
-    const imageData = response.data.artifacts[0].base64;
-    const filename = `images/image_${i}.png`;
+      // Extract the base64 data from the response
+      const base64Data =
+        imageResponse.content.parts[0].fileData.fileUri.replace(
+          /^data:image\/png;base64,/,
+          ""
+        );
+      const filename = path.join("images", `image_${i}.png`);
 
-    fs.writeFileSync(filename, imageData, "base64");
+      fs.writeFileSync(filename, base64Data, "base64");
 
-    images.push({
-      index: i,
-      filename,
-      prompt: prompt,
-    });
+      images.push({
+        index: i,
+        filename,
+        prompt: prompt,
+      });
+      logger.info(`  ✓ Image ${i} generated successfully.`);
+    } catch (error) {
+      logger.error(`  ✗ Failed to generate image ${i}:`, error.message);
+    }
   }
 
+  if (images.length === 0) {
+    throw new Error("No images could be generated by Vertex AI.");
+  }
   return images;
 };
+
+// const generateImages = async (script) => {
+//   const images = [];
+
+//   // Generate 3-4 key images based on script content
+//   const keyPoints = script.slice(0, 4); // Take first 4 lines for image generation
+
+//   for (let i = 0; i < keyPoints.length; i++) {
+//     const prompt = `Banking concept illustration: ${keyPoints[i].text}. Clean, professional, modern design.`;
+
+//     const response = await axios.post(
+//       "https://api.stability.ai/v1/generation/stable-diffusion-v1-6/text-to-image",
+//       {
+//         text_prompts: [{ text: prompt }],
+//         cfg_scale: 7,
+//         height: 512,
+//         width: 512,
+//         steps: 20,
+//         samples: 1,
+//       },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
+//           "Content-Type": "application/json",
+//         },
+//         responseType: "json",
+//       }
+//     );
+
+//     const imageData = response.data.artifacts[0].base64;
+//     const filename = `images/image_${i}.png`;
+
+//     fs.writeFileSync(filename, imageData, "base64");
+
+//     images.push({
+//       index: i,
+//       filename,
+//       prompt: prompt,
+//     });
+//   }
+
+//   return images;
+// };
 
 // 7. POST /video/assemble - Create final video with ffmpeg
 app.post("/video/assemble", async (req, res) => {
@@ -1658,32 +1752,46 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: "Internal server error" });
 });
 
-// Test endpoint for Google AI Studio Multi-speaker TTS
-app.post("/test/google-tts", async (req, res) => {
+// Test endpoint for Google AI Studio TTS
+app.post("/test/google-ai-studio-tts", async (req, res) => {
   try {
+    logger.info("🧪 Testing Google AI Studio TTS endpoint");
+
     const testScript = [
       {
         speaker: "Person A",
-        text: "Hello, Google AI Studio TTS test karna hai",
+        text: "Hello! Let's test Google AI Studio's multi-speaker text-to-speech feature.",
       },
       {
         speaker: "Person B",
-        text: "Theek hai, multi-speaker feature try karte hain",
+        text: "That sounds great! This should create natural-sounding conversation audio with different voices.",
+      },
+      {
+        speaker: "Person A",
+        text: "Perfect! If this works, we'll have high-quality TTS for our content automation.",
       },
     ];
 
-    const audioFiles = await generateAudio(testScript);
+    const audioFiles = await generateAudioWithGoogleAIStudio(testScript);
+
     res.json({
       success: true,
-      message: "Google AI Studio TTS test completed",
+      message: "✅ Google AI Studio TTS test completed successfully!",
       audioFiles: audioFiles,
+      apiUsed: "Google AI Studio TTS",
+      model: "gemini-2.5-flash-preview-tts",
+      voices: ["Kore (Person A)", "Puck (Person B)"],
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Google TTS test error:", error);
+    logger.error("❌ Google AI Studio TTS test failed:", error);
     res.status(500).json({
       success: false,
-      error: "Google TTS test failed",
+      error: "Google AI Studio TTS test failed",
       details: error.message,
+      suggestion:
+        "Make sure GOOGLE_AI_STUDIO_API_KEY is set in environment variables",
+      timestamp: new Date().toISOString(),
     });
   }
 });
