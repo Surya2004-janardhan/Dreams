@@ -10,7 +10,6 @@ const nodemailer = require("nodemailer");
 const AWS = require("aws-sdk");
 const FormData = require("form-data");
 const { v4: uuidv4 } = require("uuid");
-const cron = require("cron");
 const winston = require("winston");
 require("dotenv").config();
 
@@ -127,7 +126,7 @@ let currentWorkflow = {
   results: {},
 };
 
-// 1. POST /workflow/run - Entry point triggered by cron
+// 1. POST /workflow/run - Entry point for manual workflow execution
 app.post("/workflow/run", async (req, res) => {
   try {
     logger.info("Starting workflow execution");
@@ -1167,22 +1166,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Set up cron job to run twice daily
-const cronJob = new cron.CronJob(
-  "0 8,20 * * *",
-  async () => {
-    logger.info("Cron job triggered - starting workflow");
-    try {
-      await axios.post(`http://localhost:${PORT}/workflow/run`);
-    } catch (error) {
-      logger.error("Cron job error:", error);
-    }
-  },
-  null,
-  true,
-  "Asia/Kolkata"
-);
-
 // Error handling middleware
 app.use((error, req, res, next) => {
   logger.error("Unhandled error:", error);
@@ -1192,8 +1175,7 @@ app.use((error, req, res, next) => {
 // Start server
 app.listen(PORT, () => {
   logger.info(`🚀 AI Content Automation Server running on port ${PORT}`);
-  logger.info(`📅 Cron job scheduled to run at 8:00 AM and 8:00 PM daily`);
-  logger.info(`🔍 Health check available at: http://localhost:${PORT}/health`);
+  logger.info(` Health check available at: http://localhost:${PORT}/health`);
   logger.info(
     `📊 Workflow status available at: http://localhost:${PORT}/workflow/status`
   );
