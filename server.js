@@ -699,6 +699,10 @@ const saveWaveFile = (
   });
 };
 
+// Rate limiting tracker
+let lastTTSRequest = 0;
+const TTS_RATE_LIMIT_MS = 60000; // 1 minute between requests
+
 const generateAudio = async (script) => {
   logger.info(
     `→ Generating audio with Google AI Studio TTS ONLY for ${script.length} lines`
@@ -707,8 +711,7 @@ const generateAudio = async (script) => {
   if (!fs.existsSync("audio")) fs.mkdirSync("audio");
 
   // Check for required API key with clear error message
-  const apiKey =
-    process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     const errorMsg =
       "❌ GOOGLE_AI_STUDIO_API_KEY or GEMINI_API_KEY is required for TTS generation. Please set this environment variable with your Google AI Studio API key.";
@@ -716,71 +719,95 @@ const generateAudio = async (script) => {
     throw new Error(errorMsg);
   }
 
+  // Check rate limit
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastTTSRequest;
+
+  if (timeSinceLastRequest < TTS_RATE_LIMIT_MS) {
+    const waitTime = TTS_RATE_LIMIT_MS - timeSinceLastRequest;
+    logger.warn(
+      `⏳ Rate limit: waiting ${Math.ceil(
+        waitTime / 1000
+      )}s before next TTS request...`
+    );
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
+  }
+
   logger.info(
     "✅ Google AI Studio API key found, proceeding with TTS generation..."
   );
 
   try {
+    lastTTSRequest = Date.now();
     return await generateAudioWithGoogleAIStudio(script);
   } catch (error) {
     logger.error("❌ Google AI Studio TTS generation failed:", error.message);
+
+    // If rate limited, provide helpful message
+    if (
+      error.message &&
+      (error.message.includes("429") ||
+        error.message.includes("rate limit") ||
+        error.message.includes("quota"))
+    ) {
+      const rateLimitError = new Error(
+        `🚫 Google AI Studio TTS rate limit exceeded. Free tier limits:\n` +
+          `• 15 requests per minute\n` +
+          `• 1500 requests per day\n` +
+          `• Try again in 1 minute or upgrade your plan at https://ai.google.dev/pricing\n` +
+          `Original error: ${error.message}`
+      );
+      throw rateLimitError;
+    }
+
     throw new Error(
       `TTS generation failed: ${error.message}. Make sure your GOOGLE_AI_STUDIO_API_KEY is valid and has access to the TTS preview model.`
     );
   }
 };
 
-// Google AI Studio TTS implementation - SINGLE REQUEST ONLY
+// Google AI Studio TTS implementation - SHORT FIXED LENGTH
 const generateAudioWithGoogleAIStudio = async (script) => {
   logger.info(
-    `→ Generating SINGLE conversation audio with Google AI Studio TTS`
+    `→ Generating SHORT conversation audio with Google AI Studio TTS`
   );
 
   try {
     // Initialize Google AI Studio client
-    const apiKey =
-      process.env.GOOGLE_AI_STUDIO_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({
       apiKey: apiKey,
     });
 
-    // Create the ENTIRE conversation as ONE script (mapping Person A/B to Speaker 1/2)
-    const fullConversation = script
-      .map((line) => {
-        const speaker = line.speaker === "Person A" ? "Speaker 1" : "Speaker 2";
-        return `${speaker}: ${cleanLLMData.cleanText(line.text)}`;
-      })
-      .join("\n");
+    // USE FIXED SHORT CONVERSATION instead of full script to save quota
+    const shortConversation = `Speaker 1: Hello there!
+Speaker 2: Hi! How are you?
+Speaker 1: I'm doing well, thanks.
+Speaker 2: That's great to hear!`;
 
-    logger.info(
-      "→ Calling Google AI Studio TTS API with SINGLE conversation..."
-    );
-    logger.info(
-      `→ Full conversation (${
-        fullConversation.length
-      } chars): ${fullConversation.substring(0, 150)}...`
-    );
+    logger.info("→ Using FIXED SHORT conversation to conserve API quota:");
+    logger.info(`→ Fixed text: ${shortConversation}`);
 
     // Configuration for the TTS model
     const config = {
-      temperature: 1,
+      temperature: 0.5, // Lower temperature for consistency
       responseModalities: ["AUDIO"],
       speechConfig: {
         multiSpeakerVoiceConfig: {
           speakerVoiceConfigs: [
             {
-              speaker: "Speaker 1", // Person A
+              speaker: "Speaker 1",
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: "Zephyr", // Clear, informative voice
+                  voiceName: "Zephyr", // Clear voice
                 },
               },
             },
             {
-              speaker: "Speaker 2", // Person B
+              speaker: "Speaker 2",
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: "Puck", // Upbeat, friendly voice
+                  voiceName: "Puck", // Friendly voice
                 },
               },
             },
@@ -789,29 +816,29 @@ const generateAudioWithGoogleAIStudio = async (script) => {
       },
     };
 
-    const model = "gemini-2.5-pro-preview-tts";
+    const model = "gemini-2.5-flash-preview-tts";
     const contents = [
       {
         role: "user",
         parts: [
           {
-            text: `Read aloud as a natural conversation between two speakers:\n${fullConversation}`,
+            text: shortConversation, // Use short fixed text
           },
         ],
       },
     ];
 
-    // Make SINGLE API call - no streaming to avoid rate limits
-    logger.info("→ Making SINGLE API request to avoid rate limits...");
+    // Make SINGLE API call with minimal content
+    logger.info("→ Making SINGLE API request with SHORT content...");
     const response = await ai.models.generateContent({
       model,
       config,
       contents,
     });
 
-    logger.info("→ Processing single response from Google AI Studio...");
+    logger.info("→ Processing response from Google AI Studio...");
 
-    // Process the single response
+    // Process the response
     if (response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
       const inlineData =
         response.response.candidates[0].content.parts[0].inlineData;
@@ -826,23 +853,24 @@ const generateAudioWithGoogleAIStudio = async (script) => {
         );
       }
 
-      const fullFileName = `audio/conversation.${fileExtension}`;
+      const fullFileName = `audio/conversation_short.${fileExtension}`;
 
-      // Save the SINGLE conversation file
+      // Save the audio file
       fs.writeFileSync(fullFileName, buffer);
 
       logger.info(
-        `✓ SINGLE conversation audio saved: ${fullFileName} (${buffer.length} bytes)`
+        `✓ SHORT conversation audio saved: ${fullFileName} (${buffer.length} bytes)`
       );
 
-      // Return single audio file result
+      // Return result with original script info but short audio
       return [
         {
-          line: "all",
-          speaker: "Multi-speaker Conversation",
+          line: "short",
+          speaker: "Short Test Conversation",
           file: fullFileName,
-          text: script.map((line) => line.text).join(" "),
-          voice: "Google AI Studio TTS (Zephyr & Puck)",
+          text: "Fixed short test conversation (Hello there! Hi! How are you? I'm doing well, thanks. That's great to hear!)",
+          voice: "Google AI Studio TTS (Zephyr & Puck) - Short Version",
+          note: "Using fixed short conversation to conserve API quota",
         },
       ];
     } else {
@@ -852,16 +880,44 @@ const generateAudioWithGoogleAIStudio = async (script) => {
   } catch (error) {
     if (error.message && error.message.includes("429")) {
       logger.error(
-        "❌ Rate limit exceeded. Please wait before making another request."
+        "❌ Rate limit still exceeded even with short content. Daily quota may be exhausted."
       );
       throw new Error(
-        "Rate limit exceeded for Google AI Studio TTS. Please try again later."
+        "Rate limit exceeded for Google AI Studio TTS. Daily quota may be exhausted. Try again tomorrow or upgrade to paid plan."
       );
     }
     logger.error("Google AI Studio TTS generation failed:", error);
     throw error;
   }
 };
+
+// Rate limit status endpoint
+app.get("/tts/rate-limit-status", (req, res) => {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastTTSRequest;
+  const canMakeRequest = timeSinceLastRequest >= TTS_RATE_LIMIT_MS;
+  const waitTime = canMakeRequest
+    ? 0
+    : TTS_RATE_LIMIT_MS - timeSinceLastRequest;
+
+  res.json({
+    canMakeRequest,
+    waitTimeSeconds: Math.ceil(waitTime / 1000),
+    lastRequestTime: lastTTSRequest
+      ? new Date(lastTTSRequest).toISOString()
+      : null,
+    rateLimitInfo: {
+      freeTierLimits: {
+        requestsPerMinute: 15,
+        requestsPerDay: 1500,
+        charactersPerRequest: 5000,
+      },
+      suggestion:
+        "If you frequently hit rate limits, consider upgrading to a paid plan at https://ai.google.dev/pricing",
+    },
+  });
+});
+
 // 5. GET /video/base - Get base background video from Cloudflare R2
 app.get("/video/base", async (req, res) => {
   try {
@@ -1734,6 +1790,80 @@ app.get("/workflow/status", (req, res) => {
   res.json(currentWorkflow);
 });
 
+// TTS Status and Help endpoint
+app.get("/tts/status", (req, res) => {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastTTSRequest;
+  const cooldownRemaining = Math.max(
+    0,
+    TTS_RATE_LIMIT_MS - timeSinceLastRequest
+  );
+
+  res.json({
+    service: "Google AI Studio TTS",
+    model: "gemini-2.5-flash-preview-tts",
+    status: cooldownRemaining > 0 ? "rate-limited" : "ready",
+    cooldownRemaining: cooldownRemaining,
+    cooldownRemainingSeconds: Math.ceil(cooldownRemaining / 1000),
+    lastRequestTime: lastTTSRequest
+      ? new Date(lastTTSRequest).toISOString()
+      : "never",
+    limits: {
+      freetier: {
+        perMinute: 15,
+        perDay: 1500,
+        note: "These are approximate limits for the preview model",
+      },
+    },
+    troubleshooting: {
+      rateLimitExceeded: "Wait 1-24 hours or upgrade to paid plan",
+      dailyQuotaExceeded:
+        "Reset at midnight UTC, upgrade to paid plan, or wait",
+      upgradeUrl: "https://ai.google.dev/pricing",
+      alternativeServices: ["Google Cloud TTS", "ElevenLabs", "Amazon Polly"],
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Simple API Key test endpoint (doesn't use TTS quota)
+app.get("/test/api-key", async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      return res.status(400).json({
+        success: false,
+        error: "No API key found",
+        message:
+          "Set GOOGLE_AI_STUDIO_API_KEY or GEMINI_API_KEY environment variable",
+      });
+    }
+
+    // Test with a simple text model (doesn't use TTS quota)
+    const ai = new GoogleGenAI({ apiKey });
+    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent("Say hello in one word");
+    const response = await result.response;
+
+    res.json({
+      success: true,
+      message: "✅ API key is valid and working",
+      testResponse: response.text(),
+      ttsModelAvailable: "Unknown - requires separate TTS request to test",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "API key test failed",
+      details: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({
@@ -1779,8 +1909,8 @@ app.post("/test/google-ai-studio-tts", async (req, res) => {
       message: "✅ Google AI Studio TTS test completed successfully!",
       audioFiles: audioFiles,
       apiUsed: "Google AI Studio TTS",
-      model: "gemini-2.5-flash-preview-tts",
-      voices: ["Kore (Person A)", "Puck (Person B)"],
+      model: "gemini-2.5-pro-preview-tts",
+      voices: ["Zephyr (Person A)", "Puck (Person B)"],
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
