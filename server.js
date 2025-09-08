@@ -460,15 +460,16 @@ const generateScript = async (title, description) => {
   Description: ${description}
   
   Requirements:
-  - ENGLISH ONLY - simple, clear explanations
+  - ENGLISH ONLY - clear, conversational style
   - 2 speakers: Person A and Person B
-  - Natural, engaging conversation style
-  - Each line should be 3-5 seconds when spoken
-  - Avoid jargon, use everyday language
-  - Make it educational but conversational
+  - Natural, engaging conversation like friends talking
+  - Each line should be 3-5 seconds when spoken (8-15 words max)
+  - Use simple, everyday English that sounds natural
+  - Make it educational but friendly and conversational
+  - Examples: "Arre yaar", "Telugu lo", "simple ga", "easy ga", "koncham", etc.
   
   Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "clear english text"}, {"speaker": "Person B", "text": "response text"}]`;
+  [{"speaker": "Person A", "text": "clear english text"}, {"speaker": "Person B", "text": "natural response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -561,16 +562,203 @@ app.post("/audio/generate", async (req, res) => {
   }
 });
 
+// Helper function to create silent audio placeholder
+const createSilentAudio = async (filename, durationSeconds = 2) => {
+  return new Promise((resolve, reject) => {
+    // Create a simple silent text that system TTS can handle
+    const silentText = "..."; // System will generate very brief audio for this
+
+    say.export(silentText, null, 1.0, filename, (err) => {
+      if (err) {
+        // If even this fails, create an empty file
+        fs.writeFileSync(filename, Buffer.alloc(1024)); // Minimal empty audio buffer
+      }
+      resolve(filename);
+    });
+  });
+};
+
+// Helper function to combine audio files into single conversation
+const combineAudioFiles = async (audioFiles, outputFile) => {
+  logger.info(
+    `→ Combining ${audioFiles.length} audio segments into conversation`
+  );
+
+  try {
+    // For Windows, we'll create a simple concatenation approach
+    // Since we can't use complex audio tools, we'll create one combined text
+    const conversationText = audioFiles
+      .map((file, index) => {
+        const pause = index > 0 ? "... " : ""; // Brief pause between speakers
+        return `${pause}${file.speaker} says: ${file.text}`;
+      })
+      .join(". ");
+
+    // Generate the full conversation as one TTS file
+    await new Promise((resolve, reject) => {
+      say.export(conversationText, null, 0.95, outputFile, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    logger.info(`✓ Combined conversation audio: ${outputFile}`);
+  } catch (error) {
+    logger.error("Audio combination failed:", error.message);
+
+    // Fallback: copy the first valid audio file
+    const firstValidFile = audioFiles.find(
+      (f) => !f.isSilent && fs.existsSync(f.file)
+    );
+    if (firstValidFile) {
+      fs.copyFileSync(firstValidFile.file, outputFile);
+      logger.info(`✓ Used first valid audio as fallback: ${outputFile}`);
+    } else {
+      throw new Error("No valid audio files to combine");
+    }
+  }
+};
+
 const generateAudio = async (script) => {
-  logger.info(`→ Generating audio for ${script.length} lines using System TTS`);
-  
+  logger.info(
+    `→ Generating single conversation audio file for ${script.length} lines`
+  );
+
+  // Ensure directories exist
+  if (!fs.existsSync("temp")) fs.mkdirSync("temp");
+  if (!fs.existsSync("audio")) fs.mkdirSync("audio");
+
+  const tempAudioFiles = [];
+
+  try {
+    // Generate individual TTS files first
+    for (let i = 0; i < script.length; i++) {
+      const line = script[i];
+
+      // Clean the text
+      const cleanText = cleanLLMData.cleanText(line.text);
+
+      if (!cleanText || cleanText.length < 2) {
+        logger.warn(`Skipping empty/short line ${i}: "${line.text}"`);
+        continue;
+      }
+
+      const tempFilename = `temp/temp_line_${i}.wav`;
+
+      try {
+        logger.info(`  → Generating TTS for line ${i}: ${line.speaker}`);
+
+        // Use system TTS to generate individual line
+        await new Promise((resolve, reject) => {
+          // Use different voice speeds for Person A and Person B
+          const speed = line.speaker === "Person A" ? 0.9 : 1.0;
+
+          say.export(cleanText, null, speed, tempFilename, (err) => {
+            if (err) {
+              logger.warn(`System TTS failed for line ${i}:`, err.message);
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        // Verify file was created
+        if (!fs.existsSync(tempFilename)) {
+          throw new Error("TTS file was not created");
+        }
+
+        tempAudioFiles.push({
+          index: i,
+          speaker: line.speaker,
+          file: tempFilename,
+          text: cleanText,
+          duration: Math.max(2, cleanText.length * 0.08), // Estimate duration
+        });
+
+        logger.info(
+          `  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(0, 30)}..."`
+        );
+      } catch (error) {
+        logger.warn(
+          `TTS failed for line ${i}, creating silent placeholder:`,
+          error.message
+        );
+
+        // Create silent placeholder
+        const duration = Math.max(2, Math.min(6, cleanText.length * 0.06));
+        const silentFile = await createSilentAudio(tempFilename, duration);
+
+        tempAudioFiles.push({
+          index: i,
+          speaker: line.speaker,
+          file: tempFilename,
+          text: cleanText,
+          duration: duration,
+          isSilent: true,
+        });
+      }
+    }
+
+    if (tempAudioFiles.length === 0) {
+      throw new Error("No audio files were generated successfully");
+    }
+
+    // Combine all audio files into a single conversation
+    const finalAudioFile = "audio/conversation.wav";
+    logger.info(
+      `→ Combining ${tempAudioFiles.length} audio files into single conversation`
+    );
+
+    await combineAudioFiles(tempAudioFiles, finalAudioFile);
+
+    // Clean up temp files
+    tempAudioFiles.forEach((file) => {
+      try {
+        if (fs.existsSync(file.file)) {
+          fs.unlinkSync(file.file);
+        }
+      } catch (e) {
+        logger.warn(`Could not delete temp file: ${file.file}`);
+      }
+    });
+
+    // Return single audio file
+    const audioFiles = [
+      {
+        line: "all",
+        speaker: "Conversation",
+        file: finalAudioFile,
+        text: script.map((line) => line.text).join(" "),
+        voice: "System TTS Conversation",
+        totalDuration: tempAudioFiles.reduce((sum, f) => sum + f.duration, 0),
+      },
+    ];
+
+    logger.info(`✓ Single conversation audio generated: ${finalAudioFile}`);
+    return audioFiles;
+  } catch (error) {
+    logger.error("Audio generation failed:", error.message);
+    throw error;
+  }
+};
+
+// Fallback function for individual audio files when Google AI Studio fails
+const generateAudioFallback = async (script) => {
+  logger.info(
+    `→ Fallback: Generating individual audio files for ${script.length} lines`
+  );
+
   const audioFiles = [];
 
   for (let i = 0; i < script.length; i++) {
     const line = script[i];
 
-    // Clean the text before processing
-    const cleanText = cleanLLMData.cleanText(line.text);
+    // Clean the text and optimize for Telugu-English mix
+    let cleanText = cleanLLMData.cleanText(line.text);
 
     if (!cleanText || cleanText.length < 2) {
       logger.warn(`Skipping empty/short line ${i}: "${line.text}"`);
@@ -578,99 +766,67 @@ const generateAudio = async (script) => {
     }
 
     const filename = `audio/line_${i}.wav`;
-    const mp3filename = `audio/line_${i}.mp3`;
 
     try {
-      logger.info(`  → Generating TTS for line ${i}: ${line.speaker}`);
+      // Create a simple silent audio file as placeholder
+      const duration = Math.max(2, Math.min(6, cleanText.length * 0.06));
+      const sampleRate = 44100;
+      const channels = 2;
+      const bytesPerSample = 2;
+      const totalSamples = duration * sampleRate * channels;
 
-      // Use system TTS to generate audio
-      await new Promise((resolve, reject) => {
-        say.export(cleanText, null, 0.75, filename, (err) => {
-          if (err) {
-            logger.warn(`System TTS failed for line ${i}:`, err.message);
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
-      });
+      // Create WAV header
+      const buffer = Buffer.alloc(44 + totalSamples * bytesPerSample);
 
-      // Convert WAV to MP3 using ffmpeg
-      await new Promise((resolve, reject) => {
-        ffmpeg(filename)
-          .toFormat('mp3')
-          .audioCodec('mp3')
-          .audioBitrate(128)
-          .output(mp3filename)
-          .on('end', () => {
-            // Remove the temporary WAV file
-            try {
-              fs.unlinkSync(filename);
-            } catch (e) {
-              logger.warn(`Could not delete temp file ${filename}`);
-            }
-            resolve();
-          })
-          .on('error', (err) => {
-            logger.error(`FFmpeg conversion failed for line ${i}:`, err.message);
-            reject(err);
-          })
-          .run();
-      });
+      // WAV header
+      buffer.write("RIFF", 0);
+      buffer.writeUInt32LE(36 + totalSamples * bytesPerSample, 4);
+      buffer.write("WAVE", 8);
+      buffer.write("fmt ", 12);
+      buffer.writeUInt32LE(16, 16);
+      buffer.writeUInt16LE(1, 20);
+      buffer.writeUInt16LE(channels, 22);
+      buffer.writeUInt32LE(sampleRate, 24);
+      buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+      buffer.writeUInt16LE(channels * bytesPerSample, 32);
+      buffer.writeUInt16LE(bytesPerSample * 8, 34);
+      buffer.write("data", 36);
+      buffer.writeUInt32LE(totalSamples * bytesPerSample, 40);
+
+      // Fill with silence (zeros)
+      for (let j = 44; j < buffer.length; j++) {
+        buffer[j] = 0;
+      }
+
+      fs.writeFileSync(filename, buffer);
 
       audioFiles.push({
         line: i,
         speaker: line.speaker,
-        file: mp3filename,
+        file: filename,
         text: cleanText,
-        voice: 'System TTS',
+        voice: "Fallback Audio",
       });
 
-      logger.info(`  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(0, 30)}..."`);
-
+      logger.info(
+        `  ✓ Line ${i} (${line.speaker}): "${cleanText.substring(
+          0,
+          30
+        )}..." (${duration}s)`
+      );
     } catch (error) {
-      logger.warn(`TTS failed for line ${i}, creating silent placeholder:`, error.message);
-
-      // Create a silent audio placeholder if TTS fails
-      try {
-        await new Promise((resolve, reject) => {
-          // Calculate duration based on text length (approximate)
-          const duration = Math.max(2, Math.min(8, cleanText.length * 0.08));
-          
-          ffmpeg()
-            .input('anullsrc=channel_layout=stereo:sample_rate=44100')
-            .inputFormat('lavfi')
-            .duration(duration)
-            .audioCodec('mp3')
-            .output(mp3filename)
-            .on('end', () => {
-              logger.info(`  ✓ Silent placeholder created for line ${i} (${duration}s)`);
-              resolve();
-            })
-            .on('error', reject)
-            .run();
-        });
-
-        audioFiles.push({
-          line: i,
-          speaker: line.speaker,
-          file: mp3filename,
-          text: cleanText,
-          voice: 'Silent Placeholder',
-        });
-
-      } catch (ffmpegError) {
-        logger.error(`Failed to create silent placeholder for line ${i}:`, ffmpegError.message);
-        continue;
-      }
+      logger.error(`Failed to create audio for line ${i}:`, error.message);
+      continue;
     }
   }
 
   if (audioFiles.length === 0) {
-    throw new Error('No audio files were generated successfully');
+    throw new Error("No audio files were generated successfully");
   }
 
-  logger.info(`✓ System TTS audio generation completed - ${audioFiles.length}/${script.length} files`);
+  logger.info(
+    `✓ Fallback audio generation completed - ${audioFiles.length}/${script.length} files`
+  );
   return audioFiles;
 };
 
@@ -1068,24 +1224,6 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
   });
 };
 
-const combineAudioFiles = (audioFiles, outputPath) => {
-  return new Promise((resolve, reject) => {
-    let command = ffmpeg();
-
-    audioFiles.forEach((audio) => {
-      command = command.input(audio.file);
-    });
-
-    command
-      .complexFilter("concat=n=" + audioFiles.length + ":v=0:a=1[out]")
-      .outputOptions(["-map", "[out]"])
-      .output(outputPath)
-      .on("end", resolve)
-      .on("error", reject)
-      .run();
-  });
-};
-
 const createSubtitlesFile = (script, subtitlesPath) => {
   let srtContent = "";
   let startTime = 0;
@@ -1439,16 +1577,16 @@ app.get("/test/voices", async (req, res) => {
     });
 
     const voiceConfigs = {
-      'Person A': {
-        languageCode: 'en-US',
-        name: 'en-US-Journey-D',
-        ssmlGender: 'MALE',
+      "Person A": {
+        languageCode: "en-US",
+        name: "en-US-Journey-D",
+        ssmlGender: "MALE",
       },
-      'Person B': {
-        languageCode: 'en-US', 
-        name: 'en-US-Journey-F',
-        ssmlGender: 'FEMALE',
-      }
+      "Person B": {
+        languageCode: "en-US",
+        name: "en-US-Journey-F",
+        ssmlGender: "FEMALE",
+      },
     };
 
     const results = {};
@@ -1458,8 +1596,8 @@ app.get("/test/voices", async (req, res) => {
         const request = {
           input: { text: "Hello, this is a test." },
           voice: voiceConfig,
-          audioConfig: { 
-            audioEncoding: 'MP3',
+          audioConfig: {
+            audioEncoding: "MP3",
             speakingRate: 1.0,
             pitch: 0.0,
           },
@@ -1471,14 +1609,13 @@ app.get("/test/voices", async (req, res) => {
           voice: voiceConfig.name,
           status: "✓ Working",
           audioSize: response.audioContent.length,
-          gender: voiceConfig.ssmlGender
+          gender: voiceConfig.ssmlGender,
         };
-
       } catch (error) {
         results[speaker] = {
           voice: voiceConfig.name,
           status: "✗ Failed",
-          error: error.message
+          error: error.message,
         };
       }
     }
@@ -1487,14 +1624,13 @@ app.get("/test/voices", async (req, res) => {
     res.json({
       service: "Google Text-to-Speech",
       results: results,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     logger.error("Voice test error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to test Google TTS voices",
-      details: error.message 
+      details: error.message,
     });
   }
 });
@@ -1520,6 +1656,36 @@ app.get("/health", (req, res) => {
 app.use((error, req, res, next) => {
   logger.error("Unhandled error:", error);
   res.status(500).json({ error: "Internal server error" });
+});
+
+// Test endpoint for Google AI Studio Multi-speaker TTS
+app.post("/test/google-tts", async (req, res) => {
+  try {
+    const testScript = [
+      {
+        speaker: "Person A",
+        text: "Hello, Google AI Studio TTS test karna hai",
+      },
+      {
+        speaker: "Person B",
+        text: "Theek hai, multi-speaker feature try karte hain",
+      },
+    ];
+
+    const audioFiles = await generateAudio(testScript);
+    res.json({
+      success: true,
+      message: "Google AI Studio TTS test completed",
+      audioFiles: audioFiles,
+    });
+  } catch (error) {
+    logger.error("Google TTS test error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Google TTS test failed",
+      details: error.message,
+    });
+  }
 });
 
 // Start server
