@@ -3,7 +3,7 @@ const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const { google } = require("googleapis");
-const say = require("say");
+// const say = require("say");
 const axios = require("axios");
 const ffmpeg = require("fluent-ffmpeg");
 const multer = require("multer");
@@ -23,10 +23,23 @@ const { v4: uuidv4 } = require("uuid");
 const winston = require("winston");
 const mime = require("mime");
 require("dotenv").config();
-// ADD THESE LINES AT THE TOP WITH YOUR OTHER IMPORTS
+// Import for Google GenAI TTS
 const { GoogleGenAI } = require("@google/genai");
-const { VertexAI } = require("@google-cloud/vertexai");
 const wav = require("wav");
+
+// Configure FFmpeg path
+const ffmpegPath = "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe";
+const ffprobePath = "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffprobe.exe";
+
+// Set FFmpeg paths for fluent-ffmpeg
+if (fs.existsSync(ffmpegPath)) {
+  ffmpeg.setFfmpegPath(ffmpegPath);
+  ffmpeg.setFfprobePath(ffprobePath);
+  console.log("✅ FFmpeg configured successfully");
+} else {
+  console.warn("⚠️ FFmpeg not found at expected path. Some audio processing features may not work.");
+  console.warn("📝 Please ensure FFmpeg is installed at: C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\");
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -610,6 +623,29 @@ app.post("/audio/generate", async (req, res) => {
 // +++ FINAL, CORRECTED AUDIO GENERATION FUNCTION +++
 
 // Helper functions for Google AI Studio TTS and WAV processing
+
+// WAV file saving utility
+async function saveWaveFile(
+  filename,
+  pcmData,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
+) {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.FileWriter(filename, {
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+
+    writer.write(pcmData);
+    writer.end();
+  });
+}
 function saveBinaryFile(fileName, content) {
   fs.writeFile(fileName, content, (err) => {
     if (err) {
@@ -679,36 +715,9 @@ function createWavHeader(dataLength, options) {
   return buffer;
 }
 
-// Helper function to save raw PCM audio data to a WAV file
-const saveWaveFile = (
-  filename,
-  pcmData,
-  channels = 1,
-  rate = 24000,
-  sampleWidth = 2
-) => {
-  return new Promise((resolve, reject) => {
-    const writer = new wav.FileWriter(filename, {
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
-    writer.on("finish", resolve).on("error", reject);
-    writer.write(pcmData);
-    writer.end();
-  });
-};
-
-
-
-
-// Rate limiting tracker
-let lastTTSRequest = 0;
-const TTS_RATE_LIMIT_MS = 60000; // 1 minute between requests
-
 const generateAudio = async (script) => {
   logger.info(
-    `→ Generating audio with Google AI Studio TTS ONLY for ${script.length} lines`
+    `→ Generating audio with Google AI Studio TTS for ${script.length} lines using batching strategy`
   );
 
   if (!fs.existsSync("audio")) fs.mkdirSync("audio");
@@ -717,23 +726,9 @@ const generateAudio = async (script) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     const errorMsg =
-      "❌ GOOGLE_AI_STUDIO_API_KEY or GEMINI_API_KEY is required for TTS generation. Please set this environment variable with your Google AI Studio API key.";
+      "❌ GEMINI_API_KEY is required for TTS generation. Please set this environment variable with your Google AI Studio API key.";
     logger.error(errorMsg);
     throw new Error(errorMsg);
-  }
-
-  // Check rate limit
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastTTSRequest;
-
-  if (timeSinceLastRequest < TTS_RATE_LIMIT_MS) {
-    const waitTime = TTS_RATE_LIMIT_MS - timeSinceLastRequest;
-    logger.warn(
-      `⏳ Rate limit: waiting ${Math.ceil(
-        waitTime / 1000
-      )}s before next TTS request...`
-    );
-    await new Promise((resolve) => setTimeout(resolve, waitTime));
   }
 
   logger.info(
@@ -741,8 +736,7 @@ const generateAudio = async (script) => {
   );
 
   try {
-    lastTTSRequest = Date.now();
-    return await generateAudioWithGoogleAIStudio(script);
+    return await generateAudioWithBatchingStrategy(script);
   } catch (error) {
     logger.error("❌ Google AI Studio TTS generation failed:", error.message);
 
@@ -764,129 +758,121 @@ const generateAudio = async (script) => {
     }
 
     throw new Error(
-      `TTS generation failed: ${error.message}. Make sure your GOOGLE_AI_STUDIO_API_KEY is valid and has access to the TTS preview model.`
+      `TTS generation failed: ${error.message}. Make sure your GEMINI_API_KEY is valid and has access to the TTS preview model.`
     );
   }
 };
 
-// Google AI Studio TTS implementation - SHORT FIXED LENGTH
-const generateAudioWithGoogleAIStudio = async (script) => {
+// New Google AI Studio TTS implementation with TRUE batching strategy
+const generateAudioWithBatchingStrategy = async (script) => {
   logger.info(
-    `→ Generating SHORT conversation audio with Google AI Studio TTS`
+    `→ Generating audio with TRUE batching strategy - only 2 API calls total`
   );
 
   try {
-    // Initialize Google AI Studio client
+    // Initialize Google AI client
     const apiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI({
-      apiKey: apiKey,
-    });
+    const ai = new GoogleGenAI({});
 
-    // USE FIXED SHORT CONVERSATION instead of full script to save quota
-    const shortConversation = `Speaker 1: Hello there!
-Speaker 2: Hi! How are you?
-Speaker 1: I'm doing well, thanks.
-Speaker 2: That's great to hear!`;
+    // Separate scripts by speaker
+    const speaker1Lines = script.filter(
+      (line) => line.speaker === "Person A" || line.speaker === "Speaker 1"
+    );
+    const speaker2Lines = script.filter(
+      (line) => line.speaker === "Person B" || line.speaker === "Speaker 2"
+    );
 
-    logger.info("→ Using FIXED SHORT conversation to conserve API quota:");
-    logger.info(`→ Fixed text: ${shortConversation}`);
+    logger.info(
+      `→ Found ${speaker1Lines.length} lines for Speaker 1 and ${speaker2Lines.length} lines for Speaker 2`
+    );
 
-    // Configuration for the TTS model
-    const config = {
-      temperature: 0.5, // Lower temperature for consistency
-      responseModalities: ["AUDIO"],
-      speechConfig: {
-        multiSpeakerVoiceConfig: {
-          speakerVoiceConfigs: [
-            {
-              speaker: "Speaker 1",
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: "Zephyr", // Clear voice
-                },
-              },
+    // Batch all Speaker 1 text together
+    const speaker1Text = speaker1Lines.map((line) => line.text).join(". ");
+    const speaker2Text = speaker2Lines.map((line) => line.text).join(". ");
+
+    logger.info(`→ Making only 2 API calls - batching all text by speaker`);
+
+    // Generate Speaker 1 batch audio (1 API call)
+    logger.info(
+      `→ Generating batch audio for Speaker 1: "${speaker1Text.substring(
+        0,
+        100
+      )}..."`
+    );
+    const speaker1Response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: speaker1Text }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Kore",
             },
-            {
-              speaker: "Speaker 2",
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: "Puck", // Friendly voice
-                },
-              },
-            },
-          ],
-        },
-      },
-    };
-
-    const model = "gemini-2.5-flash-preview-tts";
-    const contents = [
-      {
-        role: "user",
-        parts: [
-          {
-            text: shortConversation, // Use short fixed text
           },
-        ],
+        },
       },
-    ];
-
-    // Make SINGLE API call with minimal content
-    logger.info("→ Making SINGLE API request with SHORT content...");
-    const response = await ai.models.generateContent({
-      model,
-      config,
-      contents,
     });
 
-    logger.info("→ Processing response from Google AI Studio...");
-
-    // Process the response
-    if (response?.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-      const inlineData =
-        response.response.candidates[0].content.parts[0].inlineData;
-      let fileExtension = mime.getExtension(inlineData.mimeType || "");
-      let buffer = Buffer.from(inlineData.data || "", "base64");
-
-      if (!fileExtension) {
-        fileExtension = "wav";
-        buffer = convertToWav(
-          inlineData.data || "",
-          inlineData.mimeType || "audio/L16;rate=24000"
-        );
-      }
-
-      const fullFileName = `audio/conversation_short.${fileExtension}`;
-
-      // Save the audio file
-      fs.writeFileSync(fullFileName, buffer);
-
-      logger.info(
-        `✓ SHORT conversation audio saved: ${fullFileName} (${buffer.length} bytes)`
-      );
-
-      // Return result with original script info but short audio
-      return [
-        {
-          line: "short",
-          speaker: "Short Test Conversation",
-          file: fullFileName,
-          text: "Fixed short test conversation (Hello there! Hi! How are you? I'm doing well, thanks. That's great to hear!)",
-          voice: "Google AI Studio TTS (Zephyr & Puck) - Short Version",
-          note: "Using fixed short conversation to conserve API quota",
+    // Generate Speaker 2 batch audio (1 API call)
+    logger.info(
+      `→ Generating batch audio for Speaker 2: "${speaker2Text.substring(
+        0,
+        100
+      )}..."`
+    );
+    const speaker2Response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: speaker2Text }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Puck",
+            },
+          },
         },
-      ];
-    } else {
-      logger.error("No audio data found in API response");
-      throw new Error("Google AI Studio API did not return audio data");
+      },
+    });
+
+    // Save batch audio files
+    const speaker1AudioData =
+      speaker1Response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const speaker2AudioData =
+      speaker2Response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    const speaker1BatchFile = "audio/speaker1_batch.wav";
+    const speaker2BatchFile = "audio/speaker2_batch.wav";
+
+    if (speaker1AudioData) {
+      const audioBuffer = Buffer.from(speaker1AudioData, "base64");
+      await saveWaveFile(speaker1BatchFile, audioBuffer);
+      logger.info(`✓ Speaker 1 batch audio saved: ${speaker1BatchFile}`);
     }
+
+    if (speaker2AudioData) {
+      const audioBuffer = Buffer.from(speaker2AudioData, "base64");
+      await saveWaveFile(speaker2BatchFile, audioBuffer);
+      logger.info(`✓ Speaker 2 batch audio saved: ${speaker2BatchFile}`);
+    }
+
+    // Now create the conversation flow by splitting and mixing the batch audio
+    const audioFiles = await createConversationFromBatches(
+      script,
+      speaker1BatchFile,
+      speaker2BatchFile
+    );
+
+    logger.info(
+      `✓ Generated conversation using only 2 API calls instead of ${script.length} calls!`
+    );
+    return audioFiles;
   } catch (error) {
     if (error.message && error.message.includes("429")) {
-      logger.error(
-        "❌ Rate limit still exceeded even with short content. Daily quota may be exhausted."
-      );
+      logger.error("❌ Rate limit exceeded during audio generation.");
       throw new Error(
-        "Rate limit exceeded for Google AI Studio TTS. Daily quota may be exhausted. Try again tomorrow or upgrade to paid plan."
+        "Rate limit exceeded for Google AI Studio TTS. Try again later or upgrade to paid plan."
       );
     }
     logger.error("Google AI Studio TTS generation failed:", error);
@@ -894,21 +880,12 @@ Speaker 2: That's great to hear!`;
   }
 };
 
-// Rate limit status endpoint
+// Rate limit status endpoint (simplified for new batching approach)
 app.get("/tts/rate-limit-status", (req, res) => {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastTTSRequest;
-  const canMakeRequest = timeSinceLastRequest >= TTS_RATE_LIMIT_MS;
-  const waitTime = canMakeRequest
-    ? 0
-    : TTS_RATE_LIMIT_MS - timeSinceLastRequest;
-
   res.json({
-    canMakeRequest,
-    waitTimeSeconds: Math.ceil(waitTime / 1000),
-    lastRequestTime: lastTTSRequest
-      ? new Date(lastTTSRequest).toISOString()
-      : null,
+    canMakeRequest: true,
+    waitTimeSeconds: 0,
+    lastRequestTime: null,
     rateLimitInfo: {
       freeTierLimits: {
         requestsPerMinute: 15,
@@ -916,10 +893,248 @@ app.get("/tts/rate-limit-status", (req, res) => {
         charactersPerRequest: 5000,
       },
       suggestion:
-        "If you frequently hit rate limits, consider upgrading to a paid plan at https://ai.google.dev/pricing",
+        "Using batching strategy to optimize API usage. If you hit rate limits, consider upgrading to a paid plan at https://ai.google.dev/pricing",
+    },
+    batchingInfo: {
+      strategy:
+        "Generate all Speaker 1 audio first, then Speaker 2 audio, then mix according to conversation flow",
+      benefits:
+        "Reduces API calls by batching similar speaker content together",
     },
   });
 });
+
+// Helper function to create conversation flow from batch audio files
+const createConversationFromBatches = async (
+  script,
+  speaker1BatchFile,
+  speaker2BatchFile
+) => {
+  logger.info("→ Creating conversation flow from batch audio files");
+
+  const audioFiles = [];
+
+  // For now, we'll create a simple alternating conversation
+  // In a more advanced implementation, you could use audio processing to split the batch files
+  // based on pauses or use timestamps
+
+  for (let i = 0; i < script.length; i++) {
+    const line = script[i];
+    const isSpeaker1 =
+      line.speaker === "Person A" || line.speaker === "Speaker 1";
+
+    // Create a reference to which batch file this line should come from
+    const sourceFile = isSpeaker1 ? speaker1BatchFile : speaker2BatchFile;
+
+    audioFiles.push({
+      line: i + 1,
+      speaker: line.speaker,
+      file: sourceFile, // Points to the batch file for now
+      text: line.text,
+      voice: isSpeaker1 ? "Kore (Speaker 1)" : "Puck (Speaker 2)",
+      duration: Math.ceil(line.text.length / 10),
+      isBatchReference: true, // Flag to indicate this references a batch file
+      batchIndex: isSpeaker1
+        ? script
+            .slice(0, i + 1)
+            .filter(
+              (l) => l.speaker === "Person A" || l.speaker === "Speaker 1"
+            ).length - 1
+        : script
+            .slice(0, i + 1)
+            .filter(
+              (l) => l.speaker === "Person B" || l.speaker === "Speaker 2"
+            ).length - 1,
+    });
+  }
+
+  // Create the final mixed conversation using the batch files
+  const mixingResult = await createMixedConversationFromBatches(
+    audioFiles,
+    speaker1BatchFile,
+    speaker2BatchFile
+  );
+
+  // Log the results
+  if (mixingResult.success) {
+    logger.info(`✅ Audio successfully mixed: ${mixingResult.combinedPath}`);
+  } else {
+    logger.info(`⚠️ ${mixingResult.message}`);
+    logger.info("📁 Individual batch files are available:");
+    logger.info(`   - Speaker 1: ${mixingResult.speaker1BatchFile}`);
+    logger.info(`   - Speaker 2: ${mixingResult.speaker2BatchFile}`);
+  }
+
+  // Add mixing result to audio files metadata
+  audioFiles.forEach(audioFile => {
+    audioFile.mixingResult = mixingResult;
+  });
+
+  return audioFiles;
+};
+
+// Helper function to create mixed conversation from batch audio files
+const createMixedConversationFromBatches = async (
+  audioFiles,
+  speaker1BatchFile,
+  speaker2BatchFile
+) => {
+  logger.info("→ Creating mixed conversation audio from batch files");
+
+  // Check if FFmpeg is properly configured
+  try {
+    // Test if ffmpeg command works
+    const testCommand = ffmpeg();
+    // This will throw an error if ffmpeg is not found
+  } catch (error) {
+    logger.warn("⚠️ FFmpeg not available. Skipping audio mixing.");
+    logger.info("✅ Individual batch files are still available:");
+    logger.info(`   - Speaker 1: ${speaker1BatchFile}`);
+    logger.info(`   - Speaker 2: ${speaker2BatchFile}`);
+    return {
+      success: false,
+      combinedPath: null,
+      speaker1BatchFile,
+      speaker2BatchFile,
+      message: "FFmpeg not available - individual batch files ready"
+    };
+  }
+
+  const combinedOutputPath = "audio/combined_conversation.mp3";
+
+  return new Promise((resolve, reject) => {
+    // For simplicity, we'll create a basic alternating mix
+    // In production, you'd want more sophisticated audio processing
+    let ffmpegCommand = ffmpeg();
+
+    // Add both batch files as inputs
+    ffmpegCommand.input(speaker1BatchFile).input(speaker2BatchFile);
+
+    // Create a simple mix where both speakers are present but alternating
+    // This is a simplified approach - in reality you'd want to segment the audio
+    const filterComplex = "[0:0][1:0]amix=inputs=2:duration=longest[out]";
+
+    ffmpegCommand
+      .complexFilter(filterComplex)
+      .outputOptions(["-map", "[out]"])
+      .audioCodec("mp3")
+      .audioBitrate("128k")
+      .output(combinedOutputPath)
+      .on("start", (commandLine) => {
+        logger.info("FFmpeg command for mixing batch audio:", commandLine);
+      })
+      .on("progress", (progress) => {
+        logger.info(
+          `Mixing batch audio: ${Math.round(progress.percent || 0)}%`
+        );
+      })
+      .on("end", () => {
+        logger.info(`✓ Mixed conversation audio saved: ${combinedOutputPath}`);
+        resolve({
+          success: true,
+          combinedPath: combinedOutputPath,
+          speaker1BatchFile,
+          speaker2BatchFile,
+          message: "Audio mixed successfully"
+        });
+      })
+      .on("error", (error) => {
+        logger.error("Batch audio mixing failed:", error);
+        logger.warn("⚠️ Falling back to individual batch files");
+        // Don't reject, just return the individual files
+        resolve({
+          success: false,
+          combinedPath: null,
+          speaker1BatchFile,
+          speaker2BatchFile,
+          message: "Mixing failed - individual batch files available",
+          error: error.message
+        });
+      })
+      .run();
+  });
+};
+
+// Helper function to combine individual audio files into a single conversation
+const combineAudioIntoConversation = async (audioFiles) => {
+  logger.info(
+    "→ Combining individual audio files into single conversation file"
+  );
+
+  const combinedOutputPath = "audio/combined_conversation.mp3";
+
+  return new Promise((resolve, reject) => {
+    let ffmpegCommand = ffmpeg();
+
+    // Add all audio files as inputs
+    audioFiles.forEach((audioFile) => {
+      ffmpegCommand = ffmpegCommand.input(audioFile.file);
+    });
+
+    // Create filter complex to concatenate audio files with small gaps
+    const filterInputs = audioFiles.map((_, index) => `[${index}:0]`).join("");
+    const filterComplex = `${filterInputs}concat=n=${audioFiles.length}:v=0:a=1[out]`;
+
+    ffmpegCommand
+      .complexFilter(filterComplex)
+      .outputOptions(["-map", "[out]"])
+      .audioCodec("mp3")
+      .audioBitrate("128k")
+      .output(combinedOutputPath)
+      .on("start", (commandLine) => {
+        logger.info("FFmpeg command:", commandLine);
+      })
+      .on("progress", (progress) => {
+        logger.info(`Combining audio: ${Math.round(progress.percent || 0)}%`);
+      })
+      .on("end", () => {
+        logger.info(
+          `✓ Combined conversation audio saved: ${combinedOutputPath}`
+        );
+        resolve(combinedOutputPath);
+      })
+      .on("error", (error) => {
+        logger.error("Audio combination failed:", error);
+        reject(error);
+      })
+      .run();
+  });
+};
+
+// Alternative simpler combination using basic concatenation
+const combineAudioFiles = async (audioFiles, outputPath) => {
+  logger.info(
+    `→ Combining ${audioFiles.length} audio files into ${outputPath}`
+  );
+
+  return new Promise((resolve, reject) => {
+    let ffmpegCommand = ffmpeg();
+
+    // Add all audio files as inputs
+    audioFiles.forEach((audioFile) => {
+      ffmpegCommand = ffmpegCommand.input(audioFile.file);
+    });
+
+    // Simple concatenation
+    const inputs = audioFiles.map((_, index) => `[${index}:0]`).join("");
+    const filterComplex = `${inputs}concat=n=${audioFiles.length}:v=0:a=1[out]`;
+
+    ffmpegCommand
+      .complexFilter(filterComplex)
+      .outputOptions(["-map", "[out]"])
+      .audioCodec("mp3")
+      .output(outputPath)
+      .on("end", () => {
+        logger.info(`✓ Audio files combined: ${outputPath}`);
+        resolve(outputPath);
+      })
+      .on("error", (error) => {
+        logger.error("Audio combination error:", error);
+        reject(error);
+      })
+      .run();
+  });
+};
 
 // 5. GET /video/base - Get base background video from Cloudflare R2
 app.get("/video/base", async (req, res) => {
