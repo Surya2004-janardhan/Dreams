@@ -26,6 +26,8 @@ require("dotenv").config();
 // Import for Google GenAI TTS
 const { GoogleGenAI } = require("@google/genai");
 const wav = require("wav");
+// Import for Vertex AI image generation
+const { VertexAI } = require("@google-cloud/vertexai");
 
 // Configure FFmpeg path
 const ffmpegPath = "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe";
@@ -37,8 +39,12 @@ if (fs.existsSync(ffmpegPath)) {
   ffmpeg.setFfprobePath(ffprobePath);
   console.log("✅ FFmpeg configured successfully");
 } else {
-  console.warn("⚠️ FFmpeg not found at expected path. Some audio processing features may not work.");
-  console.warn("📝 Please ensure FFmpeg is installed at: C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\");
+  console.warn(
+    "⚠️ FFmpeg not found at expected path. Some audio processing features may not work."
+  );
+  console.warn(
+    "📝 Please ensure FFmpeg is installed at: C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\"
+  );
 }
 
 const app = express();
@@ -475,20 +481,29 @@ app.post("/script/generate", async (req, res) => {
 const generateScript = async (title, description) => {
   logger.info(`→ Generating script for: ${title}`);
 
-  const prompt = `Create a 60-70 second conversation script between two people about "${title}". 
+  const prompt = `Create a 55-60 second educational conversation script between two people about "${title}". 
   Description: ${description}
   
   Requirements:
-  - ENGLISH ONLY - clear, conversational style
-  - 2 speakers: Person A and Person B
-  - Natural, engaging conversation like friends talking
-  - Each line should be 3-5 seconds when spoken (8-15 words max)
-  - Use simple, everyday English that sounds natural
-  - Make it educational but friendly and conversational
-  - Examples: "Arre yaar", "Telugu lo", "simple ga", "easy ga", "koncham", etc.
+  - EXACTLY 6 lines total: 3 from Person A, 3 from Person B (alternating)
+  - Each line should be 8-12 seconds when spoken (25-35 words per line)
+  - EDUCATIONAL and EXPLANATORY style - teach concepts, explain processes, give examples
+  - Person A asks questions or introduces concepts, Person B explains in detail
+  - Use teaching language: "Let me explain...", "Here's how it works...", "For example...", "The key point is..."
+  - Make it conversational but informative - like a teacher explaining to a student
+  - Clear, simple English that explains the WHY and HOW, not just WHAT
+  - Each response should build on the previous one to create a complete learning experience
+  
+  Example structure:
+  Person A: [Introduces topic with a question - 25-35 words]
+  Person B: [Explains the concept with examples - 25-35 words] 
+  Person A: [Asks follow-up or digs deeper - 25-35 words]
+  Person B: [Provides detailed explanation with practical example - 25-35 words]
+  Person A: [Summarizes or asks about application - 25-35 words]
+  Person B: [Gives final explanation with actionable advice - 25-35 words]
   
   Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "clear english text"}, {"speaker": "Person B", "text": "natural response"}]`;
+  [{"speaker": "Person A", "text": "detailed educational text"}, {"speaker": "Person B", "text": "explanatory response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -501,7 +516,7 @@ const generateScript = async (title, description) => {
       ],
       model: "llama-3.3-70b-versatile",
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: 800, // Increased for longer educational content
     },
     {
       headers: {
@@ -547,18 +562,60 @@ const generateScript = async (title, description) => {
   } catch (error) {
     logger.error("Script generation parsing error:", error.message);
 
-    // Return a simple fallback script
+    // Return a simple fallback script with 6 educational lines
     return [
       {
         speaker: "Person A",
-        text: cleanLLMData.cleanText(`Let's talk about ${title}.`),
-        subtitle: cleanLLMData.cleanText(`Let's talk about ${title}.`),
+        text: cleanLLMData.cleanText(
+          `Can you help me understand what ${title} really means and why it's important for people like us?`
+        ),
+        subtitle: cleanLLMData.cleanText(
+          `Can you help me understand what ${title} really means and why it's important for people like us?`
+        ),
       },
       {
         speaker: "Person B",
-        text: cleanLLMData.cleanText(`That sounds interesting! ${description}`),
+        text: cleanLLMData.cleanText(
+          `Sure! Let me explain how ${title} works. ${description} The key thing to understand is that this affects your daily financial decisions.`
+        ),
         subtitle: cleanLLMData.cleanText(
-          `That sounds interesting! ${description}`
+          `Sure! Let me explain how ${title} works. ${description} The key thing to understand is that this affects your daily financial decisions.`
+        ),
+      },
+      {
+        speaker: "Person A",
+        text: cleanLLMData.cleanText(
+          `That makes sense! But can you give me a practical example of how someone would actually use this knowledge in real life?`
+        ),
+        subtitle: cleanLLMData.cleanText(
+          `That makes sense! But can you give me a practical example of how someone would actually use this knowledge in real life?`
+        ),
+      },
+      {
+        speaker: "Person B",
+        text: cleanLLMData.cleanText(
+          `Absolutely! For example, when you're making financial decisions, understanding ${title} helps you avoid common mistakes and make smarter choices with your money.`
+        ),
+        subtitle: cleanLLMData.cleanText(
+          `Absolutely! For example, when you're making financial decisions, understanding ${title} helps you avoid common mistakes and make smarter choices with your money.`
+        ),
+      },
+      {
+        speaker: "Person A",
+        text: cleanLLMData.cleanText(
+          `Got it! So what's the most important thing people should remember when they're dealing with this concept in their daily lives?`
+        ),
+        subtitle: cleanLLMData.cleanText(
+          `Got it! So what's the most important thing people should remember when they're dealing with this concept in their daily lives?`
+        ),
+      },
+      {
+        speaker: "Person B",
+        text: cleanLLMData.cleanText(
+          `The key takeaway is to always research and understand before making decisions. Start small, learn from experience, and gradually build your knowledge and confidence.`
+        ),
+        subtitle: cleanLLMData.cleanText(
+          `The key takeaway is to always research and understand before making decisions. Start small, learn from experience, and gradually build your knowledge and confidence.`
         ),
       },
     ];
@@ -763,116 +820,114 @@ const generateAudio = async (script) => {
   }
 };
 
-// New Google AI Studio TTS implementation with TRUE batching strategy
+// New Google AI Studio TTS implementation with conversation-style generation
 const generateAudioWithBatchingStrategy = async (script) => {
   logger.info(
-    `→ Generating audio with TRUE batching strategy - only 2 API calls total`
+    `→ Generating single conversation audio using optimized strategy for ${script.length} lines`
   );
+
+  // Validate script length
+  if (script.length !== 6) {
+    logger.warn(
+      `⚠️ Expected 6 lines for optimal rate limiting, got ${script.length}. Proceeding anyway...`
+    );
+  }
 
   try {
     // Initialize Google AI client
     const apiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({});
 
-    // Separate scripts by speaker
-    const speaker1Lines = script.filter(
-      (line) => line.speaker === "Person A" || line.speaker === "Speaker 1"
-    );
-    const speaker2Lines = script.filter(
-      (line) => line.speaker === "Person B" || line.speaker === "Speaker 2"
-    );
+    // Generate individual audio files for each line to maintain conversation flow
+    const audioSegments = [];
 
     logger.info(
-      `→ Found ${speaker1Lines.length} lines for Speaker 1 and ${speaker2Lines.length} lines for Speaker 2`
+      `→ Generating ${script.length} audio segments for educational conversation`
     );
 
-    // Batch all Speaker 1 text together
-    const speaker1Text = speaker1Lines.map((line) => line.text).join(". ");
-    const speaker2Text = speaker2Lines.map((line) => line.text).join(". ");
+    for (let i = 0; i < script.length; i++) {
+      const line = script[i];
+      const isSpeaker1 =
+        line.speaker === "Person A" || line.speaker === "Speaker 1";
 
-    logger.info(`→ Making only 2 API calls - batching all text by speaker`);
+      logger.info(
+        `→ Generating audio for line ${i + 1} (${
+          line.speaker
+        }): "${line.text.substring(0, 60)}..."`
+      );
 
-    // Generate Speaker 1 batch audio (1 API call)
-    logger.info(
-      `→ Generating batch audio for Speaker 1: "${speaker1Text.substring(
-        0,
-        100
-      )}..."`
-    );
-    const speaker1Response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: speaker1Text }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: "Kore",
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: line.text }] }],
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: isSpeaker1 ? "Kore" : "Puck",
+              },
             },
           },
         },
-      },
-    });
+      });
 
-    // Generate Speaker 2 batch audio (1 API call)
-    logger.info(
-      `→ Generating batch audio for Speaker 2: "${speaker2Text.substring(
-        0,
-        100
-      )}..."`
-    );
-    const speaker2Response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: speaker2Text }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: "Puck",
-            },
-          },
-        },
-      },
-    });
+      const audioData =
+        response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
-    // Save batch audio files
-    const speaker1AudioData =
-      speaker1Response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    const speaker2AudioData =
-      speaker2Response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (audioData) {
+        const audioBuffer = Buffer.from(audioData, "base64");
+        const segmentFile = `audio/segment_${i + 1}.wav`;
+        await saveWaveFile(segmentFile, audioBuffer);
 
-    const speaker1BatchFile = "audio/speaker1_batch.wav";
-    const speaker2BatchFile = "audio/speaker2_batch.wav";
+        audioSegments.push({
+          index: i + 1,
+          speaker: line.speaker,
+          text: line.text,
+          file: segmentFile,
+          voice: isSpeaker1 ? "Kore (Speaker 1)" : "Puck (Speaker 2)",
+          estimatedDuration: Math.ceil(line.text.split(" ").length / 3), // ~3 words per second
+        });
 
-    if (speaker1AudioData) {
-      const audioBuffer = Buffer.from(speaker1AudioData, "base64");
-      await saveWaveFile(speaker1BatchFile, audioBuffer);
-      logger.info(`✓ Speaker 1 batch audio saved: ${speaker1BatchFile}`);
+        logger.info(`✓ Audio segment ${i + 1} saved: ${segmentFile}`);
+      } else {
+        logger.warn(`⚠️ No audio data received for line ${i + 1}`);
+      }
+
+      // Add a delay to avoid rate limiting (4 seconds between calls)
+      if (i < script.length - 1) {
+        logger.info("⏳ Waiting 4 seconds to avoid rate limiting...");
+        await new Promise((resolve) => setTimeout(resolve, 4000)); // 4 second delay
+      }
     }
 
-    if (speaker2AudioData) {
-      const audioBuffer = Buffer.from(speaker2AudioData, "base64");
-      await saveWaveFile(speaker2BatchFile, audioBuffer);
-      logger.info(`✓ Speaker 2 batch audio saved: ${speaker2BatchFile}`);
-    }
+    // Now combine all segments into a single conversation file
+    const conversationFile = await createSingleConversationFile(audioSegments);
 
-    // Now create the conversation flow by splitting and mixing the batch audio
-    const audioFiles = await createConversationFromBatches(
-      script,
-      speaker1BatchFile,
-      speaker2BatchFile
+    const totalEstimatedDuration = audioSegments.reduce(
+      (total, segment) => total + segment.estimatedDuration,
+      0
     );
 
     logger.info(
-      `✓ Generated conversation using only 2 API calls instead of ${script.length} calls!`
+      `✓ Educational conversation audio created: ${conversationFile}`
     );
-    return audioFiles;
+    logger.info(
+      `📊 Summary: ${audioSegments.length} segments, ~${totalEstimatedDuration} seconds total`
+    );
+
+    return {
+      segments: audioSegments,
+      conversationFile: conversationFile,
+      totalSegments: audioSegments.length,
+      estimatedDuration: totalEstimatedDuration,
+      message:
+        "Educational conversation audio file generated successfully with rate limit optimization",
+    };
   } catch (error) {
     if (error.message && error.message.includes("429")) {
       logger.error("❌ Rate limit exceeded during audio generation.");
       throw new Error(
-        "Rate limit exceeded for Google AI Studio TTS. Try again later or upgrade to paid plan."
+        "Rate limit exceeded for Google AI Studio TTS. Please wait a few minutes before trying again."
       );
     }
     logger.error("Google AI Studio TTS generation failed:", error);
@@ -880,7 +935,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
   }
 };
 
-// Rate limit status endpoint (simplified for new batching approach)
+// Rate limit status endpoint (updated for educational conversation approach)
 app.get("/tts/rate-limit-status", (req, res) => {
   res.json({
     canMakeRequest: true,
@@ -893,16 +948,68 @@ app.get("/tts/rate-limit-status", (req, res) => {
         charactersPerRequest: 5000,
       },
       suggestion:
-        "Using batching strategy to optimize API usage. If you hit rate limits, consider upgrading to a paid plan at https://ai.google.dev/pricing",
+        "Using 6-line educational conversations (3 per speaker) to minimize API usage while maximizing content quality.",
     },
-    batchingInfo: {
-      strategy:
-        "Generate all Speaker 1 audio first, then Speaker 2 audio, then mix according to conversation flow",
-      benefits:
-        "Reduces API calls by batching similar speaker content together",
+    optimizedStrategy: {
+      linesPerConversation: 6,
+      expectedAPICalls: 6,
+      delayBetweenCalls: "4 seconds",
+      totalGenerationTime: "~24 seconds",
+      benefits: [
+        "Reduced API calls from 10-15 to just 6",
+        "Longer, more educational content per line",
+        "Better rate limit compliance",
+        "Higher quality teaching-style conversations",
+      ],
     },
   });
 });
+
+// Helper function to create a single conversation file from individual audio segments
+const createSingleConversationFile = async (audioSegments) => {
+  logger.info("→ Combining audio segments into single conversation file");
+
+  const conversationFile = "audio/conversation.mp3";
+
+  return new Promise((resolve, reject) => {
+    let ffmpegCommand = ffmpeg();
+
+    // Add all segment files as inputs
+    audioSegments.forEach((segment) => {
+      ffmpegCommand = ffmpegCommand.input(segment.file);
+    });
+
+    // Create filter complex to concatenate all segments
+    const filterInputs = audioSegments
+      .map((_, index) => `[${index}:0]`)
+      .join("");
+    const filterComplex = `${filterInputs}concat=n=${audioSegments.length}:v=0:a=1[out]`;
+
+    ffmpegCommand
+      .complexFilter(filterComplex)
+      .outputOptions(["-map", "[out]"])
+      .audioCodec("mp3")
+      .audioBitrate("128k")
+      .output(conversationFile)
+      .on("start", (commandLine) => {
+        logger.info("FFmpeg command for conversation creation:", commandLine);
+      })
+      .on("progress", (progress) => {
+        logger.info(
+          `Creating conversation: ${Math.round(progress.percent || 0)}%`
+        );
+      })
+      .on("end", () => {
+        logger.info(`✓ Single conversation file created: ${conversationFile}`);
+        resolve(conversationFile);
+      })
+      .on("error", (error) => {
+        logger.error("Conversation creation failed:", error);
+        reject(error);
+      })
+      .run();
+  });
+};
 
 // Helper function to create conversation flow from batch audio files
 const createConversationFromBatches = async (
@@ -966,7 +1073,7 @@ const createConversationFromBatches = async (
   }
 
   // Add mixing result to audio files metadata
-  audioFiles.forEach(audioFile => {
+  audioFiles.forEach((audioFile) => {
     audioFile.mixingResult = mixingResult;
   });
 
@@ -996,7 +1103,7 @@ const createMixedConversationFromBatches = async (
       combinedPath: null,
       speaker1BatchFile,
       speaker2BatchFile,
-      message: "FFmpeg not available - individual batch files ready"
+      message: "FFmpeg not available - individual batch files ready",
     };
   }
 
@@ -1035,7 +1142,7 @@ const createMixedConversationFromBatches = async (
           combinedPath: combinedOutputPath,
           speaker1BatchFile,
           speaker2BatchFile,
-          message: "Audio mixed successfully"
+          message: "Audio mixed successfully",
         });
       })
       .on("error", (error) => {
@@ -1048,7 +1155,7 @@ const createMixedConversationFromBatches = async (
           speaker1BatchFile,
           speaker2BatchFile,
           message: "Mixing failed - individual batch files available",
-          error: error.message
+          error: error.message,
         });
       })
       .run();
