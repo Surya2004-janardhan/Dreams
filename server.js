@@ -485,25 +485,23 @@ const generateScript = async (title, description) => {
   Description: ${description}
   
   Requirements:
-  - EXACTLY 6 lines total: 3 from Person A, 3 from Person B (alternating)
-  - Each line should be 8-12 seconds when spoken (25-35 words per line)
-  - EDUCATIONAL and EXPLANATORY style - teach concepts, explain processes, give examples
-  - Person A asks questions or introduces concepts, Person B explains in detail
-  - Use teaching language: "Let me explain...", "Here's how it works...", "For example...", "The key point is..."
-  - Make it conversational but informative - like a teacher explaining to a student
-  - Clear, simple English that explains the WHY and HOW, not just WHAT
-  - Each response should build on the previous one to create a complete learning experience
+  - EXACTLY 4 lines total: 2 from Person A, 2 from Person B (alternating)
+  - Each line should be 13-16 seconds when spoken (40-50 words per line)
+  - COMPREHENSIVE and EDUCATIONAL style - each line must cover significant depth
+  - Person A introduces and asks comprehensive questions, Person B provides detailed explanations
+  - Use extensive teaching language: "Let me break this down completely...", "Here's the full process...", "To understand this fully..."
+  - Make it like a comprehensive tutorial - each line should be information-dense
+  - Clear, detailed English that explains everything: the WHY, HOW, WHAT, and practical applications
+  - Each response should be complete and comprehensive to cover the topic fully in just 4 exchanges
   
-  Example structure:
-  Person A: [Introduces topic with a question - 25-35 words]
-  Person B: [Explains the concept with examples - 25-35 words] 
-  Person A: [Asks follow-up or digs deeper - 25-35 words]
-  Person B: [Provides detailed explanation with practical example - 25-35 words]
-  Person A: [Summarizes or asks about application - 25-35 words]
-  Person B: [Gives final explanation with actionable advice - 25-35 words]
+  Structure:
+  Person A: [Comprehensive introduction with detailed question - 40-50 words]
+  Person B: [Complete detailed explanation with multiple examples - 40-50 words] 
+  Person A: [In-depth follow-up with specific scenarios - 40-50 words]
+  Person B: [Comprehensive conclusion with actionable steps and summary - 40-50 words]
   
   Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "detailed educational text"}, {"speaker": "Person B", "text": "explanatory response"}]`;
+  [{"speaker": "Person A", "text": "comprehensive detailed educational text"}, {"speaker": "Person B", "text": "thorough explanatory response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -562,60 +560,42 @@ const generateScript = async (title, description) => {
   } catch (error) {
     logger.error("Script generation parsing error:", error.message);
 
-    // Return a simple fallback script with 6 educational lines
+    // Return a comprehensive fallback script with 4 detailed educational lines
     return [
       {
         speaker: "Person A",
         text: cleanLLMData.cleanText(
-          `Can you help me understand what ${title} really means and why it's important for people like us?`
+          `I've been hearing a lot about ${title} lately, but I really need to understand what it actually means, how it works in practice, and why it's so important for people like us to know about this concept in today's world.`
         ),
         subtitle: cleanLLMData.cleanText(
-          `Can you help me understand what ${title} really means and why it's important for people like us?`
+          `I've been hearing a lot about ${title} lately, but I really need to understand what it actually means, how it works in practice, and why it's so important for people like us to know about this concept in today's world.`
         ),
       },
       {
         speaker: "Person B",
         text: cleanLLMData.cleanText(
-          `Sure! Let me explain how ${title} works. ${description} The key thing to understand is that this affects your daily financial decisions.`
+          `Let me break this down completely for you. ${title} is essentially about ${description}. The key thing to understand is that this directly impacts your daily financial decisions, your long-term planning, and how you can protect and grow your money effectively.`
         ),
         subtitle: cleanLLMData.cleanText(
-          `Sure! Let me explain how ${title} works. ${description} The key thing to understand is that this affects your daily financial decisions.`
+          `Let me break this down completely for you. ${title} is essentially about ${description}. The key thing to understand is that this directly impacts your daily financial decisions, your long-term planning, and how you can protect and grow your money effectively.`
         ),
       },
       {
         speaker: "Person A",
         text: cleanLLMData.cleanText(
-          `That makes sense! But can you give me a practical example of how someone would actually use this knowledge in real life?`
+          `That's really helpful! But I'm curious about the practical side - can you walk me through some specific real-world scenarios where understanding ${title} would actually make a difference in someone's financial life and help them avoid costly mistakes?`
         ),
         subtitle: cleanLLMData.cleanText(
-          `That makes sense! But can you give me a practical example of how someone would actually use this knowledge in real life?`
+          `That's really helpful! But I'm curious about the practical side - can you walk me through some specific real-world scenarios where understanding ${title} would actually make a difference in someone's financial life and help them avoid costly mistakes?`
         ),
       },
       {
         speaker: "Person B",
         text: cleanLLMData.cleanText(
-          `Absolutely! For example, when you're making financial decisions, understanding ${title} helps you avoid common mistakes and make smarter choices with your money.`
+          `Absolutely! For example, when you understand ${title}, you can make smarter decisions about saving, investing, and spending. The most important steps are: first, educate yourself thoroughly; second, start with small amounts; and finally, consistently apply what you learn while staying updated with changes.`
         ),
         subtitle: cleanLLMData.cleanText(
-          `Absolutely! For example, when you're making financial decisions, understanding ${title} helps you avoid common mistakes and make smarter choices with your money.`
-        ),
-      },
-      {
-        speaker: "Person A",
-        text: cleanLLMData.cleanText(
-          `Got it! So what's the most important thing people should remember when they're dealing with this concept in their daily lives?`
-        ),
-        subtitle: cleanLLMData.cleanText(
-          `Got it! So what's the most important thing people should remember when they're dealing with this concept in their daily lives?`
-        ),
-      },
-      {
-        speaker: "Person B",
-        text: cleanLLMData.cleanText(
-          `The key takeaway is to always research and understand before making decisions. Start small, learn from experience, and gradually build your knowledge and confidence.`
-        ),
-        subtitle: cleanLLMData.cleanText(
-          `The key takeaway is to always research and understand before making decisions. Start small, learn from experience, and gradually build your knowledge and confidence.`
+          `Absolutely! For example, when you understand ${title}, you can make smarter decisions about saving, investing, and spending. The most important steps are: first, educate yourself thoroughly; second, start with small amounts; and finally, consistently apply what you learn while staying updated with changes.`
         ),
       },
     ];
@@ -823,13 +803,13 @@ const generateAudio = async (script) => {
 // New Google AI Studio TTS implementation with conversation-style generation
 const generateAudioWithBatchingStrategy = async (script) => {
   logger.info(
-    `→ Generating single conversation audio using optimized strategy for ${script.length} lines`
+    `→ Generating single conversation audio using ultra-conservative rate limiting for ${script.length} lines`
   );
 
   // Validate script length
-  if (script.length !== 6) {
+  if (script.length !== 4) {
     logger.warn(
-      `⚠️ Expected 6 lines for optimal rate limiting, got ${script.length}. Proceeding anyway...`
+      `⚠️ Expected 4 lines for optimal rate limiting, got ${script.length}. Proceeding anyway...`
     );
   }
 
@@ -842,7 +822,10 @@ const generateAudioWithBatchingStrategy = async (script) => {
     const audioSegments = [];
 
     logger.info(
-      `→ Generating ${script.length} audio segments for educational conversation`
+      `→ Generating ${script.length} comprehensive audio segments with 1-minute delays`
+    );
+    logger.info(
+      `⏰ Total estimated time: ~${script.length} minutes (including delays)`
     );
 
     for (let i = 0; i < script.length; i++) {
@@ -851,9 +834,12 @@ const generateAudioWithBatchingStrategy = async (script) => {
         line.speaker === "Person A" || line.speaker === "Speaker 1";
 
       logger.info(
-        `→ Generating audio for line ${i + 1} (${
+        `→ Generating audio for line ${i + 1}/${script.length} (${
           line.speaker
-        }): "${line.text.substring(0, 60)}..."`
+        }): "${line.text.substring(0, 80)}..."`
+      );
+      logger.info(
+        `📝 Full text (${line.text.split(" ").length} words): ${line.text}`
       );
 
       const response = await ai.models.generateContent({
@@ -893,10 +879,20 @@ const generateAudioWithBatchingStrategy = async (script) => {
         logger.warn(`⚠️ No audio data received for line ${i + 1}`);
       }
 
-      // Add a delay to avoid rate limiting (4 seconds between calls)
+      // Add a full 1-minute delay to completely avoid rate limiting
       if (i < script.length - 1) {
-        logger.info("⏳ Waiting 4 seconds to avoid rate limiting...");
-        await new Promise((resolve) => setTimeout(resolve, 4000)); // 4 second delay
+        logger.info(
+          "⏳ Waiting 60 seconds to completely avoid rate limiting..."
+        );
+        logger.info(`   Progress: ${i + 1}/${script.length} calls completed`);
+
+        // Show countdown every 15 seconds
+        for (let countdown = 60; countdown > 0; countdown -= 15) {
+          await new Promise((resolve) => setTimeout(resolve, 15000)); // 15 second increments
+          if (countdown > 15) {
+            logger.info(`   ⏱️ ${countdown - 15} seconds remaining...`);
+          }
+        }
       }
     }
 
@@ -909,10 +905,13 @@ const generateAudioWithBatchingStrategy = async (script) => {
     );
 
     logger.info(
-      `✓ Educational conversation audio created: ${conversationFile}`
+      `✓ Comprehensive educational conversation audio created: ${conversationFile}`
     );
     logger.info(
       `📊 Summary: ${audioSegments.length} segments, ~${totalEstimatedDuration} seconds total`
+    );
+    logger.info(
+      `🎯 Rate limiting: Used only ${script.length} API calls with 60-second delays`
     );
 
     return {
@@ -920,14 +919,15 @@ const generateAudioWithBatchingStrategy = async (script) => {
       conversationFile: conversationFile,
       totalSegments: audioSegments.length,
       estimatedDuration: totalEstimatedDuration,
+      apiCallsUsed: script.length,
       message:
-        "Educational conversation audio file generated successfully with rate limit optimization",
+        "Comprehensive educational conversation audio generated with ultra-conservative rate limiting",
     };
   } catch (error) {
     if (error.message && error.message.includes("429")) {
-      logger.error("❌ Rate limit exceeded during audio generation.");
+      logger.error("❌ Rate limit exceeded even with 60-second delays.");
       throw new Error(
-        "Rate limit exceeded for Google AI Studio TTS. Please wait a few minutes before trying again."
+        "Rate limit exceeded despite conservative delays. Please wait 10-15 minutes before trying again, or check if you've exceeded daily quota."
       );
     }
     logger.error("Google AI Studio TTS generation failed:", error);
@@ -935,7 +935,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
   }
 };
 
-// Rate limit status endpoint (updated for educational conversation approach)
+// Rate limit status endpoint (updated for ultra-conservative approach)
 app.get("/tts/rate-limit-status", (req, res) => {
   res.json({
     canMakeRequest: true,
@@ -948,18 +948,21 @@ app.get("/tts/rate-limit-status", (req, res) => {
         charactersPerRequest: 5000,
       },
       suggestion:
-        "Using 6-line educational conversations (3 per speaker) to minimize API usage while maximizing content quality.",
+        "Using ultra-conservative 4-line conversations with 60-second delays to completely avoid rate limiting.",
     },
-    optimizedStrategy: {
-      linesPerConversation: 6,
-      expectedAPICalls: 6,
-      delayBetweenCalls: "4 seconds",
-      totalGenerationTime: "~24 seconds",
+    ultraConservativeStrategy: {
+      linesPerConversation: 4,
+      expectedAPICalls: 4,
+      delayBetweenCalls: "60 seconds",
+      totalGenerationTime: "~4 minutes",
+      wordsPerLine: "40-50 words",
+      secondsPerLine: "13-16 seconds",
       benefits: [
-        "Reduced API calls from 10-15 to just 6",
-        "Longer, more educational content per line",
-        "Better rate limit compliance",
-        "Higher quality teaching-style conversations",
+        "Reduced API calls to absolute minimum (4 total)",
+        "Comprehensive, information-dense content per line",
+        "60-second delays eliminate rate limit risk",
+        "Higher quality, detailed educational conversations",
+        "Maximum content value per API call",
       ],
     },
   });
