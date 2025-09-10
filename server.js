@@ -1432,6 +1432,21 @@ app.get("/video/base", async (req, res) => {
 });
 
 const getBaseVideo = async () => {
+  // Check for local base video files first
+  const localBaseVideos = [
+    "base.mp4",
+    "temp/base_video.mp4",
+    "videos/base.mp4",
+  ];
+
+  for (const videoPath of localBaseVideos) {
+    if (fs.existsSync(videoPath)) {
+      logger.info(`✅ Using local base video: ${videoPath}`);
+      return path.resolve(videoPath); // Return absolute path for local file
+    }
+  }
+
+  // If no local file found, try Filebase
   try {
     const command = new GetObjectCommand({
       Bucket: process.env.FILEBASE_BUCKET_NAME,
@@ -1445,21 +1460,6 @@ const getBaseVideo = async () => {
     return url;
   } catch (error) {
     logger.error("❌ Error getting base video from Filebase:", error.message);
-
-    // Check for local base video files as fallback
-    const localBaseVideos = [
-      "temp/base_video.mp4",
-      "base.mp4",
-      "videos/base.mp4",
-    ];
-
-    for (const videoPath of localBaseVideos) {
-      if (fs.existsSync(videoPath)) {
-        logger.info(`✅ Using local base video: ${videoPath}`);
-        return path.resolve(videoPath); // Return absolute path for local file
-      }
-    }
-
     logger.error("❌ No base video found locally or in Filebase");
     throw new Error(
       "Base video not found. Please upload base.mp4 to Filebase or place it in the project directory."
