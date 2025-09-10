@@ -1432,16 +1432,39 @@ app.get("/video/base", async (req, res) => {
 });
 
 const getBaseVideo = async () => {
-  const command = new GetObjectCommand({
-    Bucket: process.env.FILEBASE_BUCKET_NAME,
-    Key: "base.mp4",
-  });
+  try {
+    const command = new GetObjectCommand({
+      Bucket: process.env.FILEBASE_BUCKET_NAME,
+      Key: "base.mp4",
+    });
 
-  const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
-  logger.info(
-    `Retrieved base video URL from Filebase bucket: ${process.env.FILEBASE_BUCKET_NAME}/base.mp4`
-  );
-  return url;
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
+    logger.info(
+      `Retrieved base video URL from Filebase bucket: ${process.env.FILEBASE_BUCKET_NAME}/base.mp4`
+    );
+    return url;
+  } catch (error) {
+    logger.error("❌ Error getting base video from Filebase:", error.message);
+
+    // Check for local base video files as fallback
+    const localBaseVideos = [
+      "temp/base_video.mp4",
+      "base.mp4",
+      "videos/base.mp4",
+    ];
+
+    for (const videoPath of localBaseVideos) {
+      if (fs.existsSync(videoPath)) {
+        logger.info(`✅ Using local base video: ${videoPath}`);
+        return path.resolve(videoPath); // Return absolute path for local file
+      }
+    }
+
+    logger.error("❌ No base video found locally or in Filebase");
+    throw new Error(
+      "Base video not found. Please upload base.mp4 to Filebase or place it in the project directory."
+    );
+  }
 };
 
 // Filebase Upload/Download API endpoints
@@ -1983,21 +2006,39 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
   // Create SRT subtitle file
   createSubtitlesFile(script, subtitlesPath);
 
-  // Download base video
-  const baseVideoPath = "temp/base_video.mp4";
-  const response = await axios({
-    method: "GET",
-    url: baseVideoUrl,
-    responseType: "stream",
-  });
+  // Handle base video - could be URL or local path
+  let baseVideoPath = "temp/base_video.mp4";
 
-  const writer = fs.createWriteStream(baseVideoPath);
-  response.data.pipe(writer);
+  // Check if baseVideoUrl is a local file path or a URL
+  if (
+    baseVideoUrl.startsWith("http://") ||
+    baseVideoUrl.startsWith("https://")
+  ) {
+    logger.info(`→ Downloading base video from URL: ${baseVideoUrl}`);
+    const response = await axios({
+      method: "GET",
+      url: baseVideoUrl,
+      responseType: "stream",
+    });
 
-  await new Promise((resolve, reject) => {
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-  });
+    const writer = fs.createWriteStream(baseVideoPath);
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+    logger.info(`✓ Base video downloaded: ${baseVideoPath}`);
+  } else {
+    // It's a local file path
+    logger.info(`→ Using local base video: ${baseVideoUrl}`);
+    baseVideoPath = baseVideoUrl;
+
+    // Verify the file exists
+    if (!fs.existsSync(baseVideoPath)) {
+      throw new Error(`Base video file not found: ${baseVideoPath}`);
+    }
+  }
 
   // Prepare audio - now handles single conversation file or multiple files
   const combinedAudioPath = "temp/combined_audio.mp3";
