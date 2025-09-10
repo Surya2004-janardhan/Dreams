@@ -485,23 +485,23 @@ const generateScript = async (title, description) => {
   Description: ${description}
   
   Requirements:
-  - EXACTLY 4 lines total: 2 from Person A, 2 from Person B (alternating)
-  - Each line should be 13-16 seconds when spoken (40-50 words per line)
-  - COMPREHENSIVE and EDUCATIONAL style - each line must cover significant depth
-  - Person A introduces and asks comprehensive questions, Person B provides detailed explanations
-  - Use extensive teaching language: "Let me break this down completely...", "Here's the full process...", "To understand this fully..."
-  - Make it like a comprehensive tutorial - each line should be information-dense
-  - Clear, detailed English that explains everything: the WHY, HOW, WHAT, and practical applications
-  - Each response should be complete and comprehensive to cover the topic fully in just 4 exchanges
+  - EXACTLY 4 lines total: 2 from Person A, 2 from Person B (alternating: A, B, A, B)
+  - Each line should be 13-16 seconds when spoken (35-45 words per line)
+  - EDUCATIONAL and COMPREHENSIVE style - teach concepts clearly
+  - Person A asks questions, Person B provides detailed explanations
+  - Use teaching language: "Let me explain...", "Here's how it works...", "For example..."
+  - Make it like a tutorial - information-dense but conversational
+  - Clear, detailed English that explains WHY, HOW, and practical applications
+  - Keep total under 4000 characters for optimal API processing
   
   Structure:
-  Person A: [Comprehensive introduction with detailed question - 40-50 words]
-  Person B: [Complete detailed explanation with multiple examples - 40-50 words] 
-  Person A: [In-depth follow-up with specific scenarios - 40-50 words]
-  Person B: [Comprehensive conclusion with actionable steps and summary - 40-50 words]
+  Person A: [Comprehensive question - 35-45 words]
+  Person B: [Detailed explanation with example - 35-45 words] 
+  Person A: [Follow-up question with scenario - 35-45 words]
+  Person B: [Complete answer with actionable advice - 35-45 words]
   
   Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "comprehensive detailed educational text"}, {"speaker": "Person B", "text": "thorough explanatory response"}]`;
+  [{"speaker": "Person A", "text": "detailed educational text"}, {"speaker": "Person B", "text": "comprehensive response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -800,142 +800,132 @@ const generateAudio = async (script) => {
   }
 };
 
-// New Google AI Studio TTS implementation with conversation-style generation
+// Helper function to count tokens in text (approximate)
+const countTokens = (text) => {
+  // Rough approximation: 1 token ≈ 4 characters for English text
+  return Math.ceil(text.length / 4);
+};
+
+// Helper function to format conversation script for multi-speaker TTS
+const formatConversationForTTS = (script) => {
+  return script.map((line) => `${line.speaker}: ${line.text}`).join("\n");
+};
+
+// New single API call approach with multi-speaker configuration
 const generateAudioWithBatchingStrategy = async (script) => {
   logger.info(
-    `→ Generating single conversation audio using ultra-conservative rate limiting for ${script.length} lines`
+    `→ Generating single conversation audio using ONE API call with multi-speaker configuration`
   );
-
-  // Validate script length
-  if (script.length !== 4) {
-    logger.warn(
-      `⚠️ Expected 4 lines for optimal rate limiting, got ${script.length}. Proceeding anyway...`
-    );
-  }
 
   try {
     // Initialize Google AI client
     const apiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({});
 
-    // Generate individual audio files for each line to maintain conversation flow
-    const audioSegments = [];
+    // Format the entire conversation for multi-speaker TTS
+    const conversationText = formatConversationForTTS(script);
 
+    // Count tokens before sending
+    const tokenCount = countTokens(conversationText);
+    logger.info(`📊 Token count: ${tokenCount} tokens`);
     logger.info(
-      `→ Generating ${script.length} comprehensive audio segments with 1-minute delays`
-    );
-    logger.info(
-      `⏰ Total estimated time: ~${script.length} minutes (including delays)`
+      `📝 Conversation text length: ${conversationText.length} characters`
     );
 
-    for (let i = 0; i < script.length; i++) {
-      const line = script[i];
-      const isSpeaker1 =
-        line.speaker === "Person A" || line.speaker === "Speaker 1";
-
-      logger.info(
-        `→ Generating audio for line ${i + 1}/${script.length} (${
-          line.speaker
-        }): "${line.text.substring(0, 80)}..."`
+    if (tokenCount > 4500) {
+      logger.warn(
+        `⚠️ High token count (${tokenCount}). API call may fail or be truncated.`
       );
-      logger.info(
-        `📝 Full text (${line.text.split(" ").length} words): ${line.text}`
-      );
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: line.text }] }],
-        config: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: isSpeaker1 ? "Kore" : "Puck",
-              },
-            },
-          },
-        },
-      });
-
-      const audioData =
-        response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-      if (audioData) {
-        const audioBuffer = Buffer.from(audioData, "base64");
-        const segmentFile = `audio/segment_${i + 1}.wav`;
-        await saveWaveFile(segmentFile, audioBuffer);
-
-        audioSegments.push({
-          index: i + 1,
-          speaker: line.speaker,
-          text: line.text,
-          file: segmentFile,
-          voice: isSpeaker1 ? "Kore (Speaker 1)" : "Puck (Speaker 2)",
-          estimatedDuration: Math.ceil(line.text.split(" ").length / 3), // ~3 words per second
-        });
-
-        logger.info(`✓ Audio segment ${i + 1} saved: ${segmentFile}`);
-      } else {
-        logger.warn(`⚠️ No audio data received for line ${i + 1}`);
-      }
-
-      // Add a full 1-minute delay to completely avoid rate limiting
-      if (i < script.length - 1) {
-        logger.info(
-          "⏳ Waiting 60 seconds to completely avoid rate limiting..."
-        );
-        logger.info(`   Progress: ${i + 1}/${script.length} calls completed`);
-
-        // Show countdown every 15 seconds
-        for (let countdown = 60; countdown > 0; countdown -= 15) {
-          await new Promise((resolve) => setTimeout(resolve, 15000)); // 15 second increments
-          if (countdown > 15) {
-            logger.info(`   ⏱️ ${countdown - 15} seconds remaining...`);
-          }
-        }
-      }
     }
 
-    // Now combine all segments into a single conversation file
-    const conversationFile = await createSingleConversationFile(audioSegments);
+    logger.info(`→ Making single API call with multi-speaker configuration...`);
+    logger.info(`� Full conversation:\n${conversationText}`);
 
-    const totalEstimatedDuration = audioSegments.reduce(
-      (total, segment) => total + segment.estimatedDuration,
-      0
-    );
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: conversationText }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              {
+                speaker: "Person A",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Kore" },
+                },
+              },
+              {
+                speaker: "Person B",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Puck" },
+                },
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const audioData =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    if (!audioData) {
+      throw new Error("No audio data received from API");
+    }
+
+    const audioBuffer = Buffer.from(audioData, "base64");
+    const conversationFile = "audio/conversation_single_call.wav";
+    await saveWaveFile(conversationFile, audioBuffer);
 
     logger.info(
-      `✓ Comprehensive educational conversation audio created: ${conversationFile}`
+      `✓ Single conversation audio file created: ${conversationFile}`
     );
     logger.info(
-      `📊 Summary: ${audioSegments.length} segments, ~${totalEstimatedDuration} seconds total`
+      `📊 Summary: 1 API call, ${script.length} speakers, ${tokenCount} tokens`
     );
     logger.info(
-      `🎯 Rate limiting: Used only ${script.length} API calls with 60-second delays`
+      `🎯 Success: Used only 1 API call instead of ${script.length} calls!`
     );
 
     return {
-      segments: audioSegments,
       conversationFile: conversationFile,
-      totalSegments: audioSegments.length,
-      estimatedDuration: totalEstimatedDuration,
-      apiCallsUsed: script.length,
+      totalSegments: script.length,
+      apiCallsUsed: 1,
+      tokenCount: tokenCount,
+      textLength: conversationText.length,
       message:
-        "Comprehensive educational conversation audio generated with ultra-conservative rate limiting",
+        "Single conversation audio generated with ONE API call using multi-speaker configuration",
     };
   } catch (error) {
-    if (error.message && error.message.includes("429")) {
-      logger.error("❌ Rate limit exceeded even with 60-second delays.");
+    // Enhanced error handling
+    if (
+      error.status === 503 ||
+      (error.error && error.error.status === "UNAVAILABLE")
+    ) {
+      logger.error(
+        "❌ Model is overloaded. The TTS service is currently unavailable."
+      );
       throw new Error(
-        "Rate limit exceeded despite conservative delays. Please wait 10-15 minutes before trying again, or check if you've exceeded daily quota."
+        "TTS model is overloaded. Please try again in a few minutes. This is a temporary Google service issue."
       );
     }
+
+    if (error.message && error.message.includes("429")) {
+      logger.error("❌ Rate limit exceeded during audio generation.");
+      throw new Error(
+        "Rate limit exceeded for Google AI Studio TTS. Please wait a few minutes before trying again."
+      );
+    }
+
     logger.error("Google AI Studio TTS generation failed:", error);
-    throw error;
+    throw new Error(
+      `TTS generation failed: ${error.message || "Unknown error"}`
+    );
   }
 };
 
-// Rate limit status endpoint (updated for ultra-conservative approach)
+// Rate limit status endpoint (updated for single API call approach)
 app.get("/tts/rate-limit-status", (req, res) => {
   res.json({
     canMakeRequest: true,
@@ -948,22 +938,27 @@ app.get("/tts/rate-limit-status", (req, res) => {
         charactersPerRequest: 5000,
       },
       suggestion:
-        "Using ultra-conservative 4-line conversations with 60-second delays to completely avoid rate limiting.",
+        "Using single API call with multi-speaker configuration to completely eliminate rate limiting issues.",
     },
-    ultraConservativeStrategy: {
-      linesPerConversation: 4,
-      expectedAPICalls: 4,
-      delayBetweenCalls: "60 seconds",
-      totalGenerationTime: "~4 minutes",
-      wordsPerLine: "40-50 words",
-      secondsPerLine: "13-16 seconds",
+    singleCallStrategy: {
+      apiCallsPerConversation: 1,
+      speakersSupported: ["Person A (Kore voice)", "Person B (Puck voice)"],
+      maxTokensPerCall: "~4500 tokens",
+      totalGenerationTime: "~10-30 seconds",
       benefits: [
-        "Reduced API calls to absolute minimum (4 total)",
-        "Comprehensive, information-dense content per line",
-        "60-second delays eliminate rate limit risk",
-        "Higher quality, detailed educational conversations",
-        "Maximum content value per API call",
+        "Only 1 API call total - no rate limiting possible",
+        "Multi-speaker voices in single audio file",
+        "Faster generation (no delays needed)",
+        "Natural conversation flow",
+        "Token counting for safety",
+        "Robust error handling for service overload",
       ],
+    },
+    tokenCounting: {
+      enabled: true,
+      approximateRatio: "1 token ≈ 4 characters",
+      warningThreshold: 4500,
+      recommendation: "Keep conversations under 4500 tokens for best results",
     },
   });
 });
