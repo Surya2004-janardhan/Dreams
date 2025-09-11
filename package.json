@@ -2,7 +2,7 @@
   "name": "ai-content-automation",
   "version": "2.0.0",
   "description": "AI Content Automation Workflow v2.0 - Clean Architecture with Routes, Controllers, and Services",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
