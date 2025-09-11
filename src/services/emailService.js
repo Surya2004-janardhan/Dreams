@@ -81,7 +81,7 @@ const sendSuccessNotification = async (taskData, results) => {
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // Send to self
+      to: process.env.NOTIFICATION_EMAIL, // Send to chintalajanardhan2004
       subject: subject,
       html: htmlContent,
     };
@@ -157,7 +157,7 @@ ${error.stack}
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // Send to self
+      to: process.env.NOTIFICATION_EMAIL, // Send to chintalajanardhan2004
       subject: subject,
       html: htmlContent,
     };
