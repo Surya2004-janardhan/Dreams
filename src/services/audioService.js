@@ -2,10 +2,12 @@ const { GoogleGenAI } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
-const axios = require("axios");
+const wav = require("wav");
 
 // Initialize Google GenAI client
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
 // Parse conversation into segments with speaker identification
 const parseConversation = (script) => {
@@ -37,59 +39,76 @@ const parseConversation = (script) => {
   return segments;
 };
 
-// Generate TTS audio using Google Cloud Text-to-Speech
+// Save WAV file helper function
+const saveWaveFile = async (
+  filename,
+  pcmData,
+  channels = 1,
+  rate = 24000,
+  sampleWidth = 2
+) => {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.FileWriter(filename, {
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+
+    writer.on("finish", resolve);
+    writer.on("error", reject);
+
+    writer.write(pcmData);
+    writer.end();
+  });
+};
+
+// Generate TTS audio using new Gemini API
 const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
+    if (!process.env.GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY is required for TTS generation");
     }
 
-    // Custom prompt for natural-sounding Indian English TTS
-    const customPrompt = `Generate natural-sounding Indian English speech for: "${text}"
+    // Determine speaker based on voice parameter
+    const isFemale = voice.includes("A") || voice.toLowerCase().includes("female");
+    const speakerName = isFemale ? "Jane" : "Joe";
+    const voiceName = isFemale ? "Puck" : "Kore"; // Gemini voice names
 
-Instructions for voice synthesis:
-- Use clear, natural Indian English accent
-- Maintain conversational tone and pace
+    const prompt = `Generate natural-sounding speech for the following text in Indian English accent: "${text}"
+
+Instructions:
+- Use clear, natural Indian English pronunciation
+- Maintain conversational tone and moderate pace
 - Include natural pauses and intonation
 - Ensure proper pronunciation of technical terms
 - Voice should sound engaging and educational
-- Pace: moderate speed for easy understanding
-- Emotion: Friendly and informative`;
+- Keep the delivery friendly and informative`;
 
-    const requestBody = {
-      input: {
-        text: customPrompt,
-      },
-      voice: {
-        languageCode: "en-IN",
-        name: voice,
-        ssmlGender: voice.includes("A") ? "FEMALE" : "MALE",
-      },
-      audioConfig: {
-        audioEncoding: "LINEAR16",
-        speakingRate: 1.0,
-        pitch: 0.0,
-        volumeGainDb: 0.0,
-      },
-    };
-
-    const response = await axios.post(
-      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
-      requestBody,
-      {
-        headers: {
-          "Content-Type": "application/json",
+    const response = await genAI.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: [{ parts: [{ text: prompt }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: voiceName,
+            },
+          },
         },
       }
-    );
+    });
 
-    if (response.data.audioContent) {
-      return Buffer.from(response.data.audioContent, "base64");
-    } else {
-      throw new Error("No audio content received from TTS API");
+    const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    if (!data) {
+      throw new Error("No audio data received from Gemini TTS API");
     }
+
+    const audioBuffer = Buffer.from(data, "base64");
+    logger.info(`✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`);
+
+    return audioBuffer;
   } catch (error) {
     logger.error(`TTS generation failed: ${error.message}`);
 
@@ -116,29 +135,13 @@ Instructions for voice synthesis:
 
     // Generate simple tone for placeholder
     for (let i = 0; i < samples; i++) {
-      const sample = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 16383;
+      const sample = Math.sin((i * 440 * 2 * Math.PI) / sampleRate) * 16383;
       buffer.writeInt16LE(sample, 44 + i * 2);
     }
 
-    logger.info("Generated placeholder audio");
+    logger.warn("⚠️ Using placeholder audio due to TTS API failure");
     return buffer;
   }
-};
-
-// Save WAV file from buffer
-const saveWaveFile = async (audioBuffer, filePath) => {
-  return new Promise((resolve, reject) => {
-    try {
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      fs.writeFileSync(filePath, audioBuffer);
-      resolve(filePath);
-    } catch (error) {
-      reject(error);
-    }
-  });
 };
 
 // Main audio generation function
@@ -167,7 +170,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
           `audio/segment_${i + 1}_${segment.speaker}_${Date.now()}.wav`
         );
 
-        await saveWaveFile(audioBuffer, segmentFile);
+        await saveWaveFile(segmentFile, audioBuffer);
         audioSegments.push({
           file: segmentFile,
           speaker: segment.speaker,
