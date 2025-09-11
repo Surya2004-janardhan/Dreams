@@ -11,7 +11,7 @@ const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
 const parseConversation = (script) => {
   const lines = script.split("\n").filter((line) => line.trim());
   const segments = [];
-  
+
   lines.forEach((line) => {
     if (line.includes("Speaker A:")) {
       const content = line.replace("Speaker A:", "").trim();
@@ -19,21 +19,21 @@ const parseConversation = (script) => {
         segments.push({
           speaker: "female",
           text: content,
-          voice: "en-IN-Wavenet-A" // Indian English Female voice
+          voice: "en-IN-Wavenet-A", // Indian English Female voice
         });
       }
     } else if (line.includes("Speaker B:")) {
       const content = line.replace("Speaker B:", "").trim();
       if (content) {
         segments.push({
-          speaker: "male", 
+          speaker: "male",
           text: content,
-          voice: "en-IN-Wavenet-B" // Indian English Male voice
+          voice: "en-IN-Wavenet-B", // Indian English Male voice
         });
       }
     }
   });
-  
+
   return segments;
 };
 
@@ -41,7 +41,7 @@ const parseConversation = (script) => {
 const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    
+
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is required for TTS generation");
     }
@@ -65,14 +65,14 @@ Instructions for voice synthesis:
       voice: {
         languageCode: "en-IN",
         name: voice,
-        ssmlGender: voice.includes("A") ? "FEMALE" : "MALE"
+        ssmlGender: voice.includes("A") ? "FEMALE" : "MALE",
       },
       audioConfig: {
         audioEncoding: "LINEAR16",
         speakingRate: 1.0,
         pitch: 0.0,
-        volumeGainDb: 0.0
-      }
+        volumeGainDb: 0.0,
+      },
     };
 
     const response = await axios.post(
@@ -80,31 +80,30 @@ Instructions for voice synthesis:
       requestBody,
       {
         headers: {
-          'Content-Type': 'application/json'
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
 
     if (response.data.audioContent) {
-      return Buffer.from(response.data.audioContent, 'base64');
+      return Buffer.from(response.data.audioContent, "base64");
     } else {
       throw new Error("No audio content received from TTS API");
     }
-
   } catch (error) {
     logger.error(`TTS generation failed: ${error.message}`);
-    
+
     // Fallback: Create a simple WAV header for placeholder
     const sampleRate = 22050;
     const duration = Math.max(1, Math.ceil(text.length / 10)); // Estimate duration
     const samples = sampleRate * duration;
     const buffer = Buffer.alloc(44 + samples * 2);
-    
+
     // WAV header
-    buffer.write('RIFF', 0);
+    buffer.write("RIFF", 0);
     buffer.writeUInt32LE(36 + samples * 2, 4);
-    buffer.write('WAVE', 8);
-    buffer.write('fmt ', 12);
+    buffer.write("WAVE", 8);
+    buffer.write("fmt ", 12);
     buffer.writeUInt32LE(16, 16);
     buffer.writeUInt16LE(1, 20);
     buffer.writeUInt16LE(1, 22);
@@ -112,15 +111,15 @@ Instructions for voice synthesis:
     buffer.writeUInt32LE(sampleRate * 2, 28);
     buffer.writeUInt16LE(2, 32);
     buffer.writeUInt16LE(16, 34);
-    buffer.write('data', 36);
+    buffer.write("data", 36);
     buffer.writeUInt32LE(samples * 2, 40);
-    
+
     // Generate simple tone for placeholder
     for (let i = 0; i < samples; i++) {
-      const sample = Math.sin(2 * Math.PI * 440 * i / sampleRate) * 16383;
+      const sample = Math.sin((2 * Math.PI * 440 * i) / sampleRate) * 16383;
       buffer.writeInt16LE(sample, 44 + i * 2);
     }
-    
+
     logger.info("Generated placeholder audio");
     return buffer;
   }
@@ -152,31 +151,39 @@ const generateAudioWithBatchingStrategy = async (script) => {
     logger.info(`📊 Found ${segments.length} conversation segments`);
 
     const audioSegments = [];
-    
+
     // Generate audio for each segment
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      logger.info(`🔄 Generating audio for segment ${i + 1}/${segments.length} (${segment.speaker})`);
-      
+      logger.info(
+        `🔄 Generating audio for segment ${i + 1}/${segments.length} (${
+          segment.speaker
+        })`
+      );
+
       try {
         const audioBuffer = await generateTTSAudio(segment.text, segment.voice);
-        const segmentFile = path.resolve(`audio/segment_${i + 1}_${segment.speaker}_${Date.now()}.wav`);
-        
+        const segmentFile = path.resolve(
+          `audio/segment_${i + 1}_${segment.speaker}_${Date.now()}.wav`
+        );
+
         await saveWaveFile(audioBuffer, segmentFile);
         audioSegments.push({
           file: segmentFile,
           speaker: segment.speaker,
           text: segment.text,
-          duration: Math.ceil(segment.text.length / 10) // Estimate duration
+          duration: Math.ceil(segment.text.length / 10), // Estimate duration
         });
-        
+
         logger.info(`✓ Generated: ${segmentFile}`);
-        
+
         // Small delay between API calls to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
+        await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
-        logger.error(`Failed to generate audio for segment ${i + 1}:`, error.message);
+        logger.error(
+          `Failed to generate audio for segment ${i + 1}:`,
+          error.message
+        );
         // Continue with next segment
       }
     }
@@ -189,15 +196,16 @@ const generateAudioWithBatchingStrategy = async (script) => {
     // In a full implementation, you'd merge all segments
     const conversationFile = audioSegments[0].file;
 
-    logger.info(`✅ Multi-speaker TTS audio generated: ${audioSegments.length} segments`);
+    logger.info(
+      `✅ Multi-speaker TTS audio generated: ${audioSegments.length} segments`
+    );
 
     return {
       conversationFile: conversationFile,
       segments: audioSegments,
       totalSegments: segments.length,
-      apiCallsUsed: audioSegments.length
+      apiCallsUsed: audioSegments.length,
     };
-    
   } catch (error) {
     logger.error("❌ Audio generation failed:", error.message);
     throw error;
@@ -207,5 +215,5 @@ const generateAudioWithBatchingStrategy = async (script) => {
 module.exports = {
   generateAudioWithBatchingStrategy,
   parseConversation,
-  generateTTSAudio
+  generateTTSAudio,
 };

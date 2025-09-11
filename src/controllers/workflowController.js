@@ -1,13 +1,14 @@
 const { generateScript } = require("../services/scriptService");
-const {
-  generateAudioWithBatchingStrategy,
-} = require("../services/audioService");
+const { generateAudioWithBatchingStrategy } = require("../services/audioService");
 const { generateImages } = require("../services/imageService");
-const { getBaseVideo } = require("../services/videoService");
-const { createSubtitlesFile } = require("../utils/subtitles");
+const { getBaseVideo, composeVideo, createPlatformOptimized } = require("../services/videoProcessingService");
+const { createSubtitlesFile, parseConversationTiming } = require("../utils/subtitles");
+const { getNextTask, updateSheetStatus } = require("../services/sheetsService");
+const { uploadToBothPlatforms } = require("../services/socialMediaService");
+const { sendSuccessNotification, sendErrorNotification } = require("../services/emailService");
+const { cleanupAllMediaFolders, initializeDirectories } = require("../services/cleanupService");
 const cleanLLMData = require("../utils/textCleaner");
 const logger = require("../config/logger");
-const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
 const path = require("path");
 
@@ -18,9 +19,186 @@ let currentWorkflow = {
   currentStep: null,
   error: null,
   results: {},
+  taskData: null
 };
 
-// Main workflow execution
+/**
+ * Main automated workflow - pulls from Google Sheets and processes
+ */
+const runAutomatedWorkflow = async (req, res) => {
+  let taskData = null;
+  
+  try {
+    logger.info("🚀 Starting automated content creation workflow...");
+    
+    // Initialize directories
+    initializeDirectories();
+    
+    const taskId = Date.now().toString();
+    currentWorkflow = {
+      taskId,
+      status: "running",
+      currentStep: "sheets/fetch-task",
+      error: null,
+      results: {},
+      taskData: null
+    };
+
+    // Send immediate response
+    res.json({
+      success: true,
+      message: "Automated workflow started successfully",
+      taskId: taskId,
+      status: "running",
+      note: "Check workflow status at /workflow/status or wait for email notification"
+    });
+
+    // Step 1: Get next task from Google Sheets
+    logger.info("→ Step 1: Getting next task from Google Sheets");
+    currentWorkflow.currentStep = "sheets/fetch-task";
+    taskData = await getNextTask();
+    currentWorkflow.taskData = taskData;
+    
+    logger.info(`📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`);
+
+    // Step 2: Generate Q&A conversation script
+    logger.info("→ Step 2: Generating multi-speaker Q&A script");
+    currentWorkflow.currentStep = "script/generate";
+    const rawScript = await generateScript(taskData.idea, taskData.description);
+    const script = cleanLLMData.extractConversation(rawScript);
+
+    if (!script || script.length < 100) {
+      throw new Error("Generated script is too short or empty");
+    }
+
+    currentWorkflow.results.script = script;
+    logger.info("✓ Q&A script generated with male/female speakers");
+
+    // Step 3: Generate TTS audio with different voices
+    logger.info("→ Step 3: Generating TTS audio with male/female voices");
+    currentWorkflow.currentStep = "audio/generate";
+    const audioFiles = await generateAudioWithBatchingStrategy(script);
+    currentWorkflow.results.audioFiles = audioFiles;
+    logger.info("✓ Multi-speaker TTS audio generated");
+
+    // Step 4: Create perfectly timed subtitles
+    logger.info("→ Step 4: Creating perfectly timed subtitles");
+    currentWorkflow.currentStep = "subtitles/generate";
+    const subtitlesPath = path.resolve(`subtitles/subtitles_${taskId}.srt`);
+    const subtitlesResult = createSubtitlesFile(script, subtitlesPath);
+    
+    if (!subtitlesResult.success) {
+      throw new Error("Failed to create subtitles");
+    }
+    
+    currentWorkflow.results.subtitles = subtitlesPath;
+    logger.info("✓ SRT subtitles created with perfect timing");
+
+    // Step 5: Get base video from Drive or local
+    logger.info("→ Step 5: Getting base video");
+    currentWorkflow.currentStep = "video/base";
+    const baseVideoPath = await getBaseVideo();
+    currentWorkflow.results.baseVideoPath = baseVideoPath;
+    logger.info("✓ Base video ready");
+
+    // Step 6: Generate contextual images with timing
+    logger.info("→ Step 6: Generating contextual educational images");
+    currentWorkflow.currentStep = "images/generate";
+    const images = await generateImages(script);
+    currentWorkflow.results.images = images;
+    logger.info(`✓ ${images.length} contextual images generated with timing`);
+
+    // Step 7: Compose final video with all elements
+    logger.info("→ Step 7: Composing final video with subtitles and images");
+    currentWorkflow.currentStep = "video/compose";
+    const finalVideo = await composeVideo(
+      baseVideoPath,
+      audioFiles.conversationFile,
+      images,
+      subtitlesPath,
+      taskData.idea
+    );
+    
+    currentWorkflow.results.finalVideo = finalVideo;
+    logger.info("✓ Final video composed with subtitles and images");
+
+    // Step 8: Create platform-optimized versions
+    logger.info("→ Step 8: Creating platform-optimized versions");
+    currentWorkflow.currentStep = "video/optimize";
+    const optimizedVersions = await createPlatformOptimized(finalVideo.videoPath, 'both');
+    currentWorkflow.results.optimizedVersions = optimizedVersions;
+    logger.info("✓ Platform-optimized versions created");
+
+    // Step 9: Upload to YouTube and Instagram
+    logger.info("→ Step 9: Uploading to social media platforms");
+    currentWorkflow.currentStep = "social/upload";
+    const uploadResults = await uploadToBothPlatforms(
+      optimizedVersions.youtube || finalVideo.videoPath,
+      taskData.idea,
+      taskData.description
+    );
+    
+    currentWorkflow.results.uploadResults = uploadResults;
+    logger.info("✓ Social media uploads completed");
+
+    // Step 10: Update Google Sheet with results
+    logger.info("→ Step 10: Updating Google Sheet with results");
+    currentWorkflow.currentStep = "sheets/update";
+    await updateSheetStatus(
+      taskData.rowId,
+      "Posted",
+      uploadResults.youtubeUrl,
+      uploadResults.instagramUrl
+    );
+    logger.info("✓ Google Sheet updated with live links");
+
+    // Step 11: Send success notification email
+    logger.info("→ Step 11: Sending success notification");
+    currentWorkflow.currentStep = "email/success";
+    await sendSuccessNotification(taskData, uploadResults);
+    logger.info("✓ Success notification sent");
+
+    // Step 12: Cleanup media folders
+    logger.info("→ Step 12: Cleaning up media folders");
+    currentWorkflow.currentStep = "cleanup";
+    await cleanupAllMediaFolders();
+    logger.info("✓ Media folders cleaned");
+
+    // Final status update
+    currentWorkflow.status = "completed";
+    currentWorkflow.currentStep = "finished";
+    
+    logger.info("🎉 Automated workflow completed successfully!");
+    logger.info(`📺 YouTube: ${uploadResults.youtubeUrl}`);
+    logger.info(`📱 Instagram: ${uploadResults.instagramUrl}`);
+
+  } catch (error) {
+    logger.error("❌ Automated workflow failed:", error);
+    
+    currentWorkflow.status = "error";
+    currentWorkflow.error = error.message;
+    
+    // Send error notification
+    try {
+      await sendErrorNotification(taskData, error, currentWorkflow.currentStep);
+    } catch (emailError) {
+      logger.error("Failed to send error notification:", emailError);
+    }
+    
+    // If task data exists, update sheet with error status
+    if (taskData) {
+      try {
+        await updateSheetStatus(taskData.rowId, "Error", "", "");
+      } catch (sheetError) {
+        logger.error("Failed to update sheet with error status:", sheetError);
+      }
+    }
+  }
+};
+
+/**
+ * Legacy manual workflow - for backwards compatibility
+ */
 const runWorkflow = async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -37,14 +215,23 @@ const runWorkflow = async (req, res) => {
       currentStep: "script/generate",
       error: null,
       results: {},
+      taskData: { idea: title, description: description || "" }
     };
 
-    logger.info(`🚀 Starting workflow for task: ${title}`);
+    logger.info(`🚀 Starting manual workflow for: ${title}`);
 
-    // Step 1: Generate script
-    logger.info("→ Step 1: Generating script");
-    const prompt = `${title}. ${description || ""}`;
-    const rawScript = await generateScript(prompt);
+    // Run the same process as automated workflow but with manual input
+    const mockTaskData = {
+      rowId: null,
+      sno: "manual",
+      idea: title,
+      description: description || "",
+      status: "manual"
+    };
+
+    // Generate script
+    logger.info("→ Generating script");
+    const rawScript = await generateScript(title, description);
     const script = cleanLLMData.extractConversation(rawScript);
 
     if (!script || script.length < 100) {
@@ -52,52 +239,122 @@ const runWorkflow = async (req, res) => {
     }
 
     currentWorkflow.results.script = script;
-    logger.info("✓ Script generated");
 
-    // Step 2: Check for existing audio files
-    logger.info("→ Step 2: Checking for existing audio files");
-    let audioFiles;
-    const existingAudioFiles = [];
+    // Generate audio
+    logger.info("→ Generating audio");
+    currentWorkflow.currentStep = "audio/generate";
+    const audioFiles = await generateAudioWithBatchingStrategy(script);
+    currentWorkflow.results.audioFiles = audioFiles;
 
-    // Check for conversation audio file
-    const audioPattern = "audio/conversation_*.wav";
-    const audioDir = "audio";
+    // Get base video
+    logger.info("→ Getting base video");
+    currentWorkflow.currentStep = "video/base";
+    const baseVideoPath = await getBaseVideo();
+    currentWorkflow.results.baseVideoPath = baseVideoPath;
 
-    if (fs.existsSync(audioDir)) {
-      const audioFilesList = fs.readdirSync(audioDir);
-      const conversationFiles = audioFilesList.filter(
-        (file) => file.startsWith("conversation_") && file.endsWith(".wav")
-      );
+    // Generate images
+    logger.info("→ Generating images");
+    currentWorkflow.currentStep = "images/generate";
+    const images = await generateImages(script);
+    currentWorkflow.results.images = images;
 
-      if (conversationFiles.length > 0) {
-        const latestAudio = conversationFiles.sort().pop();
-        existingAudioFiles.push({
-          conversationFile: path.resolve(path.join(audioDir, latestAudio)),
-        });
+    // Create subtitles
+    logger.info("→ Creating subtitles");
+    const subtitlesPath = path.resolve(`subtitles/manual_subtitles_${taskId}.srt`);
+    const subtitlesResult = createSubtitlesFile(script, subtitlesPath);
+    currentWorkflow.results.subtitles = subtitlesPath;
+
+    // Final status
+    currentWorkflow.status = "completed";
+    currentWorkflow.currentStep = "finished";
+
+    res.json({
+      success: true,
+      message: "Manual workflow completed successfully",
+      taskId: taskId,
+      results: {
+        script: script.substring(0, 200) + "...",
+        audioGenerated: !!audioFiles.conversationFile,
+        imagesCount: images.length,
+        subtitlesCreated: subtitlesResult.success,
+        baseVideoFound: !!baseVideoPath
+      }
+    });
+
+  } catch (error) {
+    logger.error("❌ Manual workflow failed:", error);
+    
+    currentWorkflow.status = "error";
+    currentWorkflow.error = error.message;
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      step: currentWorkflow.currentStep
+    });
+  }
+};
+
+/**
+ * Get current workflow status
+ */
+const getWorkflowStatus = async (req, res) => {
+  res.json({
+    success: true,
+    workflow: {
+      taskId: currentWorkflow.taskId,
+      status: currentWorkflow.status,
+      currentStep: currentWorkflow.currentStep,
+      error: currentWorkflow.error,
+      taskData: currentWorkflow.taskData ? {
+        idea: currentWorkflow.taskData.idea,
+        sno: currentWorkflow.taskData.sno,
+        rowId: currentWorkflow.taskData.rowId
+      } : null,
+      progress: getProgressInfo(currentWorkflow.currentStep),
+      results: {
+        scriptGenerated: !!currentWorkflow.results.script,
+        audioGenerated: !!currentWorkflow.results.audioFiles,
+        imagesGenerated: currentWorkflow.results.images?.length || 0,
+        subtitlesCreated: !!currentWorkflow.results.subtitles,
+        videoComposed: !!currentWorkflow.results.finalVideo,
+        socialMediaUploaded: !!currentWorkflow.results.uploadResults,
+        sheetUpdated: currentWorkflow.currentStep === "finished",
+        cleaned: currentWorkflow.currentStep === "finished"
       }
     }
+  });
+};
 
-    if (existingAudioFiles.length > 0) {
-      logger.info("✅ Audio file already exists, skipping generation");
-      logger.info("⏩ Skipping audio generation step");
-      audioFiles = existingAudioFiles[0];
-    } else {
-      logger.info("🎤 No existing audio found, generating new audio");
-      currentWorkflow.currentStep = "audio/generate";
-      audioFiles = await generateAudioWithBatchingStrategy(script);
-    }
+/**
+ * Get progress information based on current step
+ */
+const getProgressInfo = (currentStep) => {
+  const steps = {
+    "sheets/fetch-task": { step: 1, total: 12, description: "Fetching task from Google Sheets" },
+    "script/generate": { step: 2, total: 12, description: "Generating Q&A conversation script" },
+    "audio/generate": { step: 3, total: 12, description: "Generating multi-speaker TTS audio" },
+    "subtitles/generate": { step: 4, total: 12, description: "Creating timed subtitles" },
+    "video/base": { step: 5, total: 12, description: "Getting base video" },
+    "images/generate": { step: 6, total: 12, description: "Generating contextual images" },
+    "video/compose": { step: 7, total: 12, description: "Composing final video" },
+    "video/optimize": { step: 8, total: 12, description: "Creating platform versions" },
+    "social/upload": { step: 9, total: 12, description: "Uploading to social media" },
+    "sheets/update": { step: 10, total: 12, description: "Updating Google Sheet" },
+    "email/success": { step: 11, total: 12, description: "Sending notification" },
+    "cleanup": { step: 12, total: 12, description: "Cleaning up files" },
+    "finished": { step: 12, total: 12, description: "Workflow completed" },
+    "error": { step: -1, total: 12, description: "Workflow encountered an error" }
+  };
 
-    currentWorkflow.results.audioFiles = audioFiles;
-    logger.info("✓ Audio ready");
+  return steps[currentStep] || { step: 0, total: 12, description: "Unknown step" };
+};
 
-    // Step 3: Get base video from Google Drive
-    logger.info("→ Step 3: Getting base video");
-    currentWorkflow.currentStep = "video/base";
-    const baseVideoUrl = await getBaseVideo();
-    currentWorkflow.results.baseVideoUrl = baseVideoUrl;
-    logger.info("✓ Base video retrieved");
-
-    // Step 4: Check for existing images
+module.exports = {
+  runAutomatedWorkflow,
+  runWorkflow,
+  getWorkflowStatus
+};
     logger.info("→ Step 4: Checking for existing images");
     let images;
     const existingImages = [];
@@ -307,12 +564,6 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
   throw new Error("No valid audio files provided for combination");
 };
 
-// Get workflow status
-const getWorkflowStatus = (req, res) => {
-  res.json(currentWorkflow);
-};
+// This function is already declared above, no need for a second declaration
 
-module.exports = {
-  runWorkflow,
-  getWorkflowStatus,
-};
+// The module exports are already defined above

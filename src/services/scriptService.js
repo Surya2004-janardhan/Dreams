@@ -13,7 +13,7 @@ const generateScript = async (topic, description = "") => {
 
   const prompt = `Create an engaging educational conversation between a curious female questioner (Speaker A) and a knowledgeable male expert (Speaker B) about: ${topic}
 
-${description ? `Context: ${description}` : ''}
+${description ? `Context: ${description}` : ""}
 
 Requirements:
 - Indian English conversation style
@@ -50,7 +50,8 @@ Topic: ${topic}`;
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator who specializes in creating natural, engaging conversations between a curious female questioner and a knowledgeable male expert. The female asks concise questions while the male provides detailed, comprehensive explanations in Indian English style.",
+            content:
+              "You are an expert educational content creator who specializes in creating natural, engaging conversations between a curious female questioner and a knowledgeable male expert. The female asks concise questions while the male provides detailed, comprehensive explanations in Indian English style.",
           },
           {
             role: "user",
