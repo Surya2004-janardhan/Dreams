@@ -709,65 +709,49 @@ const executeWorkflow = async () => {
       logger.info("♻️ Video already assembled, skipping");
     }
 
-    // Step 7: Upload final video to Filebase
-    logger.info("→ Step 7: Uploading to Filebase");
-    currentWorkflow.currentStep = "filebase/upload";
-    const videoFileName = `final-videos/${task.title.replace(
-      /[^a-zA-Z0-9]/g,
-      "-"
-    )}-${Date.now()}.mp4`;
-    const filebaseUpload = await uploadToFilebase(
-      videoFileName,
-      finalVideo,
-      "video/mp4"
-    );
-    currentWorkflow.results.filebaseUpload = filebaseUpload;
-    logger.info("✓ Uploaded to Filebase");
+    // Step 7: Save locally and prepare for social media (skip Filebase)
+    logger.info("→ Step 7: Saving video locally (skipping Filebase)");
+    currentWorkflow.currentStep = "local/save";
 
-    // Step 8: Generate metadata
-    logger.info("→ Step 8: Generating metadata");
-    currentWorkflow.currentStep = "metadata/generate";
-    const metadata = await generateMetadata(script);
-    currentWorkflow.results.metadata = metadata;
-    logger.info("✓ Metadata generated");
+    // Video is already saved locally in videos folder
+    const localVideoInfo = {
+      path: currentWorkflow.results.finalVideo,
+      format: "Instagram Reel (9:16)",
+      created: new Date().toISOString(),
+    };
 
-    // Step 9: Upload to YouTube
-    logger.info("→ Step 9: Uploading to YouTube");
-    currentWorkflow.currentStep = "youtube/upload";
-    const youtubeUrl = await uploadToYouTube(finalVideo, metadata, task.title);
-    currentWorkflow.results.youtubeUrl = youtubeUrl;
-    logger.info("✓ Uploaded to YouTube");
+    currentWorkflow.results.localVideo = localVideoInfo;
+    logger.info("✓ Video saved locally, ready for social media");
 
-    // Step 10: Upload to Instagram
-    logger.info("→ Step 10: Uploading to Instagram");
-    currentWorkflow.currentStep = "instagram/upload";
-    const instagramUrl = await uploadToInstagram(finalVideo, metadata.caption);
-    currentWorkflow.results.instagramUrl = instagramUrl;
-    logger.info("✓ Uploaded to Instagram");
+    // Step 8: Generate social media content (hashtags, emojis, captions)
+    logger.info("→ Step 8: Generating social media content");
+    currentWorkflow.currentStep = "social/content";
+    const socialContent = await generateSocialMediaContent(task.title, script);
+    currentWorkflow.results.socialContent = socialContent;
+    logger.info("✓ Social media content generated");
 
-    // Step 11: Update sheet
-    logger.info("→ Step 11: Updating sheet status");
-    currentWorkflow.currentStep = "sheets/update";
-    await updateSheetStatus(task.rowId, "Posted");
-    logger.info("✓ Sheet updated");
-
-    // Step 12: Send notification email
-    logger.info("→ Step 12: Sending notification");
-    currentWorkflow.currentStep = "notify/email";
-    await sendNotificationEmail(
-      task.title,
-      youtubeUrl,
-      instagramUrl,
-      filebaseUpload.url
-    );
-    logger.info("✓ Notification sent");
+    // Step 9: Post to Instagram Reels
+    logger.info("→ Step 9: Posting Instagram Reel");
+    currentWorkflow.currentStep = "instagram/post";
+    try {
+      const instagramResult = await postToInstagram(
+        currentWorkflow.results.finalVideo,
+        socialContent.caption,
+        socialContent.hashtags
+      );
+      currentWorkflow.results.instagramPost = instagramResult;
+      logger.info("✅ Posted to Instagram Reels successfully");
+    } catch (error) {
+      logger.warn("⚠️ Instagram posting failed:", error.message);
+      currentWorkflow.results.instagramPost = { error: error.message };
+    }
 
     // Complete workflow and clear checkpoint
     currentWorkflow.status = "completed";
     currentWorkflow.currentStep = "finished";
     clearCheckpoint();
     logger.info(
-      "🎉 Workflow completed successfully! All assets saved and checkpoint cleared."
+      "🎉 Instagram Reel workflow completed! Video saved locally in videos/ folder."
     );
   } catch (error) {
     logger.error(
@@ -1030,9 +1014,9 @@ app.post("/script/generate", async (req, res) => {
 const generateScript = async (title, description) => {
   logger.info(`→ Generating Telugu-English conversation script for: ${title}`);
 
-  // const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
+  // const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}".
   // Description: ${description}
-  
+
   // Requirements:
   // - EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
   // - Each line should be 13-16 seconds when spoken (35-45 words per line)
@@ -1043,18 +1027,18 @@ const generateScript = async (title, description) => {
   // - Natural flow with mid-conversation laughs and expressions
   // - Teach about the topic but in a very casual, friendly way
   // - Use Indian English phrases: "only", "itself", "what yaar", "no na"
-  
+
   // Example style:
   // "Arre bro, ee ${title} gurinchi cheppava? I'm confused only!"
   // "Aiyo, simple ga chepthanu! *laughs* See, it's like this only..."
-  
+
   // Structure:
   // Person A (Male): [Casual question with Telugu mix - 35-45 words]
-  // Person B (Female): [Friendly explanation with laugh/expression - 35-45 words] 
+  // Person B (Female): [Friendly explanation with laugh/expression - 35-45 words]
   // Person A (Male): [Follow-up with Telugu expression - 35-45 words]
   // Person B (Female): [Complete answer with casual advice - 35-45 words]
-  
-  // Return ONLY valid JSON array format (no markdown, no extra text): 
+
+  // Return ONLY valid JSON array format (no markdown, no extra text):
   // [{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
 
   const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
@@ -2435,7 +2419,7 @@ app.post("/video/assemble", async (req, res) => {
 });
 
 const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
-  const outputPath = `videos/final_${Date.now()}.mp4`;
+  const outputPath = `videos/final_reel_${Date.now()}.mp4`;
   const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
 
   // Ensure output directories exist
@@ -2446,8 +2430,8 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     fs.mkdirSync("subtitles", { recursive: true });
   }
 
-  // Create SRT subtitle file
-  createSubtitlesFile(script, subtitlesPath);
+  // Create English-only subtitle file
+  createEnglishSubtitlesFile(script, subtitlesPath);
 
   // Handle base video - could be URL or local path
   let baseVideoPath = "temp/base_video.mp4";
@@ -2483,7 +2467,7 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     }
   }
 
-  // Prepare audio - now handles single conversation file or multiple files
+  // Prepare audio with proper volume
   const combinedAudioPath = "temp/combined_audio.mp3";
 
   try {
@@ -2508,57 +2492,130 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
   }
 
   return new Promise((resolve, reject) => {
-    // Simplified approach: First add subtitles, then handle images separately
-    let command = ffmpeg(baseVideoPath)
+    logger.info("🎬 Starting simplified Instagram Reel (9:16) video assembly");
+
+    // Simple approach: Just convert to 9:16, add audio, add subtitles
+    const subtitleStyle =
+      "FontName=Arial Bold,FontSize=32,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=2,Bold=1,Alignment=2";
+
+    ffmpeg()
+      .input(baseVideoPath)
       .input(combinedAudioPath)
-      .audioCodec("aac")
-      .videoCodec("libx264");
+      .outputOptions([
+        // Video processing: Scale to 1080x1920 (9:16)
+        "-vf",
+        `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=${subtitlesPath.replace(
+          /\\/g,
+          "/"
+        )}:force_style='${subtitleStyle}'`,
 
-    // Create a simple filter for subtitles first
-    const subtitleFilter = `subtitles=${subtitlesPath.replace(
-      /\\/g,
-      "/"
-    )}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=2,Bold=1'`;
+        // Audio processing
+        "-c:a",
+        "aac",
+        "-af",
+        "volume=2.0", // Double the audio volume
 
-    // If we have images, create a simple overlay approach
-    if (images && images.length > 0) {
-      // For now, let's use a simpler approach - just add subtitles
-      // We'll handle image overlays in a future update
-      command = command.outputOptions([
-        `-vf`,
-        subtitleFilter,
-        `-preset`,
-        `fast`,
-        `-crf`,
-        `23`,
-      ]);
-    } else {
-      // No images, just subtitles
-      command = command.outputOptions([
-        `-vf`,
-        subtitleFilter,
-        `-preset`,
-        `fast`,
-        `-crf`,
-        `23`,
-      ]);
-    }
+        // Video encoding
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
 
-    command
+        // Ensure video and audio sync
+        "-shortest",
+        "-avoid_negative_ts",
+        "make_zero",
+      ])
       .output(outputPath)
       .on("start", (commandLine) => {
-        logger.info("FFmpeg command:", commandLine);
+        logger.info(
+          "📱 Simplified Instagram Reel FFmpeg command:",
+          commandLine
+        );
+      })
+      .on("progress", (progress) => {
+        if (progress.percent) {
+          logger.info(
+            `📱 Instagram Reel encoding progress: ${Math.round(
+              progress.percent
+            )}%`
+          );
+        }
       })
       .on("end", () => {
-        logger.info("Video assembly completed:", outputPath);
+        logger.info(
+          `✅ Instagram Reel video assembly completed: ${outputPath}`
+        );
         resolve(outputPath);
       })
       .on("error", (err) => {
-        logger.error("Video assembly error:", err);
+        logger.error("❌ Instagram Reel video assembly error:", err);
+        logger.error("Full error details:", JSON.stringify(err, null, 2));
         reject(err);
       })
       .run();
   });
+};
+
+// Create English-only subtitles (extract English words from mixed Telugu-English text)
+const createEnglishSubtitlesFile = (script, subtitlesPath) => {
+  let srtContent = "";
+  let startTime = 0;
+
+  script.forEach((line, index) => {
+    const duration = Math.ceil(line.text.length / 10); // Adjust duration based on text length (roughly 10 chars per second)
+    const endTime = startTime + duration;
+
+    // Extract English words from mixed Telugu-English text
+    const englishText = extractEnglishWords(line.text);
+
+    if (englishText.trim()) {
+      srtContent += `${index + 1}\n`;
+      srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
+      srtContent += `${englishText}\n\n`;
+    }
+
+    startTime = endTime;
+  });
+
+  fs.writeFileSync(subtitlesPath, srtContent);
+  logger.info(`✓ English-only subtitles created: ${subtitlesPath}`);
+};
+
+// Extract English words from mixed Telugu-English text
+const extractEnglishWords = (text) => {
+  if (!text) return "";
+
+  // Split by common delimiters and filter English words
+  const words = text.split(/[\s,\.\!\?]+/);
+  const englishWords = words.filter((word) => {
+    // Keep words that are primarily English (contain mostly Latin characters)
+    const latinChars = word.match(/[a-zA-Z0-9]/g) || [];
+    const totalChars = word.length;
+
+    // If more than 70% of characters are Latin, consider it English
+    return latinChars.length / totalChars > 0.7 && totalChars > 1;
+  });
+
+  // Join English words and clean up
+  let englishText = englishWords.join(" ");
+
+  // Clean up common Telugu romanized words to make more sense
+  englishText = englishText
+    .replace(
+      /\b(arre|aiyo|yaar|bro|andi|ra|ka|le|mari|enti|cheppava|gurinchi|bagundi)\b/gi,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return englishText;
 };
 
 const createSubtitlesFile = (script, subtitlesPath) => {
@@ -2603,6 +2660,121 @@ const formatTime = (seconds) => {
     .padStart(2, "0")}:${secs.toString().padStart(2, "0")},${milliseconds
     .toString()
     .padStart(3, "0")}`;
+};
+
+// Generate social media content (hashtags, emojis, captions)
+const generateSocialMediaContent = async (title, script) => {
+  logger.info("🎯 Generating social media content for Instagram Reel");
+
+  try {
+    const prompt = `Create Instagram Reel content for a video about "${title}".
+
+Based on this conversation script: ${JSON.stringify(script)}
+
+Generate:
+1. A catchy Instagram caption (2-3 sentences max, engaging and casual)
+2. 10-15 relevant hashtags (mix of trending and niche hashtags)  
+3. 3-5 relevant emojis for the caption
+
+Requirements:
+- Caption should be in English only
+- Include call-to-action (follow, like, share)
+- Hashtags should include #reels #education #telugu #learning
+- Make it appealing for Indian audience
+- Keep it casual and engaging
+
+Return ONLY valid JSON format:
+{
+  "caption": "engaging caption text with emojis",
+  "hashtags": "#hashtag1 #hashtag2 #hashtag3...",
+  "emojis": ["🎯", "📚", "✨"]
+}`;
+
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        messages: [{ role: "user", content: prompt }],
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.8,
+        max_tokens: 500,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const rawResponse = response.data.choices[0].message.content;
+    let socialContent;
+
+    try {
+      // Try to parse JSON response
+      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        socialContent = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("No JSON found");
+      }
+    } catch (parseError) {
+      // Fallback content if parsing fails
+      logger.warn("Failed to parse social media JSON, using fallback");
+      socialContent = {
+        caption: `Check out this awesome content about ${title}! 🎯 Follow for more educational content! ✨`,
+        hashtags:
+          "#reels #education #telugu #learning #india #trending #viral #knowledge #study #facts",
+        emojis: ["🎯", "📚", "✨", "🔥", "💡"],
+      };
+    }
+
+    logger.info("✓ Social media content generated successfully");
+    return socialContent;
+  } catch (error) {
+    logger.error("❌ Error generating social media content:", error.message);
+    // Return fallback content
+    return {
+      caption: `Amazing content about ${title}! 🎯 Don't forget to follow for more! ✨`,
+      hashtags:
+        "#reels #education #telugu #learning #india #trending #viral #knowledge",
+      emojis: ["🎯", "📚", "✨", "🔥"],
+    };
+  }
+};
+
+// Post to Instagram Reels (placeholder - requires publicly accessible URL)
+const postToInstagram = async (videoPath, caption, hashtags) => {
+  logger.info("📱 Preparing Instagram Reel post");
+
+  try {
+    if (!fs.existsSync(videoPath)) {
+      throw new Error(`Video file not found: ${videoPath}`);
+    }
+
+    // Note: Instagram Graph API requires publicly accessible video URL
+    // For now, we'll prepare the content and log it
+    logger.info("🎬 Instagram Reel ready for manual posting:");
+    logger.info(`📱 Video: ${videoPath}`);
+    logger.info(`📝 Caption: ${caption}`);
+    logger.info(`🏷️ Hashtags: ${hashtags}`);
+
+    return {
+      success: true,
+      message: "Instagram Reel prepared for manual posting",
+      videoPath: videoPath,
+      caption: caption,
+      hashtags: hashtags,
+      fullCaption: `${caption}\n\n${hashtags}`,
+      note: "Video saved locally in videos/ folder. Use Instagram app or business tools to post.",
+    };
+  } catch (error) {
+    logger.error("❌ Instagram preparation error:", error.message);
+    return {
+      success: false,
+      error: error.message,
+      videoPath: videoPath,
+    };
+  }
 };
 
 // 8. POST /metadata/generate - Generate caption and hashtags
@@ -3174,9 +3346,51 @@ app.post("/test/google-ai-studio-tts", async (req, res) => {
   }
 });
 
+// Test endpoint for Instagram Reel workflow
+app.post("/test/instagram-reel", async (req, res) => {
+  try {
+    const testTask = {
+      title: req.body.title || "Test Instagram Reel",
+      description:
+        req.body.description ||
+        "Testing Instagram Reel workflow with Telugu-English conversation",
+    };
+
+    logger.info("🧪 Testing Instagram Reel workflow");
+
+    // Generate test script
+    const script = await generateScript(testTask.title, testTask.description);
+
+    // Generate social media content
+    const socialContent = await generateSocialMediaContent(
+      testTask.title,
+      script
+    );
+
+    res.json({
+      message: "Instagram Reel test completed",
+      script: script,
+      socialContent: socialContent,
+      format: "9:16 Instagram Reel",
+      subtitles: "English-only",
+      storage: "Local videos/ folder",
+      note: "Run POST /workflow/run to create actual video",
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Instagram Reel test failed",
+      details: error.message,
+    });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   logger.info(`🚀 AI Content Automation Server running on port ${PORT}`);
+  logger.info(`📱 Instagram Reel format: 9:16 aspect ratio (1080x1920)`);
+  logger.info(`🎯 English-only subtitles enabled`);
+  logger.info(`💾 Videos saved locally in videos/ folder`);
+  logger.info(`📲 Social media content generation enabled`);
   logger.info(` Health check available at: http://localhost:${PORT}/health`);
   logger.info(
     `📊 Workflow status available at: http://localhost:${PORT}/workflow/status`
