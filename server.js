@@ -617,7 +617,7 @@ const getNextTask = async () => {
   return null;
 };
 
-// 3. POST /script/generate - Generate Telugu + English conversation script
+// 3. POST /script/generate - Generate Telugu + English casual conversation script
 app.post("/script/generate", async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -634,29 +634,34 @@ app.post("/script/generate", async (req, res) => {
 });
 
 const generateScript = async (title, description) => {
-  logger.info(`→ Generating script for: ${title}`);
+  logger.info(`→ Generating Telugu-English conversation script for: ${title}`);
 
-  const prompt = `Create a 55-60 second educational conversation script between two people about "${title}". 
+  const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
   Description: ${description}
   
   Requirements:
-  - EXACTLY 4 lines total: 2 from Person A, 2 from Person B (alternating: A, B, A, B)
+  - EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
   - Each line should be 13-16 seconds when spoken (35-45 words per line)
-  - EDUCATIONAL and COMPREHENSIVE style - teach concepts clearly
-  - Person A asks questions, Person B provides detailed explanations
-  - Use teaching language: "Let me explain...", "Here's how it works...", "For example..."
-  - Make it like a tutorial - information-dense but conversational
-  - Clear, detailed English that explains WHY, HOW, and practical applications
-  - Keep total under 4000 characters for optimal API processing
+  - Mix of TELUGU (romanized) and ENGLISH (Indian style) in natural conversation
+  - Casual, friendly conversation with occasional laughs (*laughs*), expressions like "arre yaar", "aiyo", "chala bagundi"
+  - Include casual Telugu words: "bro", "andi", "ra", "ka", "le", "mari", "enti"
+  - Both speakers are from different Telugu states - one from Andhra Pradesh, one from Telangana
+  - Natural flow with mid-conversation laughs and expressions
+  - Teach about the topic but in a very casual, friendly way
+  - Use Indian English phrases: "only", "itself", "what yaar", "no na"
+  
+  Example style:
+  "Arre bro, ee ${title} gurinchi cheppava? I'm confused only!"
+  "Aiyo, simple ga chepthanu! *laughs* See, it's like this only..."
   
   Structure:
-  Person A: [Comprehensive question - 35-45 words]
-  Person B: [Detailed explanation with example - 35-45 words] 
-  Person A: [Follow-up question with scenario - 35-45 words]
-  Person B: [Complete answer with actionable advice - 35-45 words]
+  Person A (Male): [Casual question with Telugu mix - 35-45 words]
+  Person B (Female): [Friendly explanation with laugh/expression - 35-45 words] 
+  Person A (Male): [Follow-up with Telugu expression - 35-45 words]
+  Person B (Female): [Complete answer with casual advice - 35-45 words]
   
   Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "detailed educational text"}, {"speaker": "Person B", "text": "comprehensive response"}]`;
+  [{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -668,8 +673,8 @@ const generateScript = async (title, description) => {
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 800, // Increased for longer educational content
+      temperature: 0.8, // Increased for more natural casual conversation
+      max_tokens: 800,
     },
     {
       headers: {
@@ -682,7 +687,7 @@ const generateScript = async (title, description) => {
   try {
     // Get the raw response
     const rawResponse = response.data.choices[0].message.content;
-    logger.info("Raw LLM response received");
+    logger.info("Raw LLM response received for Telugu-English conversation");
 
     // Extract and clean JSON
     let scriptData = cleanLLMData.extractJSON(rawResponse);
@@ -1432,7 +1437,18 @@ app.get("/video/base", async (req, res) => {
 });
 
 const getBaseVideo = async () => {
-  // Check for local base video files first
+  // Priority 1: Check for Google Drive URL in environment
+  if (
+    process.env.BASE_VIDEO_DRIVE_URL &&
+    process.env.BASE_VIDEO_DRIVE_URL !== "YOUR_DRIVE_FILE_ID"
+  ) {
+    logger.info(
+      `✅ Using Google Drive base video: ${process.env.BASE_VIDEO_DRIVE_URL}`
+    );
+    return process.env.BASE_VIDEO_DRIVE_URL;
+  }
+
+  // Priority 2: Check for local base video files
   const localBaseVideos = [
     "base.mp4",
     "temp/base_video.mp4",
@@ -1446,7 +1462,7 @@ const getBaseVideo = async () => {
     }
   }
 
-  // If no local file found, try Filebase
+  // Priority 3: Try Filebase as last resort
   try {
     const command = new GetObjectCommand({
       Bucket: process.env.FILEBASE_BUCKET_NAME,
@@ -1459,10 +1475,12 @@ const getBaseVideo = async () => {
     );
     return url;
   } catch (error) {
-    logger.error("❌ Error getting base video from Filebase:", error.message);
-    logger.error("❌ No base video found locally or in Filebase");
+    logger.error("❌ Error getting base video:", error.message);
+    logger.error(
+      "❌ Please set BASE_VIDEO_DRIVE_URL in .env file or upload base.mp4 to Filebase"
+    );
     throw new Error(
-      "Base video not found. Please upload base.mp4 to Filebase or place it in the project directory."
+      "Base video not found. Please set BASE_VIDEO_DRIVE_URL in .env file with Google Drive direct download link or upload base.mp4 to Filebase."
     );
   }
 };
@@ -2050,18 +2068,43 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
       .audioCodec("aac")
       .videoCodec("libx264");
 
-    // Add images as overlays
+    // Add images as inputs
     images.forEach((image, index) => {
-      const startTime = index * 15; // Show each image for 15 seconds
       command = command.input(image.filename);
     });
 
-    // Add subtitle
-    command = command.outputOptions([
-      `-vf subtitles=${subtitlesPath}:force_style='FontSize=24,PrimaryColour=&Hffffff'`,
-      "-preset fast",
-      "-crf 23",
-    ]);
+    // Create complex filter for image overlays and subtitles
+    let filterComplex = [];
+    let currentInput = "[0:v]";
+
+    // Add image overlays - positioned in upper part of video only (top 40% of screen)
+    images.forEach((image, index) => {
+      const startTime = index * 15; // Show each image for 15 seconds
+      const endTime = (index + 1) * 15;
+      const inputIndex = index + 2; // +2 because 0=video, 1=audio
+
+      // Scale image to fit upper portion and position it
+      const overlayFilter = `${currentInput}[${inputIndex}:v]scale=w=min(iw*min(1920/iw\\,432/ih)\\,1920):h=min(ih*min(1920/iw\\,432/ih)\\,432),pad=1920:432:(ow-iw)/2:(oh-ih)/2[scaled${index}];[scaled${index}]setpts=PTS-STARTPTS[timed${index}];[0:v][timed${index}]overlay=0:0:enable='between(t,${startTime},${endTime})'[v${index}]`;
+      filterComplex.push(overlayFilter);
+      currentInput = `[v${index}]`;
+    });
+
+    // Add enhanced subtitle filter with bold white text and dark black border
+    const subtitleFilter = `${currentInput}subtitles=${subtitlesPath}:force_style='FontName=Arial Bold,FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=3,Shadow=2,Bold=1,Alignment=2'[out]`;
+    filterComplex.push(subtitleFilter);
+
+    if (filterComplex.length > 0) {
+      command = command
+        .complexFilter(filterComplex.join(";"))
+        .outputOptions(["-map", "[out]", "-map", "1:a"]);
+    } else {
+      // Fallback if no images - just add subtitles
+      command = command.outputOptions([
+        `-vf subtitles=${subtitlesPath}:force_style='FontName=Arial Bold,FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=3,Shadow=2,Bold=1,Alignment=2'`,
+      ]);
+    }
+
+    command = command.outputOptions(["-preset fast", "-crf 23"]);
 
     command
       .output(outputPath)
