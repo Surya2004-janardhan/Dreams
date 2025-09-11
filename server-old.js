@@ -48,110 +48,6 @@ if (fs.existsSync(ffmpegPath)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Checkpoint system for workflow recovery
-const CHECKPOINT_FILE = "temp/workflow_checkpoint.json";
-const CHECKPOINT_ASSETS_FILE = "temp/checkpoint_assets.json";
-
-// Ensure temp directory exists
-if (!fs.existsSync("temp")) {
-  fs.mkdirSync("temp", { recursive: true });
-}
-
-// Checkpoint management functions
-const saveCheckpoint = (step, data, assets = {}) => {
-  try {
-    const checkpoint = {
-      timestamp: new Date().toISOString(),
-      step: step,
-      data: data,
-      completed_steps: data.completedSteps || [],
-    };
-
-    // Save main checkpoint data
-    fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(checkpoint, null, 2));
-
-    // Save asset information (file paths, timings, etc.)
-    const assetInfo = {
-      timestamp: new Date().toISOString(),
-      assets: assets,
-      step: step,
-    };
-    fs.writeFileSync(
-      CHECKPOINT_ASSETS_FILE,
-      JSON.stringify(assetInfo, null, 2)
-    );
-
-    logger.info(`✓ Checkpoint saved for step: ${step}`);
-    return true;
-  } catch (error) {
-    logger.error("❌ Failed to save checkpoint:", error.message);
-    return false;
-  }
-};
-
-const loadCheckpoint = () => {
-  try {
-    if (fs.existsSync(CHECKPOINT_FILE)) {
-      const checkpoint = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, "utf8"));
-      let assets = {};
-
-      if (fs.existsSync(CHECKPOINT_ASSETS_FILE)) {
-        const assetData = JSON.parse(
-          fs.readFileSync(CHECKPOINT_ASSETS_FILE, "utf8")
-        );
-        assets = assetData.assets || {};
-      }
-
-      logger.info(`✓ Checkpoint loaded from step: ${checkpoint.step}`);
-      return { checkpoint, assets };
-    }
-    return null;
-  } catch (error) {
-    logger.error("❌ Failed to load checkpoint:", error.message);
-    return null;
-  }
-};
-
-const clearCheckpoint = () => {
-  try {
-    if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE);
-    if (fs.existsSync(CHECKPOINT_ASSETS_FILE))
-      fs.unlinkSync(CHECKPOINT_ASSETS_FILE);
-    logger.info("✓ Checkpoint cleared");
-  } catch (error) {
-    logger.error("❌ Failed to clear checkpoint:", error.message);
-  }
-};
-
-const validateAssetFiles = (assets) => {
-  const validAssets = {};
-
-  // Check if files still exist
-  if (assets.audioFile && fs.existsSync(assets.audioFile)) {
-    validAssets.audioFile = assets.audioFile;
-  }
-
-  if (assets.images && Array.isArray(assets.images)) {
-    validAssets.images = assets.images.filter(
-      (img) => img.filename && fs.existsSync(img.filename)
-    );
-  }
-
-  if (assets.baseVideoPath && fs.existsSync(assets.baseVideoPath)) {
-    validAssets.baseVideoPath = assets.baseVideoPath;
-  }
-
-  if (assets.subtitlesPath && fs.existsSync(assets.subtitlesPath)) {
-    validAssets.subtitlesPath = assets.subtitlesPath;
-  }
-
-  if (assets.combinedAudioPath && fs.existsSync(assets.combinedAudioPath)) {
-    validAssets.combinedAudioPath = assets.combinedAudioPath;
-  }
-
-  return validAssets;
-};
-
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -390,6 +286,36 @@ const getYouTubeClient = async () => {
   return google.youtube({ version: "v3", auth: oauth2Client });
 };
 
+// Google Drive API setup
+const getGoogleDriveClient = async () => {
+  try {
+    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS || "{}");
+    if (!credentials || !credentials.client_email) {
+      // Fallback to service account file
+      const serviceAccountPath = path.join(
+        __dirname,
+        "seismic-rarity-468405-j1-a83f924d9fbc.json"
+      );
+      if (fs.existsSync(serviceAccountPath)) {
+        const auth = new google.auth.GoogleAuth({
+          keyFile: serviceAccountPath,
+          scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+        });
+        return google.drive({ version: "v3", auth });
+      }
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+    return google.drive({ version: "v3", auth });
+  } catch (error) {
+    logger.error("Failed to setup Google Drive client:", error);
+    throw new Error("Google Drive authentication failed");
+  }
+};
+
 // Store current workflow state
 let currentWorkflow = {
   taskId: null,
@@ -399,7 +325,7 @@ let currentWorkflow = {
   results: {},
 };
 
-// 1. POST /workflow/run - Entry point for manual workflow execution with checkpoint support
+// 1. POST /workflow/run - Entry point for manual workflow execution
 app.post("/workflow/run", async (req, res) => {
   try {
     logger.info("Starting workflow execution");
@@ -411,51 +337,18 @@ app.post("/workflow/run", async (req, res) => {
       });
     }
 
-    // Check for existing checkpoint
-    const checkpointData = loadCheckpoint();
-    let resumeFromCheckpoint = false;
-
-    if (checkpointData && req.body.resume !== false) {
-      const { checkpoint, assets } = checkpointData;
-      const validAssets = validateAssetFiles(assets);
-
-      if (Object.keys(validAssets).length > 0) {
-        logger.info(`🔄 Resuming workflow from checkpoint: ${checkpoint.step}`);
-        currentWorkflow = {
-          taskId: checkpoint.data.taskId || uuidv4(),
-          status: "running",
-          currentStep: checkpoint.step,
-          error: null,
-          results: checkpoint.data.results || {},
-          checkpointAssets: validAssets,
-          completedSteps: checkpoint.completed_steps || [],
-        };
-        resumeFromCheckpoint = true;
-      }
-    }
-
-    if (!resumeFromCheckpoint) {
-      currentWorkflow = {
-        taskId: uuidv4(),
-        status: "running",
-        currentStep: "sheets/next-task",
-        error: null,
-        results: {},
-        completedSteps: [],
-      };
-      clearCheckpoint(); // Clear any old checkpoints
-    }
+    currentWorkflow = {
+      taskId: uuidv4(),
+      status: "running",
+      currentStep: "sheets/next-task",
+      error: null,
+      results: {},
+    };
 
     res.json({
-      message: resumeFromCheckpoint
-        ? "Workflow resumed from checkpoint"
-        : "Workflow started",
+      message: "Workflow started",
       taskId: currentWorkflow.taskId,
       status: "running",
-      resumedFromCheckpoint: resumeFromCheckpoint,
-      resumedFromStep: resumeFromCheckpoint
-        ? currentWorkflow.currentStep
-        : null,
     });
 
     // Execute workflow asynchronously
@@ -467,415 +360,174 @@ app.post("/workflow/run", async (req, res) => {
   }
 });
 
-// Async workflow execution with checkpoint support
+// Async workflow execution
 const executeWorkflow = async () => {
   try {
     logger.info("🚀 Starting workflow execution");
 
-    let task, script, audioFiles, baseVideoUrl, images;
-    let checkpointAssets = currentWorkflow.checkpointAssets || {};
-    let completedSteps = currentWorkflow.completedSteps || [];
+    // Step 1: Get next task from sheets
+    logger.info("→ Step 1: Getting next task");
+    currentWorkflow.currentStep = "sheets/next-task";
+    const task = await getNextTask();
+    if (!task) {
+      currentWorkflow.status = "completed";
+      currentWorkflow.currentStep = "no-tasks";
+      logger.info("✓ No pending tasks found");
+      return;
+    }
+    currentWorkflow.results.task = task;
+    logger.info(`✓ Task retrieved: ${task.title}`);
 
-    // Step 1: Get next task from sheets (with checkpoint)
-    if (!completedSteps.includes("sheets/next-task")) {
-      logger.info("→ Step 1: Getting next task");
-      currentWorkflow.currentStep = "sheets/next-task";
-      task = await getNextTask();
-      if (!task) {
-        currentWorkflow.status = "completed";
-        currentWorkflow.currentStep = "no-tasks";
-        clearCheckpoint();
-        logger.info("✓ No pending tasks found");
-        return;
+    // Step 2: Generate script
+    logger.info("→ Step 2: Generating script");
+    currentWorkflow.currentStep = "script/generate";
+    const script = await generateScript(task.title, task.description);
+    currentWorkflow.results.script = script;
+    logger.info(`✓ Script generated - ${script.length} lines`);
+
+    // Step 3: Generate audio (skip if already exists)
+    logger.info("→ Step 3: Checking for existing audio");
+    currentWorkflow.currentStep = "audio/check";
+
+    let audioFiles;
+    const existingAudioFile = "audio/conversation_single_call.wav";
+
+    if (fs.existsSync(existingAudioFile)) {
+      logger.info(`✓ Audio file already exists: ${existingAudioFile}`);
+      logger.info("⏩ Skipping audio generation step");
+      audioFiles = {
+        conversationFile: existingAudioFile,
+        totalSegments: script.length,
+        apiCallsUsed: 0,
+        message: "Using existing audio file - skipped generation",
+      };
+    } else {
+      logger.info("🎵 No existing audio found, generating new audio");
+      currentWorkflow.currentStep = "audio/generate";
+      audioFiles = await generateAudio(script);
+    }
+    currentWorkflow.results.audioFiles = audioFiles;
+
+    // Step 4: Get base video from Filebase (existing uploaded video)
+    logger.info("→ Step 4: Getting base video");
+    currentWorkflow.currentStep = "video/base";
+    const baseVideoUrl = await getBaseVideo();
+    currentWorkflow.results.baseVideoUrl = baseVideoUrl;
+    logger.info("✓ Base video retrieved");
+
+    // Step 5: Generate images (skip if already exist)
+    logger.info("→ Step 5: Checking for existing images");
+    currentWorkflow.currentStep = "images/check";
+
+    let images;
+    const existingImages = [];
+
+    // Check for existing images (image_0.png to image_4.png)
+    for (let i = 0; i < 5; i++) {
+      const imagePath = `images/image_${i}.png`;
+      if (fs.existsSync(imagePath)) {
+        existingImages.push({
+          index: i,
+          filename: imagePath,
+          prompt: `Existing image ${i}`,
+        });
+        logger.info(`✓ Found existing image: ${imagePath}`);
       }
-      currentWorkflow.results.task = task;
-      completedSteps.push("sheets/next-task");
+    }
 
-      // Save checkpoint after task retrieval
-      saveCheckpoint(
-        "sheets/next-task",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      logger.info(`✓ Task retrieved: ${task.title}`);
+    if (existingImages.length >= 5) {
+      logger.info("✅ All 5 images already exist, skipping generation");
+      logger.info("⏩ Skipping image generation step");
+      images = existingImages;
     } else {
-      task = currentWorkflow.results.task;
-      logger.info(`♻️ Resuming with task: ${task.title}`);
+      logger.info(
+        `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
+          5 - existingImages.length
+        }`
+      );
+      currentWorkflow.currentStep = "images/generate";
+      images = await generateImages(script);
     }
+    currentWorkflow.results.images = images;
+    logger.info(`✓ Images ready - ${images.length} images`);
 
-    // Step 2: Generate script (with checkpoint)
-    if (!completedSteps.includes("script/generate")) {
-      logger.info("→ Step 2: Generating script");
-      currentWorkflow.currentStep = "script/generate";
-      script = await generateScript(task.title, task.description);
-      currentWorkflow.results.script = script;
-      completedSteps.push("script/generate");
+    // Step 6: Assemble video
+    logger.info("→ Step 6: Assembling final video");
+    currentWorkflow.currentStep = "video/assemble";
+    const finalVideo = await assembleVideo(
+      baseVideoUrl,
+      images,
+      audioFiles,
+      script
+    );
+    currentWorkflow.results.finalVideo = finalVideo;
+    logger.info("✓ Video assembled");
 
-      // Save checkpoint after script generation
-      saveCheckpoint(
-        "script/generate",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
+    // Step 7: Upload final video to Filebase
+    logger.info("→ Step 7: Uploading to Filebase");
+    currentWorkflow.currentStep = "filebase/upload";
+    const videoFileName = `final-videos/${task.title.replace(
+      /[^a-zA-Z0-9]/g,
+      "-"
+    )}-${Date.now()}.mp4`;
+    const filebaseUpload = await uploadToFilebase(
+      videoFileName,
+      finalVideo,
+      "video/mp4"
+    );
+    currentWorkflow.results.filebaseUpload = filebaseUpload;
+    logger.info("✓ Uploaded to Filebase");
 
-      logger.info(`✓ Script generated - ${script.length} lines`);
-    } else {
-      script = currentWorkflow.results.script;
-      logger.info(`♻️ Using existing script - ${script.length} lines`);
-    }
+    // Step 8: Generate metadata
+    logger.info("→ Step 8: Generating metadata");
+    currentWorkflow.currentStep = "metadata/generate";
+    const metadata = await generateMetadata(script);
+    currentWorkflow.results.metadata = metadata;
+    logger.info("✓ Metadata generated");
 
-    // Step 3: Generate audio (skip if already exists) (with checkpoint)
-    if (!completedSteps.includes("audio/generate")) {
-      logger.info("→ Step 3: Checking for existing audio");
-      currentWorkflow.currentStep = "audio/check";
+    // Step 9: Upload to YouTube
+    logger.info("→ Step 9: Uploading to YouTube");
+    currentWorkflow.currentStep = "youtube/upload";
+    const youtubeUrl = await uploadToYouTube(finalVideo, metadata, task.title);
+    currentWorkflow.results.youtubeUrl = youtubeUrl;
+    logger.info("✓ Uploaded to YouTube");
 
-      const existingAudioFile = "audio/conversation_single_call.wav";
+    // Step 10: Upload to Instagram
+    logger.info("→ Step 10: Uploading to Instagram");
+    currentWorkflow.currentStep = "instagram/upload";
+    const instagramUrl = await uploadToInstagram(finalVideo, metadata.caption);
+    currentWorkflow.results.instagramUrl = instagramUrl;
+    logger.info("✓ Uploaded to Instagram");
 
-      if (fs.existsSync(existingAudioFile)) {
-        logger.info(`✓ Audio file already exists: ${existingAudioFile}`);
-        logger.info("⏩ Skipping audio generation step");
-        audioFiles = {
-          conversationFile: existingAudioFile,
-          totalSegments: script.length,
-          apiCallsUsed: 0,
-          message: "Using existing audio file - skipped generation",
-        };
-        checkpointAssets.audioFile = existingAudioFile;
-      } else {
-        logger.info("🎵 No existing audio found, generating new audio");
-        currentWorkflow.currentStep = "audio/generate";
-        audioFiles = await generateAudio(script);
-        checkpointAssets.audioFile = audioFiles.conversationFile;
-      }
+    // Step 11: Update sheet
+    logger.info("→ Step 11: Updating sheet status");
+    currentWorkflow.currentStep = "sheets/update";
+    await updateSheetStatus(task.rowId, "Posted");
+    logger.info("✓ Sheet updated");
 
-      currentWorkflow.results.audioFiles = audioFiles;
-      completedSteps.push("audio/generate");
+    // Step 12: Send notification email
+    logger.info("→ Step 12: Sending notification");
+    currentWorkflow.currentStep = "notify/email";
+    await sendNotificationEmail(
+      task.title,
+      youtubeUrl,
+      instagramUrl,
+      filebaseUpload.url
+    );
+    logger.info("✓ Notification sent");
 
-      // Save checkpoint after audio generation/check
-      saveCheckpoint(
-        "audio/generate",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      logger.info(`✓ Audio ready`);
-    } else {
-      audioFiles = currentWorkflow.results.audioFiles;
-      logger.info(`♻️ Using existing audio data`);
-    }
-
-    // Step 4: Get base video (with checkpoint)
-    if (!completedSteps.includes("video/base")) {
-      logger.info("→ Step 4: Getting base video");
-      currentWorkflow.currentStep = "video/base";
-      baseVideoUrl = await getBaseVideo();
-      currentWorkflow.results.baseVideoUrl = baseVideoUrl;
-      completedSteps.push("video/base");
-
-      // Save checkpoint after base video
-      saveCheckpoint(
-        "video/base",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      logger.info("✓ Base video retrieved");
-    } else {
-      baseVideoUrl = currentWorkflow.results.baseVideoUrl;
-      logger.info(`♻️ Using existing base video URL`);
-    }
-
-    // Step 5: Generate images (skip if already exist) (with checkpoint)
-    if (!completedSteps.includes("images/generate")) {
-      logger.info("→ Step 5: Checking for existing images");
-      currentWorkflow.currentStep = "images/check";
-
-      const existingImages = [];
-
-      // Check for existing images (image_0.png to image_4.png)
-      for (let i = 0; i < 5; i++) {
-        const imagePath = `images/image_${i}.png`;
-        if (fs.existsSync(imagePath)) {
-          existingImages.push({
-            index: i,
-            filename: imagePath,
-            prompt: `Existing image ${i}`,
-          });
-          logger.info(`✓ Found existing image: ${imagePath}`);
-        }
-      }
-
-      if (existingImages.length >= 5) {
-        logger.info("✅ All 5 images already exist, skipping generation");
-        logger.info("⏩ Skipping image generation step");
-        images = existingImages;
-      } else {
-        logger.info(
-          `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
-            5 - existingImages.length
-          }`
-        );
-        currentWorkflow.currentStep = "images/generate";
-        images = await generateImages(script);
-      }
-
-      currentWorkflow.results.images = images;
-      completedSteps.push("images/generate");
-
-      // Save image file paths to checkpoint assets
-      checkpointAssets.images = images;
-
-      // Save checkpoint after images generation/check
-      saveCheckpoint(
-        "images/generate",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      logger.info(`✓ Images ready - ${images.length} images`);
-    } else {
-      images = currentWorkflow.results.images;
-      logger.info(`♻️ Using existing images - ${images.length} images`);
-    }
-
-    // Step 6: Assemble video (with checkpoint and detailed asset tracking)
-    if (!completedSteps.includes("video/assemble")) {
-      logger.info("→ Step 6: Assembling final video");
-      currentWorkflow.currentStep = "video/assemble";
-
-      // Save pre-assembly checkpoint with all assets
-      const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
-      const combinedAudioPath = "temp/combined_audio.mp3";
-
-      checkpointAssets.subtitlesPath = subtitlesPath;
-      checkpointAssets.combinedAudioPath = combinedAudioPath;
-      checkpointAssets.baseVideoUrl = baseVideoUrl;
-
-      saveCheckpoint(
-        "video/assemble-prep",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      const finalVideo = await assembleVideo(
-        baseVideoUrl,
-        images,
-        audioFiles,
-        script
-      );
-
-      currentWorkflow.results.finalVideo = finalVideo;
-      completedSteps.push("video/assemble");
-
-      // Save post-assembly checkpoint
-      checkpointAssets.finalVideo = finalVideo;
-      saveCheckpoint(
-        "video/assemble",
-        {
-          taskId: currentWorkflow.taskId,
-          results: currentWorkflow.results,
-          completedSteps: completedSteps,
-        },
-        checkpointAssets
-      );
-
-      logger.info("✓ Video assembled");
-    } else {
-      logger.info("♻️ Video already assembled, skipping");
-    }
-
-    // Step 7: Save locally and prepare for social media (skip Filebase)
-    logger.info("→ Step 7: Saving video locally (skipping Filebase)");
-    currentWorkflow.currentStep = "local/save";
-
-    // Video is already saved locally in videos folder
-    const localVideoInfo = {
-      path: currentWorkflow.results.finalVideo,
-      format: "Instagram Reel (9:16)",
-      created: new Date().toISOString(),
-    };
-
-    currentWorkflow.results.localVideo = localVideoInfo;
-    logger.info("✓ Video saved locally, ready for social media");
-
-    // Step 8: Generate social media content (hashtags, emojis, captions)
-    logger.info("→ Step 8: Generating social media content");
-    currentWorkflow.currentStep = "social/content";
-    const socialContent = await generateSocialMediaContent(task.title, script);
-    currentWorkflow.results.socialContent = socialContent;
-    logger.info("✓ Social media content generated");
-
-    // Step 9: Post to Instagram Reels
-    logger.info("→ Step 9: Posting Instagram Reel");
-    currentWorkflow.currentStep = "instagram/post";
-    try {
-      const instagramResult = await postToInstagram(
-        currentWorkflow.results.finalVideo,
-        socialContent.caption,
-        socialContent.hashtags
-      );
-      currentWorkflow.results.instagramPost = instagramResult;
-      logger.info("✅ Posted to Instagram Reels successfully");
-    } catch (error) {
-      logger.warn("⚠️ Instagram posting failed:", error.message);
-      currentWorkflow.results.instagramPost = { error: error.message };
-    }
-
-    // Complete workflow and clear checkpoint
     currentWorkflow.status = "completed";
     currentWorkflow.currentStep = "finished";
-    clearCheckpoint();
-    logger.info(
-      "🎉 Instagram Reel workflow completed! Video saved locally in videos/ folder."
-    );
+    logger.info("🎉 Workflow completed successfully");
   } catch (error) {
     logger.error(
       `✗ Workflow failed at step ${currentWorkflow.currentStep}: ${error.message}`
     );
     currentWorkflow.status = "error";
     currentWorkflow.error = error.message;
-
-    // Save error checkpoint for debugging
-    saveCheckpoint(`error/${currentWorkflow.currentStep}`, {
-      taskId: currentWorkflow.taskId,
-      results: currentWorkflow.results,
-      error: error.message,
-      completedSteps: currentWorkflow.completedSteps || [],
-    });
     // await sendErrorEmail(currentWorkflow.currentStep, error.message);
   }
 };
-
-// Checkpoint management endpoints
-app.get("/workflow/checkpoint", (req, res) => {
-  try {
-    const checkpointData = loadCheckpoint();
-    if (checkpointData) {
-      res.json({
-        message: "Checkpoint found",
-        checkpoint: checkpointData.checkpoint,
-        assets: checkpointData.assets,
-        validAssets: validateAssetFiles(checkpointData.assets),
-      });
-    } else {
-      res.status(404).json({ message: "No checkpoint found" });
-    }
-  } catch (error) {
-    res.status(500).json({ error: "Failed to load checkpoint" });
-  }
-});
-
-app.delete("/workflow/checkpoint", (req, res) => {
-  try {
-    clearCheckpoint();
-    res.json({ message: "Checkpoint cleared successfully" });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to clear checkpoint" });
-  }
-});
-
-app.post("/workflow/resume", async (req, res) => {
-  try {
-    const checkpointData = loadCheckpoint();
-    if (!checkpointData) {
-      return res
-        .status(404)
-        .json({ message: "No checkpoint found to resume from" });
-    }
-
-    logger.info("🔄 Manual resume requested from checkpoint");
-
-    if (currentWorkflow.status === "running") {
-      return res.status(409).json({
-        error: "Workflow already running",
-        currentStep: currentWorkflow.currentStep,
-      });
-    }
-
-    // Resume from checkpoint
-    const { checkpoint, assets } = checkpointData;
-    const validAssets = validateAssetFiles(assets);
-
-    currentWorkflow = {
-      taskId: checkpoint.data.taskId || uuidv4(),
-      status: "running",
-      currentStep: checkpoint.step,
-      error: null,
-      results: checkpoint.data.results || {},
-      checkpointAssets: validAssets,
-      completedSteps: checkpoint.completed_steps || [],
-    };
-
-    res.json({
-      message: "Workflow resumed from checkpoint",
-      taskId: currentWorkflow.taskId,
-      status: "running",
-      resumedFromStep: checkpoint.step,
-      validAssets: Object.keys(validAssets),
-    });
-
-    // Start execution
-    setImmediate(executeWorkflow);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to resume from checkpoint" });
-  }
-});
-
-// Test checkpoint system
-app.post("/test/checkpoint", (req, res) => {
-  try {
-    // Create a test checkpoint
-    const testData = {
-      taskId: "test-" + Date.now(),
-      results: {
-        task: { title: "Test Task", description: "Testing checkpoint system" },
-        script: [{ speaker: "Person A", text: "Test script" }],
-      },
-      completedSteps: ["sheets/next-task", "script/generate"],
-    };
-
-    const testAssets = {
-      audioFile: "audio/test.wav",
-      images: [{ filename: "images/test.png" }],
-    };
-
-    const saved = saveCheckpoint("test/checkpoint", testData, testAssets);
-
-    res.json({
-      message: "Test checkpoint created",
-      saved: saved,
-      data: testData,
-      assets: testAssets,
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create test checkpoint" });
-  }
-});
 
 // POST /files/cleanup - Remove existing audio and image files to force regeneration
 app.post("/files/cleanup", (req, res) => {
@@ -995,7 +647,7 @@ const getNextTask = async () => {
   return null;
 };
 
-// 3. POST /script/generate - Generate Telugu + English casual conversation script
+// 3. POST /script/generate - Generate Telugu + English conversation script
 app.post("/script/generate", async (req, res) => {
   try {
     const { title, description } = req.body;
@@ -1012,57 +664,29 @@ app.post("/script/generate", async (req, res) => {
 });
 
 const generateScript = async (title, description) => {
-  logger.info(`→ Generating Telugu-English conversation script for: ${title}`);
+  logger.info(`→ Generating script for: ${title}`);
 
-  // const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}".
-  // Description: ${description}
-
-  // Requirements:
-  // - EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
-  // - Each line should be 13-16 seconds when spoken (35-45 words per line)
-  // - Mix of TELUGU (romanized) and ENGLISH (Indian style) in natural conversation
-  // - Casual, friendly conversation with occasional laughs (*laughs*), expressions like "arre yaar", "aiyo", "chala bagundi"
-  // - Include casual Telugu words: "bro", "andi", "ra", "ka", "le", "mari", "enti"
-  // - Both speakers are from different Telugu states - one from Andhra Pradesh, one from Telangana
-  // - Natural flow with mid-conversation laughs and expressions
-  // - Teach about the topic but in a very casual, friendly way
-  // - Use Indian English phrases: "only", "itself", "what yaar", "no na"
-
-  // Example style:
-  // "Arre bro, ee ${title} gurinchi cheppava? I'm confused only!"
-  // "Aiyo, simple ga chepthanu! *laughs* See, it's like this only..."
-
-  // Structure:
-  // Person A (Male): [Casual question with Telugu mix - 35-45 words]
-  // Person B (Female): [Friendly explanation with laugh/expression - 35-45 words]
-  // Person A (Male): [Follow-up with Telugu expression - 35-45 words]
-  // Person B (Female): [Complete answer with casual advice - 35-45 words]
-
-  // Return ONLY valid JSON array format (no markdown, no extra text):
-  // [{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
-
-  const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
-Description: ${description}
-
-Requirements:
-- EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
-- Each line should be 13-16 seconds when spoken (35-45 words per line)
-- Mix of TELUGU (romanized) and ENGLISH (Indian style) naturally
-- Casual, friendly conversation with expressions like "arre yaar", "aiyo", "chala bagundi", "enti mari", "haha"
-- Include Telugu words: "bro", "andi", "ra", "le", "mari", "enti"
-- One speaker is from Andhra, the other from Telangana (slight slang difference)
-- Must go a bit deep into the topic, not just surface level — make it interesting to know
-- Keep the flow fun, natural, with mid-conversation laughs and casual Indian English phrases like "only", "no na", "what yaar"
-- Ensure total duration is ~55-60 seconds
-
-Structure:
-Person A (Male): [Casual question with Telugu-English mix - 35-45 words]
-Person B (Female): [Friendly explanation with laugh/expression - 35-45 words]
-Person A (Male): [Follow-up with Telugu-style surprise/comment - 35-45 words]
-Person B (Female): [Complete answer with casual advice/insight - 35-45 words]
-
-Return ONLY valid JSON array format (no markdown, no extra text): 
-[{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
+  const prompt = `Create a 55-60 second educational conversation script between two people about "${title}". 
+  Description: ${description}
+  
+  Requirements:
+  - EXACTLY 4 lines total: 2 from Person A, 2 from Person B (alternating: A, B, A, B)
+  - Each line should be 13-16 seconds when spoken (35-45 words per line)
+  - EDUCATIONAL and COMPREHENSIVE style - teach concepts clearly
+  - Person A asks questions, Person B provides detailed explanations
+  - Use teaching language: "Let me explain...", "Here's how it works...", "For example..."
+  - Make it like a tutorial - information-dense but conversational
+  - Clear, detailed English that explains WHY, HOW, and practical applications
+  - Keep total under 4000 characters for optimal API processing
+  
+  Structure:
+  Person A: [Comprehensive question - 35-45 words]
+  Person B: [Detailed explanation with example - 35-45 words] 
+  Person A: [Follow-up question with scenario - 35-45 words]
+  Person B: [Complete answer with actionable advice - 35-45 words]
+  
+  Return ONLY valid JSON array format (no markdown, no extra text): 
+  [{"speaker": "Person A", "text": "detailed educational text"}, {"speaker": "Person B", "text": "comprehensive response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -1074,8 +698,8 @@ Return ONLY valid JSON array format (no markdown, no extra text):
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: 0.8, // Increased for more natural casual conversation
-      max_tokens: 800,
+      temperature: 0.7,
+      max_tokens: 800, // Increased for longer educational content
     },
     {
       headers: {
@@ -1088,7 +712,7 @@ Return ONLY valid JSON array format (no markdown, no extra text):
   try {
     // Get the raw response
     const rawResponse = response.data.choices[0].message.content;
-    logger.info("Raw LLM response received for Telugu-English conversation");
+    logger.info("Raw LLM response received");
 
     // Extract and clean JSON
     let scriptData = cleanLLMData.extractJSON(rawResponse);
@@ -1769,7 +1393,7 @@ const combineAudioIntoConversation = async (audioFiles) => {
 
 // Alternative simpler combination using basic concatenation
 const combineAudioFiles = async (audioFiles, outputPath) => {
-  logger.info(`→ Preparing audio for video assembly with volume optimization`);
+  logger.info(`→ Preparing audio for video assembly`);
 
   // Check if audioFiles is the new single-file format
   if (audioFiles && audioFiles.conversationFile) {
@@ -1777,41 +1401,12 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
       `→ Using single conversation file: ${audioFiles.conversationFile}`
     );
 
+    // Copy the single conversation file to the output path
     const sourceFile = audioFiles.conversationFile;
     if (fs.existsSync(sourceFile)) {
-      // Process the single audio file to optimize for video
-      return new Promise((resolve, reject) => {
-        ffmpeg()
-          .input(sourceFile)
-          .outputOptions([
-            "-c:a",
-            "mp3",
-            "-b:a",
-            "192k", // Higher bitrate for better quality
-            "-ar",
-            "48000", // Higher sample rate
-            "-af",
-            "volume=2.5,highpass=f=80,lowpass=f=8000", // Volume boost + audio cleanup
-            "-avoid_negative_ts",
-            "make_zero",
-          ])
-          .output(outputPath)
-          .on("start", (commandLine) => {
-            logger.info("🔊 Audio processing command:", commandLine);
-          })
-          .on("end", () => {
-            logger.info(`✓ Audio optimized and prepared: ${outputPath}`);
-            resolve(outputPath);
-          })
-          .on("error", (error) => {
-            logger.error("Audio optimization error:", error);
-            // Fallback: just copy the file
-            fs.copyFileSync(sourceFile, outputPath);
-            logger.info(`✓ Audio file copied (fallback): ${outputPath}`);
-            resolve(outputPath);
-          })
-          .run();
-      });
+      fs.copyFileSync(sourceFile, outputPath);
+      logger.info(`✓ Audio file prepared: ${outputPath}`);
+      return outputPath;
     } else {
       throw new Error(`Conversation file not found: ${sourceFile}`);
     }
@@ -1831,25 +1426,17 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
         ffmpegCommand = ffmpegCommand.input(audioFile.file);
       });
 
-      // Simple concatenation with volume optimization
+      // Simple concatenation
       const inputs = audioFiles.map((_, index) => `[${index}:0]`).join("");
-      const filterComplex = `${inputs}concat=n=${audioFiles.length}:v=0:a=1[concat];[concat]volume=2.5,highpass=f=80,lowpass=f=8000[out]`;
+      const filterComplex = `${inputs}concat=n=${audioFiles.length}:v=0:a=1[out]`;
 
       ffmpegCommand
         .complexFilter(filterComplex)
-        .outputOptions([
-          "-map",
-          "[out]",
-          "-c:a",
-          "mp3",
-          "-b:a",
-          "192k",
-          "-ar",
-          "48000",
-        ])
+        .outputOptions(["-map", "[out]"])
+        .audioCodec("mp3")
         .output(outputPath)
         .on("end", () => {
-          logger.info(`✓ Audio files combined and optimized: ${outputPath}`);
+          logger.info(`✓ Audio files combined: ${outputPath}`);
           resolve(outputPath);
         })
         .on("error", (error) => {
@@ -1875,50 +1462,74 @@ app.get("/video/base", async (req, res) => {
 });
 
 const getBaseVideo = async () => {
-  // Priority 1: Check for Google Drive URL in environment
-  if (
-    process.env.BASE_VIDEO_DRIVE_URL &&
-    process.env.BASE_VIDEO_DRIVE_URL !== "YOUR_DRIVE_FILE_ID"
-  ) {
-    logger.info(
-      `✅ Using Google Drive base video: ${process.env.BASE_VIDEO_DRIVE_URL}`
-    );
-    return process.env.BASE_VIDEO_DRIVE_URL;
-  }
-
-  // Priority 2: Check for local base video files
-  const localBaseVideos = [
-    "base.mp4",
-    "temp/base_video.mp4",
-    "videos/base.mp4",
-  ];
-
-  for (const videoPath of localBaseVideos) {
-    if (fs.existsSync(videoPath)) {
-      logger.info(`✅ Using local base video: ${videoPath}`);
-      return path.resolve(videoPath); // Return absolute path for local file
-    }
-  }
-
-  // Priority 3: Try Filebase as last resort
   try {
-    const command = new GetObjectCommand({
-      Bucket: process.env.FILEBASE_BUCKET_NAME,
-      Key: "base.mp4",
+    logger.info("→ Getting base video from Google Drive");
+
+    const drive = await getGoogleDriveClient();
+
+    // Search for base video files in Google Drive
+    const response = await drive.files.list({
+      q: "name contains 'base' and (mimeType='video/mp4' or mimeType='video/avi' or mimeType='video/mov')",
+      fields: "files(id, name, mimeType)",
+      orderBy: "modifiedTime desc",
+      pageSize: 1,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 }); // 1 hour
+    if (!response.data.files || response.data.files.length === 0) {
+      throw new Error(
+        "No base video found in Google Drive. Please upload a video file with 'base' in the name."
+      );
+    }
+
+    const baseVideoFile = response.data.files[0];
     logger.info(
-      `Retrieved base video URL from Filebase bucket: ${process.env.FILEBASE_BUCKET_NAME}/base.mp4`
+      `✅ Found base video in Google Drive: ${baseVideoFile.name} (${baseVideoFile.id})`
     );
-    return url;
+
+    // Download the video file
+    const downloadResponse = await drive.files.get(
+      {
+        fileId: baseVideoFile.id,
+        alt: "media",
+      },
+      { responseType: "stream" }
+    );
+
+    const localPath = "temp/base_video.mp4";
+    const writer = fs.createWriteStream(localPath);
+
+    downloadResponse.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on("finish", resolve);
+      writer.on("error", reject);
+    });
+
+    logger.info(`✓ Base video downloaded to: ${localPath}`);
+    return path.resolve(localPath);
   } catch (error) {
-    logger.error("❌ Error getting base video:", error.message);
     logger.error(
-      "❌ Please set BASE_VIDEO_DRIVE_URL in .env file or upload base.mp4 to Filebase"
+      "❌ Error getting base video from Google Drive:",
+      error.message
     );
+
+    // Check for local base video files as fallback
+    const localBaseVideos = [
+      "temp/base_video.mp4",
+      "base.mp4",
+      "videos/base.mp4",
+    ];
+
+    for (const videoPath of localBaseVideos) {
+      if (fs.existsSync(videoPath)) {
+        logger.info(`✅ Using local base video: ${videoPath}`);
+        return path.resolve(videoPath); // Return absolute path for local file
+      }
+    }
+
+    logger.error("❌ No base video found locally or in Google Drive");
     throw new Error(
-      "Base video not found. Please set BASE_VIDEO_DRIVE_URL in .env file with Google Drive direct download link or upload base.mp4 to Filebase."
+      "Base video not found. Please upload a video file with 'base' in the name to Google Drive or place it in the project directory."
     );
   }
 };
@@ -2456,16 +2067,11 @@ app.post("/video/assemble", async (req, res) => {
 });
 
 const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
-  const outputPath = `videos/final_reel_${Date.now()}.mp4`;
+  const outputPath = `videos/final_${Date.now()}.mp4`;
   const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
 
-  // Ensure output directories exist
-  if (!fs.existsSync("videos")) {
-    fs.mkdirSync("videos", { recursive: true });
-  }
-  if (!fs.existsSync("subtitles")) {
-    fs.mkdirSync("subtitles", { recursive: true });
-  }
+  // Create SRT subtitle file
+  createSubtitlesFile(script, subtitlesPath);
 
   // Handle base video - could be URL or local path
   let baseVideoPath = "temp/base_video.mp4";
@@ -2501,274 +2107,41 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     }
   }
 
-  // Prepare audio with proper volume and get actual duration
+  // Prepare audio - now handles single conversation file or multiple files
   const combinedAudioPath = "temp/combined_audio.mp3";
-
-  try {
-    await combineAudioFiles(audioFiles, combinedAudioPath);
-    logger.info(`✓ Audio prepared: ${combinedAudioPath}`);
-
-    // Get actual audio duration for proper subtitle timing
-    const audioDuration = await getAudioDuration(combinedAudioPath);
-    logger.info(`✓ Audio duration detected: ${audioDuration} seconds`);
-
-    // Create English-only subtitle file with proper timing based on audio duration
-    createTimedEnglishSubtitles(script, subtitlesPath, audioDuration);
-
-    // Verify files exist before FFmpeg
-    if (!fs.existsSync(baseVideoPath)) {
-      throw new Error(`Base video not found: ${baseVideoPath}`);
-    }
-    if (!fs.existsSync(combinedAudioPath)) {
-      throw new Error(`Combined audio not found: ${combinedAudioPath}`);
-    }
-    if (!fs.existsSync(subtitlesPath)) {
-      throw new Error(`Subtitles file not found: ${subtitlesPath}`);
-    }
-
-    logger.info("✓ All input files verified for FFmpeg");
-  } catch (error) {
-    logger.error("❌ Error preparing audio or verifying files:", error.message);
-    throw error;
-  }
+  await combineAudioFiles(audioFiles, combinedAudioPath);
 
   return new Promise((resolve, reject) => {
-    logger.info(
-      "🎬 Starting Instagram Reel (9:16) video assembly with improved audio/subtitle sync"
-    );
-
-    // Two-step approach to avoid complex filter issues
-    const tempScaledPath = "temp/temp_scaled_video.mp4";
-
-    // Step 1: Scale video and add audio with volume boost
-    ffmpeg()
-      .input(baseVideoPath)
+    let command = ffmpeg(baseVideoPath)
       .input(combinedAudioPath)
-      .outputOptions([
-        // Scale video to Instagram format
-        "-vf",
-        "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
-        
-        // Audio processing with significant volume boost
-        "-af", 
-        "volume=4.0", // Quadruple the volume for better audibility
-        "-c:a", "aac",
-        "-ar", "48000", // High-quality audio sample rate
-        "-b:a", "192k", // Higher audio bitrate
-        
-        // Video encoding
-        "-c:v", "libx264",
-        "-preset", "medium",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-r", "30",
-        
-        // Ensure proper sync
-        "-shortest",
-        "-avoid_negative_ts", "make_zero"
-      ])
-      .output(tempScaledPath)
-      .on("start", (commandLine) => {
-        logger.info("📱 Step 1 - Video scaling with audio:", commandLine);
-      })
+      .audioCodec("aac")
+      .videoCodec("libx264");
+
+    // Add images as overlays
+    images.forEach((image, index) => {
+      const startTime = index * 15; // Show each image for 15 seconds
+      command = command.input(image.filename);
+    });
+
+    // Add subtitle
+    command = command.outputOptions([
+      `-vf subtitles=${subtitlesPath}:force_style='FontName=Poppins-Bold,FontSize=18,PrimaryColour=&Hffffff,SecondaryColour=&H000000,OutlineColour=&H000000,BackColour=&H80000000,Bold=1,BorderStyle=4'`,
+      "-preset fast",
+      "-crf 23",
+    ]);
+
+    command
+      .output(outputPath)
       .on("end", () => {
-        logger.info("✓ Step 1 completed - Video scaled with audio");
-        
-        // Step 2: Add Instagram Reel style subtitles
-        ffmpeg()
-          .input(tempScaledPath)
-          .outputOptions([
-            // Add subtitles with Instagram Reel styling
-            "-vf",
-            `subtitles='${subtitlesPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}':force_style='FontName=Arial Black,FontSize=52,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=3,Bold=1,Alignment=2,MarginV=150'`,
-            
-            // Copy audio without re-encoding to preserve volume
-            "-c:a", "copy",
-            
-            // Video encoding for final output
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-r", "30",
-            
-            // Instagram Reel optimization
-            "-movflags", "+faststart",
-            "-max_muxing_queue_size", "1024"
-          ])
-          .output(outputPath)
-          .on("start", (commandLine) => {
-            logger.info("📱 Step 2 - Adding Instagram Reel subtitles:", commandLine);
-          })
-          .on("progress", (progress) => {
-            if (progress.percent) {
-              logger.info(
-                `📱 Instagram Reel encoding progress: ${Math.round(progress.percent)}%`
-              );
-            }
-          })
-          .on("end", () => {
-            logger.info(`✅ Instagram Reel video assembly completed: ${outputPath}`);
-            
-            // Clean up temp files
-            try {
-              if (fs.existsSync(tempScaledPath)) {
-                fs.unlinkSync(tempScaledPath);
-              }
-            } catch (cleanupError) {
-              logger.warn("Could not clean up temp files:", cleanupError.message);
-            }
-            
-            resolve(outputPath);
-          })
-          .on("error", (err) => {
-            logger.error("❌ Step 2 subtitle addition error:", err.message);
-            reject(err);
-          })
-          .run();
+        logger.info("Video assembly completed:", outputPath);
+        resolve(outputPath);
       })
       .on("error", (err) => {
-        logger.error("❌ Step 1 video scaling error:", err.message);
+        logger.error("Video assembly error:", err);
         reject(err);
       })
       .run();
   });
-};
-
-// Get audio duration using ffprobe
-const getAudioDuration = async (audioPath) => {
-  return new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(audioPath, (err, metadata) => {
-      if (err) {
-        logger.error("Error getting audio duration:", err);
-        // Fallback to estimated duration based on script length
-        resolve(60); // Default 60 seconds
-        return;
-      }
-
-      const duration = metadata.format.duration;
-      logger.info(`📊 Actual audio duration: ${duration} seconds`);
-      resolve(parseFloat(duration));
-    });
-  });
-};
-
-// Create timed English subtitles based on actual audio duration
-const createTimedEnglishSubtitles = (script, subtitlesPath, audioDuration) => {
-  logger.info(`→ Creating timed English subtitles for ${audioDuration}s audio`);
-
-  let srtContent = "";
-  let currentTime = 0;
-
-  // Filter script to only include lines with English content
-  const englishLines = script
-    .map((line) => ({
-      ...line,
-      englishText: extractEnglishWords(line.text),
-    }))
-    .filter((line) => line.englishText.trim().length > 0);
-
-  if (englishLines.length === 0) {
-    logger.warn("No English content found for subtitles");
-    // Create a fallback subtitle
-    srtContent = `1\n00:00:00,000 --> 00:00:05,000\n[Educational Content]\n\n`;
-    fs.writeFileSync(subtitlesPath, srtContent);
-    return;
-  }
-
-  // Calculate duration per subtitle based on actual audio duration
-  const timePerSubtitle = audioDuration / englishLines.length;
-  const minDuration = 2; // Minimum 2 seconds per subtitle
-  const maxDuration = 8; // Maximum 8 seconds per subtitle
-
-  englishLines.forEach((line, index) => {
-    // Calculate dynamic duration based on text length and available time
-    const textLength = line.englishText.length;
-    const baseDuration = Math.max(
-      minDuration,
-      Math.min(maxDuration, textLength / 8)
-    );
-    const duration = Math.min(baseDuration, timePerSubtitle);
-
-    const startTime = currentTime;
-    const endTime = Math.min(currentTime + duration, audioDuration);
-
-    if (startTime < audioDuration) {
-      srtContent += `${index + 1}\n`;
-      srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
-      srtContent += `${line.englishText}\n\n`;
-    }
-
-    currentTime = endTime;
-
-    // Stop if we've reached the audio duration
-    if (currentTime >= audioDuration) {
-      logger.info(
-        `✓ Subtitles created for full audio duration (${audioDuration}s)`
-      );
-      return;
-    }
-  });
-
-  fs.writeFileSync(subtitlesPath, srtContent);
-  logger.info(
-    `✓ Timed English subtitles created: ${subtitlesPath} (${englishLines.length} subtitles)`
-  );
-};
-
-// Create English-only subtitles (extract English words from mixed Telugu-English text)
-const createEnglishSubtitlesFile = (script, subtitlesPath) => {
-  let srtContent = "";
-  let startTime = 0;
-
-  script.forEach((line, index) => {
-    const duration = Math.ceil(line.text.length / 10); // Adjust duration based on text length (roughly 10 chars per second)
-    const endTime = startTime + duration;
-
-    // Extract English words from mixed Telugu-English text
-    const englishText = extractEnglishWords(line.text);
-
-    if (englishText.trim()) {
-      srtContent += `${index + 1}\n`;
-      srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
-      srtContent += `${englishText}\n\n`;
-    }
-
-    startTime = endTime;
-  });
-
-  fs.writeFileSync(subtitlesPath, srtContent);
-  logger.info(`✓ English-only subtitles created: ${subtitlesPath}`);
-};
-
-// Extract English words from mixed Telugu-English text
-const extractEnglishWords = (text) => {
-  if (!text) return "";
-
-  // Split by common delimiters and filter English words
-  const words = text.split(/[\s,\.\!\?]+/);
-  const englishWords = words.filter((word) => {
-    // Keep words that are primarily English (contain mostly Latin characters)
-    const latinChars = word.match(/[a-zA-Z0-9]/g) || [];
-    const totalChars = word.length;
-
-    // If more than 70% of characters are Latin, consider it English
-    return latinChars.length / totalChars > 0.7 && totalChars > 1;
-  });
-
-  // Join English words and clean up
-  let englishText = englishWords.join(" ");
-
-  // Clean up common Telugu romanized words to make more sense
-  englishText = englishText
-    .replace(
-      /\b(arre|aiyo|yaar|bro|andi|ra|ka|le|mari|enti|cheppava|gurinchi|bagundi)\b/gi,
-      ""
-    )
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return englishText;
 };
 
 const createSubtitlesFile = (script, subtitlesPath) => {
@@ -2776,30 +2149,40 @@ const createSubtitlesFile = (script, subtitlesPath) => {
   let startTime = 0;
 
   script.forEach((line, index) => {
-    const duration = 15; // 15 seconds per line (matching Telugu conversation pace)
+    const duration = 4; // 4 seconds per line
     const endTime = startTime + duration;
+
+    // Convert script to plain English subtitles (2 lines max)
+    let subtitleText = line.subtitle || line.text || "";
+    subtitleText = subtitleText.replace(/[^\w\s.,'?!]/g, ""); // Remove unwanted characters
+    subtitleText = subtitleText.replace(/\s+/g, " ").trim(); // Clean up whitespace
+
+    // Split into 2 lines max, ~40 characters per line
+    const words = subtitleText.split(" ");
+    let line1 = "";
+    let line2 = "";
+
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      if ((line1 + " " + word).length <= 40) {
+        line1 += (line1 ? " " : "") + word;
+      } else if ((line2 + " " + word).length <= 40) {
+        line2 += (line2 ? " " : "") + word;
+      } else {
+        break; // Stop if we can't fit more words
+      }
+    }
+
+    const finalText = line2 ? `${line1}\n${line2}` : line1;
 
     srtContent += `${index + 1}\n`;
     srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
-    // Use line.text instead of line.subtitle, and handle both speaker and text
-    const subtitleText =
-      line.text ||
-      line.subtitle ||
-      `${line.speaker}: ${line.text}` ||
-      "No text available";
-    srtContent += `${subtitleText}\n\n`;
+    srtContent += `${finalText}\n\n`;
 
     startTime = endTime;
   });
 
-  // Ensure subtitles directory exists
-  const subtitlesDir = path.dirname(subtitlesPath);
-  if (!fs.existsSync(subtitlesDir)) {
-    fs.mkdirSync(subtitlesDir, { recursive: true });
-  }
-
   fs.writeFileSync(subtitlesPath, srtContent);
-  logger.info(`✓ Subtitle file created: ${subtitlesPath}`);
 };
 
 const formatTime = (seconds) => {
@@ -2813,121 +2196,6 @@ const formatTime = (seconds) => {
     .padStart(2, "0")}:${secs.toString().padStart(2, "0")},${milliseconds
     .toString()
     .padStart(3, "0")}`;
-};
-
-// Generate social media content (hashtags, emojis, captions)
-const generateSocialMediaContent = async (title, script) => {
-  logger.info("🎯 Generating social media content for Instagram Reel");
-
-  try {
-    const prompt = `Create Instagram Reel content for a video about "${title}".
-
-Based on this conversation script: ${JSON.stringify(script)}
-
-Generate:
-1. A catchy Instagram caption (2-3 sentences max, engaging and casual)
-2. 10-15 relevant hashtags (mix of trending and niche hashtags)  
-3. 3-5 relevant emojis for the caption
-
-Requirements:
-- Caption should be in English only
-- Include call-to-action (follow, like, share)
-- Hashtags should include #reels #education #telugu #learning
-- Make it appealing for Indian audience
-- Keep it casual and engaging
-
-Return ONLY valid JSON format:
-{
-  "caption": "engaging caption text with emojis",
-  "hashtags": "#hashtag1 #hashtag2 #hashtag3...",
-  "emojis": ["🎯", "📚", "✨"]
-}`;
-
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        messages: [{ role: "user", content: prompt }],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.8,
-        max_tokens: 500,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const rawResponse = response.data.choices[0].message.content;
-    let socialContent;
-
-    try {
-      // Try to parse JSON response
-      const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        socialContent = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error("No JSON found");
-      }
-    } catch (parseError) {
-      // Fallback content if parsing fails
-      logger.warn("Failed to parse social media JSON, using fallback");
-      socialContent = {
-        caption: `Check out this awesome content about ${title}! 🎯 Follow for more educational content! ✨`,
-        hashtags:
-          "#reels #education #telugu #learning #india #trending #viral #knowledge #study #facts",
-        emojis: ["🎯", "📚", "✨", "🔥", "💡"],
-      };
-    }
-
-    logger.info("✓ Social media content generated successfully");
-    return socialContent;
-  } catch (error) {
-    logger.error("❌ Error generating social media content:", error.message);
-    // Return fallback content
-    return {
-      caption: `Amazing content about ${title}! 🎯 Don't forget to follow for more! ✨`,
-      hashtags:
-        "#reels #education #telugu #learning #india #trending #viral #knowledge",
-      emojis: ["🎯", "📚", "✨", "🔥"],
-    };
-  }
-};
-
-// Post to Instagram Reels (placeholder - requires publicly accessible URL)
-const postToInstagram = async (videoPath, caption, hashtags) => {
-  logger.info("📱 Preparing Instagram Reel post");
-
-  try {
-    if (!fs.existsSync(videoPath)) {
-      throw new Error(`Video file not found: ${videoPath}`);
-    }
-
-    // Note: Instagram Graph API requires publicly accessible video URL
-    // For now, we'll prepare the content and log it
-    logger.info("🎬 Instagram Reel ready for manual posting:");
-    logger.info(`📱 Video: ${videoPath}`);
-    logger.info(`📝 Caption: ${caption}`);
-    logger.info(`🏷️ Hashtags: ${hashtags}`);
-
-    return {
-      success: true,
-      message: "Instagram Reel prepared for manual posting",
-      videoPath: videoPath,
-      caption: caption,
-      hashtags: hashtags,
-      fullCaption: `${caption}\n\n${hashtags}`,
-      note: "Video saved locally in videos/ folder. Use Instagram app or business tools to post.",
-    };
-  } catch (error) {
-    logger.error("❌ Instagram preparation error:", error.message);
-    return {
-      success: false,
-      error: error.message,
-      videoPath: videoPath,
-    };
-  }
 };
 
 // 8. POST /metadata/generate - Generate caption and hashtags
@@ -2947,93 +2215,54 @@ app.post("/metadata/generate", async (req, res) => {
 });
 
 const generateMetadata = async (script) => {
-  logger.info("→ Generating metadata from script");
+  logger.info("→ Generating metadata for social media posts");
 
-  const scriptText = script
-    .map((line) => cleanLLMData.cleanText(line.text))
-    .join(" ");
+  const prompt = `Generate a catchy caption and 5 relevant hashtags for a social media post based on this educational script.
 
-  const prompt = `Based on this banking/finance content: "${scriptText}"
-  
-  Generate clean, professional social media content:
-  1. An engaging caption (2-3 sentences, no extra formatting)
-  2. 8-10 relevant hashtags (include #)
-  
-  Return ONLY valid JSON (no markdown, no extra text):
-  {"caption": "clean text here", "hashtags": ["#Banking", "#Finance", "#Education"]}`;
+Script: ${script.map((line) => `${line.speaker}: ${line.text}`).join("\n")}
 
-  try {
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.7,
-        max_tokens: 200,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
+The caption should be engaging, encourage viewers to learn more, and include a call-to-action. Hashtags should be popular and relevant to the content, focusing on financial education and the specific topics covered in the video.
+
+Return ONLY valid JSON format:
+{
+  "caption": "caption text here",
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"]
+}
+`;
+
+  const response = await axios.post(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      messages: [
+        {
+          role: "user",
+          content: prompt,
         },
-      }
-    );
-
-    // Get and clean the response
-    const rawResponse = response.data.choices[0].message.content;
-    logger.info("Raw metadata response received");
-
-    // Extract and clean JSON
-    let metadataData = cleanLLMData.extractJSON(rawResponse);
-
-    if (!metadataData) {
-      logger.warn("Failed to parse metadata JSON, using fallback");
-      metadataData = {
-        caption:
-          "Learn essential banking concepts in simple English! Perfect for beginners.",
-        hashtags: [
-          "#Banking",
-          "#Finance",
-          "#Education",
-          "#Tutorial",
-          "#Money",
-          "#Learning",
-        ],
-      };
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 200,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
     }
+  );
 
-    // Clean and validate metadata
-    const cleanedMetadata = cleanLLMData.cleanMetadata(metadataData);
+  // Get and clean the response
+  const rawResponse = response.data.choices[0].message.content;
+  logger.info("Raw metadata response received");
 
-    // Ensure we have some hashtags if none were provided
-    if (cleanedMetadata.hashtags.length === 0) {
-      cleanedMetadata.hashtags = [
-        "#Banking",
-        "#Finance",
-        "#Education",
-        "#Tutorial",
-        "#Money",
-        "#Learning",
-      ];
-    }
+  // Extract and clean JSON
+  let metadataData = cleanLLMData.extractJSON(rawResponse);
 
-    logger.info(
-      `✓ Metadata cleaned - Caption: ${cleanedMetadata.caption.length} chars, Hashtags: ${cleanedMetadata.hashtags.length}`
-    );
-    return cleanedMetadata;
-  } catch (error) {
-    logger.error("Metadata generation error:", error.message);
-
-    // Return clean fallback metadata
-    return {
-      caption: cleanLLMData.cleanText(
-        "Learn essential banking concepts in simple English! Perfect for beginners."
-      ),
+  if (!metadataData) {
+    logger.warn("Failed to parse metadata JSON, using fallback");
+    metadataData = {
+      caption:
+        "Learn essential banking concepts in simple English! Perfect for beginners.",
       hashtags: [
         "#Banking",
         "#Finance",
@@ -3044,6 +2273,26 @@ const generateMetadata = async (script) => {
       ],
     };
   }
+
+  // Clean and validate metadata
+  const cleanedMetadata = cleanLLMData.cleanMetadata(metadataData);
+
+  // Ensure we have some hashtags if none were provided
+  if (cleanedMetadata.hashtags.length === 0) {
+    cleanedMetadata.hashtags = [
+      "#Banking",
+      "#Finance",
+      "#Education",
+      "#Tutorial",
+      "#Money",
+      "#Learning",
+    ];
+  }
+
+  logger.info(
+    `✓ Metadata cleaned - Caption: ${cleanedMetadata.caption.length} chars, Hashtags: ${cleanedMetadata.hashtags.length}`
+  );
+  return cleanedMetadata;
 };
 
 // 9. POST /youtube/upload - Upload to YouTube
@@ -3499,51 +2748,9 @@ app.post("/test/google-ai-studio-tts", async (req, res) => {
   }
 });
 
-// Test endpoint for Instagram Reel workflow
-app.post("/test/instagram-reel", async (req, res) => {
-  try {
-    const testTask = {
-      title: req.body.title || "Test Instagram Reel",
-      description:
-        req.body.description ||
-        "Testing Instagram Reel workflow with Telugu-English conversation",
-    };
-
-    logger.info("🧪 Testing Instagram Reel workflow");
-
-    // Generate test script
-    const script = await generateScript(testTask.title, testTask.description);
-
-    // Generate social media content
-    const socialContent = await generateSocialMediaContent(
-      testTask.title,
-      script
-    );
-
-    res.json({
-      message: "Instagram Reel test completed",
-      script: script,
-      socialContent: socialContent,
-      format: "9:16 Instagram Reel",
-      subtitles: "English-only",
-      storage: "Local videos/ folder",
-      note: "Run POST /workflow/run to create actual video",
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "Instagram Reel test failed",
-      details: error.message,
-    });
-  }
-});
-
 // Start server
 app.listen(PORT, () => {
   logger.info(`🚀 AI Content Automation Server running on port ${PORT}`);
-  logger.info(`📱 Instagram Reel format: 9:16 aspect ratio (1080x1920)`);
-  logger.info(`🎯 English-only subtitles enabled`);
-  logger.info(`💾 Videos saved locally in videos/ folder`);
-  logger.info(`📲 Social media content generation enabled`);
   logger.info(` Health check available at: http://localhost:${PORT}/health`);
   logger.info(
     `📊 Workflow status available at: http://localhost:${PORT}/workflow/status`
