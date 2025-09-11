@@ -46,7 +46,7 @@ Topic: ${topic}`;
     const response = await axios.post(
       GROQ_API_URL,
       {
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",

@@ -62,7 +62,7 @@ const saveWaveFile = async (
   });
 };
 
-// Generate TTS audio using new Gemini API
+// Generate TTS audio using new Gemini API with multi-speaker support
 const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
   try {
     if (!process.env.GEMINI_API_KEY) {
@@ -75,19 +75,32 @@ const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
     const speakerName = isFemale ? "Jane" : "Joe";
     const voiceName = isFemale ? "Puck" : "Kore"; // Gemini voice names
 
-    const prompt = `Generate natural-sounding speech for the following text in Indian English accent: "${text}"
+    // Enhanced prompt for natural Indian English TTS with engaging delivery
+    const customPrompt = `Convert this conversation to natural-sounding Indian English speech with authentic accents and engaging delivery:
 
-Instructions:
-- Use clear, natural Indian English pronunciation
-- Maintain conversational tone and moderate pace
-- Include natural pauses and intonation
-- Ensure proper pronunciation of technical terms
-- Voice should sound engaging and educational
-- Keep the delivery friendly and informative`;
+CONVERSATION TO SPEAK:
+${text}
+
+VOICE CHARACTERISTICS:
+- Female speaker (Jane/Puck): Warm, enthusiastic, conversational Indian English accent
+- Male speaker (Joe/Kore): Confident, knowledgeable, friendly Indian English accent
+
+DELIVERY STYLE:
+- Natural conversation flow with appropriate pauses
+- Enthusiastic and engaging tone
+- Authentic Indian English pronunciation and intonation
+- Educational yet conversational approach
+- Include natural "hmm", "you know", "actually" fillers where appropriate
+- Vary speaking pace for emphasis on important points
+- Sound like a friendly teacher explaining concepts
+
+Make it sound like two friends having an interesting discussion about an educational topic, not a formal presentation. Use contractions, colloquial expressions, and make it feel spontaneous and engaging.
+
+IMPORTANT: Maintain the exact speaker labels and conversation structure, but make the delivery natural and captivating.`;
 
     const response = await genAI.models.generateContent({
-      model: "gemini-2.0-flash-exp",
-      contents: [{ parts: [{ text: prompt }] }],
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: customPrompt }] }],
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
