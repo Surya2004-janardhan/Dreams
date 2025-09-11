@@ -18,6 +18,9 @@ images/
 videos/
 subtitles/
 
+test-setup.js
+z_backup.js
+setup.js
 # Logs
 *.log
 logs/
