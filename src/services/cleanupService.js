@@ -65,8 +65,8 @@ const cleanupAllMediaFolders = async () => {
     // Clean images folder (remove all generated images)
     cleanupResults.images = await cleanDirectory("images", []);
 
-    // Clean temp folder (remove all temporary files)
-    cleanupResults.temp = await cleanDirectory("temp", []);
+    // Clean temp folder (remove all temporary files but preserve checkpoints)
+    cleanupResults.temp = await cleanDirectory("temp", ["checkpoint"]);
 
     // Clean subtitles folder (remove all subtitle files)
     cleanupResults.subtitles = await cleanDirectory("subtitles", []);

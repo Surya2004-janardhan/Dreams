@@ -130,8 +130,7 @@ const findExistingAssets = (taskId) => {
     if (fs.existsSync(audioDir)) {
       const audioFiles = fs.readdirSync(audioDir);
       const taskAudio = audioFiles.find(
-        (file) =>
-          file.includes(`_${taskId}`) || file.startsWith("conversation_")
+        (file) => file.includes(`_${taskId}`)
       );
       if (taskAudio) {
         assets.audio = {
@@ -231,14 +230,45 @@ const resumeWorkflow = async (taskId, taskData) => {
   // Try to load checkpoint first
   const checkpoint = loadCheckpoint(taskId);
   if (checkpoint) {
-    logger.info(`📂 Resuming from checkpoint: ${checkpoint.step}`);
-    currentWorkflow.results = checkpoint.data;
-    currentWorkflow.completedSteps = checkpoint.completedSteps || [];
-    return {
-      resumeFromStep: checkpoint.step,
-      results: checkpoint.data,
-      completedSteps: checkpoint.completedSteps || [],
-    };
+    // Handle error checkpoints - determine proper resume point from completed steps
+    if (checkpoint.step && checkpoint.step.includes('_ERROR')) {
+      logger.info(`📂 Found error checkpoint: ${checkpoint.step}, determining proper resume point...`);
+      const completedSteps = checkpoint.completedSteps || [];
+      
+      // Find the last successfully completed step and resume from the next one
+      const stepOrder = [
+        'script/generate', 'audio/generate', 'subtitles/generate', 
+        'video/base', 'images/generate', 'video/compose', 
+        'video/optimize', 'social/upload', 'sheets/update'
+      ];
+      
+      let resumeFromStep = 'script/generate';
+      for (const step of stepOrder) {
+        if (!completedSteps.includes(step)) {
+          resumeFromStep = step;
+          break;
+        }
+      }
+      
+      logger.info(`📂 Resuming from: ${resumeFromStep} (after error at ${checkpoint.step})`);
+      currentWorkflow.results = checkpoint.data || {};
+      currentWorkflow.completedSteps = completedSteps;
+      
+      return {
+        resumeFromStep,
+        results: checkpoint.data || {},
+        completedSteps,
+      };
+    } else {
+      logger.info(`📂 Resuming from checkpoint: ${checkpoint.step}`);
+      currentWorkflow.results = checkpoint.data;
+      currentWorkflow.completedSteps = checkpoint.completedSteps || [];
+      return {
+        resumeFromStep: checkpoint.step,
+        results: checkpoint.data,
+        completedSteps: checkpoint.completedSteps || [],
+      };
+    }
   }
 
   // If no checkpoint, look for existing assets
@@ -252,6 +282,8 @@ const resumeWorkflow = async (taskId, taskData) => {
   };
 
   // Determine resume point based on existing assets
+  // Note: baseVideo is always available and should not affect resume logic
+
   if (existingAssets.finalVideo) {
     resumeData.resumeFromStep = "social/upload";
     resumeData.results.finalVideo = existingAssets.finalVideo;
@@ -259,19 +291,16 @@ const resumeWorkflow = async (taskId, taskData) => {
       "script/generate",
       "audio/generate",
       "subtitles/generate",
-      "video/base",
       "images/generate",
       "video/compose",
     ];
     logger.info("🎬 Found final video, resuming from social media upload");
   } else if (
-    existingAssets.baseVideo &&
     existingAssets.audio &&
     existingAssets.subtitles &&
     existingAssets.images.length > 0
   ) {
     resumeData.resumeFromStep = "video/compose";
-    resumeData.results.baseVideoPath = existingAssets.baseVideo;
     resumeData.results.audioFiles = existingAssets.audio;
     resumeData.results.subtitles = existingAssets.subtitles;
     resumeData.results.images = existingAssets.images;
@@ -279,16 +308,17 @@ const resumeWorkflow = async (taskId, taskData) => {
       "script/generate",
       "audio/generate",
       "subtitles/generate",
-      "video/base",
       "images/generate",
     ];
-    logger.info("🎞️ Found all components, resuming from video composition");
+    logger.info(
+      "🎞️ Found audio, subtitles, and images, resuming from video composition"
+    );
   } else if (
     existingAssets.script &&
     existingAssets.audio &&
     existingAssets.subtitles
   ) {
-    resumeData.resumeFromStep = "video/base";
+    resumeData.resumeFromStep = "images/generate";
     resumeData.results.script = existingAssets.script.content;
     resumeData.results.audioFiles = existingAssets.audio;
     resumeData.results.subtitles = existingAssets.subtitles;
@@ -298,7 +328,7 @@ const resumeWorkflow = async (taskId, taskData) => {
       "subtitles/generate",
     ];
     logger.info(
-      "🎵 Found script, audio, and subtitles, resuming from base video"
+      "🎵 Found script, audio, and subtitles, resuming from image generation"
     );
   } else if (existingAssets.script && existingAssets.audio) {
     resumeData.resumeFromStep = "subtitles/generate";
@@ -313,6 +343,12 @@ const resumeWorkflow = async (taskId, taskData) => {
     resumeData.results.script = existingAssets.script.content;
     resumeData.completedSteps = ["script/generate"];
     logger.info("📝 Found script, resuming from audio generation");
+  } else {
+    resumeData.resumeFromStep = "script/generate";
+    resumeData.completedSteps = [];
+    logger.info(
+      "🔄 No task-specific assets found, starting from script generation"
+    );
   }
 
   // Save any found assets to results
@@ -703,12 +739,23 @@ const runAutomatedWorkflow = async (req, res) => {
     currentWorkflow.currentStep = "finished";
 
     logger.info("🎉 Automated workflow completed successfully!");
-    logger.info(
-      `📺 YouTube: ${currentWorkflow.results.uploadResults.youtubeUrl}`
-    );
-    logger.info(
-      `📱 Instagram: ${currentWorkflow.results.uploadResults.instagramUrl}`
-    );
+
+    // Safely log upload URLs
+    if (currentWorkflow.results.uploadResults?.youtubeUrl) {
+      logger.info(
+        `📺 YouTube: ${currentWorkflow.results.uploadResults.youtubeUrl}`
+      );
+    } else {
+      logger.info("📺 YouTube: Upload skipped or failed");
+    }
+
+    if (currentWorkflow.results.uploadResults?.instagramUrl) {
+      logger.info(
+        `📱 Instagram: ${currentWorkflow.results.uploadResults.instagramUrl}`
+      );
+    } else {
+      logger.info("📱 Instagram: Upload skipped or failed");
+    }
   } catch (error) {
     logger.error("❌ Automated workflow failed:", error);
 
