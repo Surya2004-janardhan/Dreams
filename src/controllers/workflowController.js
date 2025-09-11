@@ -129,9 +129,7 @@ const findExistingAssets = (taskId) => {
     const audioDir = "audio";
     if (fs.existsSync(audioDir)) {
       const audioFiles = fs.readdirSync(audioDir);
-      const taskAudio = audioFiles.find(
-        (file) => file.includes(`_${taskId}`)
-      );
+      const taskAudio = audioFiles.find((file) => file.includes(`_${taskId}`));
       if (taskAudio) {
         assets.audio = {
           conversationFile: path.resolve(path.join(audioDir, taskAudio)),
@@ -231,29 +229,39 @@ const resumeWorkflow = async (taskId, taskData) => {
   const checkpoint = loadCheckpoint(taskId);
   if (checkpoint) {
     // Handle error checkpoints - determine proper resume point from completed steps
-    if (checkpoint.step && checkpoint.step.includes('_ERROR')) {
-      logger.info(`📂 Found error checkpoint: ${checkpoint.step}, determining proper resume point...`);
+    if (checkpoint.step && checkpoint.step.includes("_ERROR")) {
+      logger.info(
+        `📂 Found error checkpoint: ${checkpoint.step}, determining proper resume point...`
+      );
       const completedSteps = checkpoint.completedSteps || [];
-      
+
       // Find the last successfully completed step and resume from the next one
       const stepOrder = [
-        'script/generate', 'audio/generate', 'subtitles/generate', 
-        'video/base', 'images/generate', 'video/compose', 
-        'video/optimize', 'social/upload', 'sheets/update'
+        "script/generate",
+        "audio/generate",
+        "subtitles/generate",
+        "video/base",
+        "images/generate",
+        "video/compose",
+        "video/optimize",
+        "social/upload",
+        "sheets/update",
       ];
-      
-      let resumeFromStep = 'script/generate';
+
+      let resumeFromStep = "script/generate";
       for (const step of stepOrder) {
         if (!completedSteps.includes(step)) {
           resumeFromStep = step;
           break;
         }
       }
-      
-      logger.info(`📂 Resuming from: ${resumeFromStep} (after error at ${checkpoint.step})`);
+
+      logger.info(
+        `📂 Resuming from: ${resumeFromStep} (after error at ${checkpoint.step})`
+      );
       currentWorkflow.results = checkpoint.data || {};
       currentWorkflow.completedSteps = completedSteps;
-      
+
       return {
         resumeFromStep,
         results: checkpoint.data || {},
@@ -417,6 +425,9 @@ const runAutomatedWorkflow = async (req, res) => {
         logger.info(`🔄 Resuming workflow from step: ${resumeFromStep}`);
       }
     }
+
+    // Reset resumeFromStep to allow normal step execution flow
+    resumeFromStep = null;
 
     // Step 2: Generate Q&A conversation script
     if (
