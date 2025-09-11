@@ -4,27 +4,41 @@ const logger = require("../config/logger");
 // Groq API configuration
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-const generateScript = async (topic) => {
+const generateScript = async (topic, description = "") => {
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  const prompt = `Create an educational conversation between Speaker A and Speaker B about: ${topic}
+  const prompt = `Create an engaging educational conversation between a curious female questioner (Speaker A) and a knowledgeable male expert (Speaker B) about: ${topic}
 
-Make it:
-- Educational and informative
-- Natural conversation flow
-- 2-3 minutes when spoken
-- Clear points and examples
-- Engaging dialogue
+${description ? `Context: ${description}` : ''}
+
+Requirements:
+- Indian English conversation style
+- Female (Speaker A) asks concise, thoughtful questions (keeps responses shorter)
+- Male (Speaker B) provides detailed, in-depth explanations with examples
+- Each answer should be comprehensive but conversational, not surface-level
+- Include interesting facts, real-world applications, and engaging details
+- Make it sound natural and spontaneous, not scripted
+- Total duration when spoken: 60-90 seconds
+- Format: Q&A style but flowing naturally
+
+Make the expert's explanations detailed enough to provide deep understanding, including:
+- Why this topic matters
+- How it works in detail
+- Real-world examples and applications
+- Interesting facts or insights
+- Practical implications
 
 Format exactly like this:
-Speaker A: [dialogue]
-Speaker B: [dialogue]
-Speaker A: [dialogue]
-Speaker B: [dialogue]
+Speaker A: [concise question]
+Speaker B: [detailed, engaging explanation with examples]
+Speaker A: [follow-up question]
+Speaker B: [comprehensive answer with more depth]
+Speaker A: [final clarifying question]
+Speaker B: [concluding detailed explanation]
 
 Topic: ${topic}`;
 
@@ -36,16 +50,15 @@ Topic: ${topic}`;
         messages: [
           {
             role: "system",
-            content:
-              "You are a helpful educational content creator. Create natural, engaging conversations.",
+            content: "You are an expert educational content creator who specializes in creating natural, engaging conversations between a curious female questioner and a knowledgeable male expert. The female asks concise questions while the male provides detailed, comprehensive explanations in Indian English style.",
           },
           {
             role: "user",
             content: prompt,
           },
         ],
-        temperature: 0.7,
-        max_tokens: 2000,
+        temperature: 0.8,
+        max_tokens: 2500,
       },
       {
         headers: {
@@ -55,7 +68,7 @@ Topic: ${topic}`;
       }
     );
 
-    logger.info("✓ Script generated via Groq API");
+    logger.info("✓ Multi-speaker Q&A script generated via Groq API");
     return response.data.choices[0].message.content;
   } catch (error) {
     logger.error(
