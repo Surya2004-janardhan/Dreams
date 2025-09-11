@@ -20,9 +20,9 @@ const createTransporter = () => {
 const sendSuccessNotification = async (taskData, results) => {
   try {
     const transporter = createTransporter();
-    
+
     const subject = `✅ Content Created Successfully: ${taskData.idea}`;
-    
+
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #28a745;">🎉 Content Creation Success!</h2>
@@ -36,17 +36,25 @@ const sendSuccessNotification = async (taskData, results) => {
       
       <div style="background: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>📺 Published Links:</h3>
-        ${results.youtubeUrl ? `
+        ${
+          results.youtubeUrl
+            ? `
         <p><strong>YouTube:</strong> 
           <a href="${results.youtubeUrl}" target="_blank" style="color: #dc3545;">${results.youtubeUrl}</a>
         </p>
-        ` : '<p><strong>YouTube:</strong> Upload failed</p>'}
+        `
+            : "<p><strong>YouTube:</strong> Upload failed</p>"
+        }
         
-        ${results.instagramUrl ? `
+        ${
+          results.instagramUrl
+            ? `
         <p><strong>Instagram:</strong> 
           <a href="${results.instagramUrl}" target="_blank" style="color: #e4405f;">${results.instagramUrl}</a>
         </p>
-        ` : '<p><strong>Instagram:</strong> Upload failed</p>'}
+        `
+            : "<p><strong>Instagram:</strong> Upload failed</p>"
+        }
       </div>
       
       <div style="background: #f0f8f0; padding: 20px; border-radius: 5px; margin: 20px 0;">
@@ -80,7 +88,6 @@ const sendSuccessNotification = async (taskData, results) => {
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Success notification email sent for: ${taskData.idea}`);
-    
   } catch (error) {
     logger.error("Failed to send success notification:", error);
   }
@@ -92,19 +99,21 @@ const sendSuccessNotification = async (taskData, results) => {
 const sendErrorNotification = async (taskData, error, step) => {
   try {
     const transporter = createTransporter();
-    
-    const subject = `❌ Content Creation Failed: ${taskData?.idea || 'Unknown Task'}`;
-    
+
+    const subject = `❌ Content Creation Failed: ${
+      taskData?.idea || "Unknown Task"
+    }`;
+
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #dc3545;">❌ Content Creation Failed</h2>
       
       <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>Task Details:</h3>
-        <p><strong>Title:</strong> ${taskData?.idea || 'Unknown'}</p>
-        <p><strong>Description:</strong> ${taskData?.description || 'N/A'}</p>
-        <p><strong>Serial Number:</strong> ${taskData?.sno || 'N/A'}</p>
-        <p><strong>Failed Step:</strong> ${step || 'Unknown'}</p>
+        <p><strong>Title:</strong> ${taskData?.idea || "Unknown"}</p>
+        <p><strong>Description:</strong> ${taskData?.description || "N/A"}</p>
+        <p><strong>Serial Number:</strong> ${taskData?.sno || "N/A"}</p>
+        <p><strong>Failed Step:</strong> ${step || "Unknown"}</p>
       </div>
       
       <div style="background: #f8d7da; padding: 20px; border-radius: 5px; margin: 20px 0; color: #721c24;">
@@ -113,14 +122,18 @@ const sendErrorNotification = async (taskData, error, step) => {
 ${error.message || error.toString()}
         </pre>
         
-        ${error.stack ? `
+        ${
+          error.stack
+            ? `
         <details style="margin-top: 15px;">
           <summary style="cursor: pointer; font-weight: bold;">Stack Trace</summary>
           <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 3px; margin-top: 10px; font-size: 12px; overflow-x: auto;">
 ${error.stack}
           </pre>
         </details>
-        ` : ''}
+        `
+            : ""
+        }
       </div>
       
       <div style="background: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; color: #856404;">
@@ -151,7 +164,6 @@ ${error.stack}
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Error notification email sent for failed task`);
-    
   } catch (emailError) {
     logger.error("Failed to send error notification:", emailError);
   }
@@ -163,9 +175,9 @@ ${error.stack}
 const sendStatusUpdate = async (status, message, details = {}) => {
   try {
     const transporter = createTransporter();
-    
+
     const subject = `📊 Workflow Status: ${status}`;
-    
+
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #17a2b8;">📊 Workflow Status Update</h2>
@@ -176,16 +188,20 @@ const sendStatusUpdate = async (status, message, details = {}) => {
         <p><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
       </div>
       
-      ${Object.keys(details).length > 0 ? `
+      ${
+        Object.keys(details).length > 0
+          ? `
       <div style="background: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>Additional Details:</h3>
         <ul>
-          ${Object.entries(details).map(([key, value]) => 
-            `<li><strong>${key}:</strong> ${value}</li>`
-          ).join('')}
+          ${Object.entries(details)
+            .map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`)
+            .join("")}
         </ul>
       </div>
-      ` : ''}
+      `
+          : ""
+      }
     </div>
     `;
 
@@ -198,7 +214,6 @@ const sendStatusUpdate = async (status, message, details = {}) => {
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Status update email sent: ${status}`);
-    
   } catch (error) {
     logger.error("Failed to send status update:", error);
   }
@@ -207,5 +222,5 @@ const sendStatusUpdate = async (status, message, details = {}) => {
 module.exports = {
   sendSuccessNotification,
   sendErrorNotification,
-  sendStatusUpdate
+  sendStatusUpdate,
 };
