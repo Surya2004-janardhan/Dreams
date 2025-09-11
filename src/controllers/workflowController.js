@@ -651,11 +651,17 @@ const runAutomatedWorkflow = async (req, res) => {
       logger.info("→ Step 10: Updating Google Sheet with results");
       currentWorkflow.currentStep = "sheets/update";
 
+      // Safely get upload URLs with fallbacks
+      const youtubeUrl =
+        currentWorkflow.results.uploadResults?.youtubeUrl || "";
+      const instagramUrl =
+        currentWorkflow.results.uploadResults?.instagramUrl || "";
+
       await updateSheetStatus(
         taskData.rowId,
         "Posted",
-        currentWorkflow.results.uploadResults.youtubeUrl,
-        currentWorkflow.results.uploadResults.instagramUrl
+        youtubeUrl,
+        instagramUrl
       );
 
       completedSteps.push("sheets/update");
@@ -671,7 +677,7 @@ const runAutomatedWorkflow = async (req, res) => {
     currentWorkflow.currentStep = "email/success";
     await sendSuccessNotification(
       taskData,
-      currentWorkflow.results.uploadResults
+      currentWorkflow.results.uploadResults || {}
     );
     logger.info("✓ Success notification sent");
 
