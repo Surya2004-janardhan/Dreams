@@ -11,6 +11,7 @@ const cleanLLMData = require("../utils/textCleaner");
 const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
+const ffmpeg = require("fluent-ffmpeg");
 
 // Store current workflow state
 let currentWorkflow = {
@@ -220,17 +221,8 @@ const runWorkflow = async (req, res) => {
 
     logger.info(`🚀 Starting manual workflow for: ${title}`);
 
-    // Run the same process as automated workflow but with manual input
-    const mockTaskData = {
-      rowId: null,
-      sno: "manual",
-      idea: title,
-      description: description || "",
-      status: "manual"
-    };
-
-    // Generate script
-    logger.info("→ Generating script");
+    // Step 1: Generate script
+    logger.info("→ Step 1: Generating script");
     const rawScript = await generateScript(title, description);
     const script = cleanLLMData.extractConversation(rawScript);
 
@@ -239,51 +231,112 @@ const runWorkflow = async (req, res) => {
     }
 
     currentWorkflow.results.script = script;
+    logger.info("✓ Script generated");
 
-    // Generate audio
-    logger.info("→ Generating audio");
-    currentWorkflow.currentStep = "audio/generate";
-    const audioFiles = await generateAudioWithBatchingStrategy(script);
+    // Step 2: Check for existing audio files
+    logger.info("→ Step 2: Checking for existing audio files");
+    let audioFiles;
+    const existingAudioFiles = [];
+
+    // Check for conversation audio file
+    const audioDir = "audio";
+    if (fs.existsSync(audioDir)) {
+      const audioFilesList = fs.readdirSync(audioDir);
+      const conversationFiles = audioFilesList.filter(
+        (file) => file.startsWith("conversation_") && file.endsWith(".wav")
+      );
+
+      if (conversationFiles.length > 0) {
+        const latestAudio = conversationFiles.sort().pop();
+        existingAudioFiles.push({
+          conversationFile: path.resolve(path.join(audioDir, latestAudio)),
+        });
+      }
+    }
+
+    if (existingAudioFiles.length > 0) {
+      logger.info("✅ Audio file already exists, skipping generation");
+      audioFiles = existingAudioFiles[0];
+    } else {
+      logger.info("🎤 No existing audio found, generating new audio");
+      currentWorkflow.currentStep = "audio/generate";
+      audioFiles = await generateAudioWithBatchingStrategy(script);
+    }
+
     currentWorkflow.results.audioFiles = audioFiles;
+    logger.info("✓ Audio ready");
 
-    // Get base video
-    logger.info("→ Getting base video");
+    // Step 3: Get base video
+    logger.info("→ Step 3: Getting base video");
     currentWorkflow.currentStep = "video/base";
     const baseVideoPath = await getBaseVideo();
     currentWorkflow.results.baseVideoPath = baseVideoPath;
+    logger.info("✓ Base video retrieved");
 
-    // Generate images
-    logger.info("→ Generating images");
-    currentWorkflow.currentStep = "images/generate";
-    const images = await generateImages(script);
+    // Step 4: Check for existing images
+    logger.info("→ Step 4: Checking for existing images");
+    let images;
+    const existingImages = [];
+
+    // Check for existing images (image_0.png to image_4.png)
+    for (let i = 0; i < 5; i++) {
+      const imagePath = `images/image_${i}.png`;
+      if (fs.existsSync(imagePath)) {
+        existingImages.push({
+          index: i,
+          filename: imagePath,
+          prompt: `Existing image ${i}`,
+        });
+        logger.info(`✓ Found existing image: ${imagePath}`);
+      }
+    }
+
+    if (existingImages.length >= 5) {
+      logger.info("✅ All 5 images already exist, skipping generation");
+      images = existingImages;
+    } else {
+      logger.info(
+        `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
+          5 - existingImages.length
+        }`
+      );
+      currentWorkflow.currentStep = "images/generate";
+      images = await generateImages(script);
+    }
     currentWorkflow.results.images = images;
+    logger.info(`✓ Images ready - ${images.length} images`);
 
-    // Create subtitles
-    logger.info("→ Creating subtitles");
-    const subtitlesPath = path.resolve(`subtitles/manual_subtitles_${taskId}.srt`);
-    const subtitlesResult = createSubtitlesFile(script, subtitlesPath);
-    currentWorkflow.results.subtitles = subtitlesPath;
+    // Step 5: Assemble video
+    logger.info("→ Step 5: Assembling final video");
+    currentWorkflow.currentStep = "video/assemble";
+    const finalVideo = await assembleVideo(
+      baseVideoPath,
+      images,
+      audioFiles,
+      script
+    );
+    currentWorkflow.results.finalVideo = finalVideo;
+    logger.info("✓ Video assembled");
 
-    // Final status
+    // Complete workflow
     currentWorkflow.status = "completed";
-    currentWorkflow.currentStep = "finished";
+    currentWorkflow.currentStep = "completed";
+    logger.info(`🎉 Workflow completed successfully: ${finalVideo}`);
 
     res.json({
       success: true,
-      message: "Manual workflow completed successfully",
-      taskId: taskId,
-      results: {
+      taskId,
+      result: {
         script: script.substring(0, 200) + "...",
         audioGenerated: !!audioFiles.conversationFile,
         imagesCount: images.length,
-        subtitlesCreated: subtitlesResult.success,
-        baseVideoFound: !!baseVideoPath
-      }
+        baseVideoFound: !!baseVideoPath,
+        finalVideo: finalVideo
+      },
     });
 
   } catch (error) {
-    logger.error("❌ Manual workflow failed:", error);
-    
+    logger.error("❌ Manual workflow failed:", error.message);
     currentWorkflow.status = "error";
     currentWorkflow.error = error.message;
 
@@ -344,116 +397,27 @@ const getProgressInfo = (currentStep) => {
     "email/success": { step: 11, total: 12, description: "Sending notification" },
     "cleanup": { step: 12, total: 12, description: "Cleaning up files" },
     "finished": { step: 12, total: 12, description: "Workflow completed" },
-    "error": { step: -1, total: 12, description: "Workflow encountered an error" }
+    "error": { step: -1, total: 12, description: "Workflow encountered an error" },
+    "completed": { step: 12, total: 12, description: "Workflow completed successfully" },
+    "video/assemble": { step: 7, total: 12, description: "Assembling final video" }
   };
 
   return steps[currentStep] || { step: 0, total: 12, description: "Unknown step" };
 };
 
-module.exports = {
-  runAutomatedWorkflow,
-  runWorkflow,
-  getWorkflowStatus
-};
-    logger.info("→ Step 4: Checking for existing images");
-    let images;
-    const existingImages = [];
-
-    // Check for existing images (image_0.png to image_4.png)
-    for (let i = 0; i < 5; i++) {
-      const imagePath = `images/image_${i}.png`;
-      if (fs.existsSync(imagePath)) {
-        existingImages.push({
-          index: i,
-          filename: imagePath,
-          prompt: `Existing image ${i}`,
-        });
-        logger.info(`✓ Found existing image: ${imagePath}`);
-      }
-    }
-
-    if (existingImages.length >= 5) {
-      logger.info("✅ All 5 images already exist, skipping generation");
-      logger.info("⏩ Skipping image generation step");
-      images = existingImages;
-    } else {
-      logger.info(
-        `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
-          5 - existingImages.length
-        }`
-      );
-      currentWorkflow.currentStep = "images/generate";
-      images = await generateImages(script);
-    }
-    currentWorkflow.results.images = images;
-    logger.info(`✓ Images ready - ${images.length} images`);
-
-    // Step 5: Assemble video
-    logger.info("→ Step 5: Assembling final video");
-    currentWorkflow.currentStep = "video/assemble";
-    const finalVideo = await assembleVideo(
-      baseVideoUrl,
-      images,
-      audioFiles,
-      script
-    );
-    currentWorkflow.results.finalVideo = finalVideo;
-    logger.info("✓ Video assembled");
-
-    // Complete workflow
-    currentWorkflow.status = "completed";
-    currentWorkflow.currentStep = "completed";
-    logger.info(`🎉 Workflow completed successfully: ${finalVideo}`);
-
-    res.json({
-      success: true,
-      taskId,
-      result: {
-        script,
-        audioFiles,
-        images,
-        finalVideo,
-      },
-    });
-  } catch (error) {
-    logger.error("❌ Workflow failed:", error.message);
-    currentWorkflow.status = "error";
-    currentWorkflow.error = error.message;
-
-    res.status(500).json({
-      error: "Workflow failed",
-      details: error.message,
-      taskId: currentWorkflow.taskId,
-    });
-  }
-};
-
-// Video assembly function
-const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
+/**
+ * Legacy video assembly function for manual workflow
+ */
+const assembleVideo = async (baseVideoPath, images, audioFiles, script) => {
   const outputPath = `videos/final_${Date.now()}.mp4`;
   const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
 
   // Create SRT subtitle file
   createSubtitlesFile(script, subtitlesPath);
 
-  // Handle base video - could be URL or local path
-  let baseVideoPath = "temp/base_video.mp4";
-
-  if (
-    baseVideoUrl.startsWith("http://") ||
-    baseVideoUrl.startsWith("https://")
-  ) {
-    logger.info(`→ Downloading base video from URL: ${baseVideoUrl}`);
-    // Download logic would go here
-    logger.info(`✓ Base video downloaded: ${baseVideoPath}`);
-  } else {
-    // It's a local file path
-    logger.info(`→ Using local base video: ${baseVideoUrl}`);
-    baseVideoPath = baseVideoUrl;
-
-    if (!fs.existsSync(baseVideoPath)) {
-      throw new Error(`Base video file not found: ${baseVideoPath}`);
-    }
+  // Handle base video path
+  if (!fs.existsSync(baseVideoPath)) {
+    throw new Error(`Base video file not found: ${baseVideoPath}`);
   }
 
   // Prepare audio
@@ -508,7 +472,9 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
   });
 };
 
-// Combine audio files function
+/**
+ * Combine audio files function for legacy workflow
+ */
 const combineAudioFiles = async (audioFiles, outputPath) => {
   logger.info("→ Preparing audio for video assembly");
 
@@ -564,6 +530,8 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
   throw new Error("No valid audio files provided for combination");
 };
 
-// This function is already declared above, no need for a second declaration
-
-// The module exports are already defined above
+module.exports = {
+  runAutomatedWorkflow,
+  runWorkflow,
+  getWorkflowStatus
+};
