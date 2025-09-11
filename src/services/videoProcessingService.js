@@ -300,7 +300,7 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
     const results = {};
 
     if (platform === "youtube" || platform === "both") {
-      // YouTube Shorts optimization
+      // YouTube Shorts optimization (9:16 aspect ratio)
       const youtubeOutputPath = videoPath.replace(".mp4", "_youtube.mp4");
 
       await new Promise((resolve, reject) => {
@@ -314,11 +314,13 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
             "-c:a aac",
             "-b:a 192k",
             "-movflags +faststart",
+            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2", // 9:16 aspect ratio
+            "-t 60", // YouTube Shorts limit
           ])
           .output(youtubeOutputPath)
           .on("end", () => {
             logger.info(
-              `✅ YouTube-optimized version created: ${youtubeOutputPath}`
+              `✅ YouTube Shorts (9:16) version created: ${youtubeOutputPath}`
             );
             results.youtube = youtubeOutputPath;
             resolve();
@@ -329,7 +331,7 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
     }
 
     if (platform === "instagram" || platform === "both") {
-      // Instagram Reels optimization
+      // Instagram Reels optimization (9:16 aspect ratio)
       const instagramOutputPath = videoPath.replace(".mp4", "_instagram.mp4");
 
       await new Promise((resolve, reject) => {
@@ -343,12 +345,13 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
             "-c:a aac",
             "-b:a 128k",
             "-movflags +faststart",
+            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2", // 9:16 aspect ratio
             "-t 59", // Instagram Reels limit
           ])
           .output(instagramOutputPath)
           .on("end", () => {
             logger.info(
-              `✅ Instagram-optimized version created: ${instagramOutputPath}`
+              `✅ Instagram Reels (9:16) version created: ${instagramOutputPath}`
             );
             results.instagram = instagramOutputPath;
             resolve();
@@ -361,7 +364,7 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
     return results;
   } catch (error) {
     logger.error("❌ Platform optimization failed:", error);
-    return {};
+    throw error;
   }
 };
 
