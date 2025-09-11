@@ -70,7 +70,8 @@ const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
     }
 
     // Determine speaker based on voice parameter
-    const isFemale = voice.includes("A") || voice.toLowerCase().includes("female");
+    const isFemale =
+      voice.includes("A") || voice.toLowerCase().includes("female");
     const speakerName = isFemale ? "Jane" : "Joe";
     const voiceName = isFemale ? "Puck" : "Kore"; // Gemini voice names
 
@@ -96,17 +97,20 @@ Instructions:
             },
           },
         },
-      }
+      },
     });
 
-    const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    const data =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
     if (!data) {
       throw new Error("No audio data received from Gemini TTS API");
     }
 
     const audioBuffer = Buffer.from(data, "base64");
-    logger.info(`✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`);
+    logger.info(
+      `✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`
+    );
 
     return audioBuffer;
   } catch (error) {
