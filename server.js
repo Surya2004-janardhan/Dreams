@@ -2491,31 +2491,70 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     throw error;
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     logger.info("🎬 Starting simplified Instagram Reel (9:16) video assembly");
 
-    // Simple approach: Just convert to 9:16, add audio, add subtitles
-    const subtitleStyle =
-      "FontName=Arial Bold,FontSize=32,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=2,Bold=1,Alignment=2";
+    // Two-step approach: First scale video, then add subtitles in separate pass
+    const tempVideoPath = "temp/temp_scaled_video.mp4";
 
+    // Step 1: Scale video to Instagram format with audio
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(baseVideoPath)
+        .input(combinedAudioPath)
+        .outputOptions([
+          // Video processing: Scale to 1080x1920 (9:16)
+          "-vf",
+          "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+
+          // Audio processing
+          "-c:a",
+          "aac",
+          "-af",
+          "volume=2.0", // Double the audio volume
+
+          // Video encoding
+          "-c:v",
+          "libx264",
+          "-preset",
+          "medium",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          "30",
+          "-shortest",
+        ])
+        .output(tempVideoPath)
+        .on("start", (commandLine) => {
+          logger.info("📱 Step 1 - Scaling video FFmpeg command:", commandLine);
+        })
+        .on("end", () => {
+          logger.info("✓ Step 1 completed - Video scaled to 9:16");
+          resolve();
+        })
+        .on("error", (err) => {
+          logger.error("❌ Step 1 error:", err.message);
+          reject(err);
+        })
+        .run();
+    });
+
+    // Step 2: Add subtitles to the scaled video
     ffmpeg()
-      .input(baseVideoPath)
-      .input(combinedAudioPath)
+      .input(tempVideoPath)
       .outputOptions([
-        // Video processing: Scale to 1080x1920 (9:16)
+        // Add subtitles with simpler style
         "-vf",
-        `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles=${subtitlesPath.replace(
+        `subtitles=${subtitlesPath.replace(
           /\\/g,
           "/"
-        )}:force_style='${subtitleStyle}'`,
+        )}:force_style='FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Bold=1'`,
 
-        // Audio processing
+        // Copy streams
         "-c:a",
-        "aac",
-        "-af",
-        "volume=2.0", // Double the audio volume
-
-        // Video encoding
+        "copy", // Copy audio without re-encoding
         "-c:v",
         "libx264",
         "-preset",
