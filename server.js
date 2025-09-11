@@ -64,20 +64,23 @@ const saveCheckpoint = (step, data, assets = {}) => {
       timestamp: new Date().toISOString(),
       step: step,
       data: data,
-      completed_steps: data.completedSteps || []
+      completed_steps: data.completedSteps || [],
     };
-    
+
     // Save main checkpoint data
     fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(checkpoint, null, 2));
-    
+
     // Save asset information (file paths, timings, etc.)
     const assetInfo = {
       timestamp: new Date().toISOString(),
       assets: assets,
-      step: step
+      step: step,
     };
-    fs.writeFileSync(CHECKPOINT_ASSETS_FILE, JSON.stringify(assetInfo, null, 2));
-    
+    fs.writeFileSync(
+      CHECKPOINT_ASSETS_FILE,
+      JSON.stringify(assetInfo, null, 2)
+    );
+
     logger.info(`✓ Checkpoint saved for step: ${step}`);
     return true;
   } catch (error) {
@@ -89,14 +92,16 @@ const saveCheckpoint = (step, data, assets = {}) => {
 const loadCheckpoint = () => {
   try {
     if (fs.existsSync(CHECKPOINT_FILE)) {
-      const checkpoint = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8'));
+      const checkpoint = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, "utf8"));
       let assets = {};
-      
+
       if (fs.existsSync(CHECKPOINT_ASSETS_FILE)) {
-        const assetData = JSON.parse(fs.readFileSync(CHECKPOINT_ASSETS_FILE, 'utf8'));
+        const assetData = JSON.parse(
+          fs.readFileSync(CHECKPOINT_ASSETS_FILE, "utf8")
+        );
         assets = assetData.assets || {};
       }
-      
+
       logger.info(`✓ Checkpoint loaded from step: ${checkpoint.step}`);
       return { checkpoint, assets };
     }
@@ -110,7 +115,8 @@ const loadCheckpoint = () => {
 const clearCheckpoint = () => {
   try {
     if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE);
-    if (fs.existsSync(CHECKPOINT_ASSETS_FILE)) fs.unlinkSync(CHECKPOINT_ASSETS_FILE);
+    if (fs.existsSync(CHECKPOINT_ASSETS_FILE))
+      fs.unlinkSync(CHECKPOINT_ASSETS_FILE);
     logger.info("✓ Checkpoint cleared");
   } catch (error) {
     logger.error("❌ Failed to clear checkpoint:", error.message);
@@ -119,30 +125,30 @@ const clearCheckpoint = () => {
 
 const validateAssetFiles = (assets) => {
   const validAssets = {};
-  
+
   // Check if files still exist
   if (assets.audioFile && fs.existsSync(assets.audioFile)) {
     validAssets.audioFile = assets.audioFile;
   }
-  
+
   if (assets.images && Array.isArray(assets.images)) {
-    validAssets.images = assets.images.filter(img => 
-      img.filename && fs.existsSync(img.filename)
+    validAssets.images = assets.images.filter(
+      (img) => img.filename && fs.existsSync(img.filename)
     );
   }
-  
+
   if (assets.baseVideoPath && fs.existsSync(assets.baseVideoPath)) {
     validAssets.baseVideoPath = assets.baseVideoPath;
   }
-  
+
   if (assets.subtitlesPath && fs.existsSync(assets.subtitlesPath)) {
     validAssets.subtitlesPath = assets.subtitlesPath;
   }
-  
+
   if (assets.combinedAudioPath && fs.existsSync(assets.combinedAudioPath)) {
     validAssets.combinedAudioPath = assets.combinedAudioPath;
   }
-  
+
   return validAssets;
 };
 
@@ -408,11 +414,11 @@ app.post("/workflow/run", async (req, res) => {
     // Check for existing checkpoint
     const checkpointData = loadCheckpoint();
     let resumeFromCheckpoint = false;
-    
+
     if (checkpointData && req.body.resume !== false) {
       const { checkpoint, assets } = checkpointData;
       const validAssets = validateAssetFiles(assets);
-      
+
       if (Object.keys(validAssets).length > 0) {
         logger.info(`🔄 Resuming workflow from checkpoint: ${checkpoint.step}`);
         currentWorkflow = {
@@ -422,7 +428,7 @@ app.post("/workflow/run", async (req, res) => {
           error: null,
           results: checkpoint.data.results || {},
           checkpointAssets: validAssets,
-          completedSteps: checkpoint.completed_steps || []
+          completedSteps: checkpoint.completed_steps || [],
         };
         resumeFromCheckpoint = true;
       }
@@ -435,17 +441,21 @@ app.post("/workflow/run", async (req, res) => {
         currentStep: "sheets/next-task",
         error: null,
         results: {},
-        completedSteps: []
+        completedSteps: [],
       };
       clearCheckpoint(); // Clear any old checkpoints
     }
 
     res.json({
-      message: resumeFromCheckpoint ? "Workflow resumed from checkpoint" : "Workflow started",
+      message: resumeFromCheckpoint
+        ? "Workflow resumed from checkpoint"
+        : "Workflow started",
       taskId: currentWorkflow.taskId,
       status: "running",
       resumedFromCheckpoint: resumeFromCheckpoint,
-      resumedFromStep: resumeFromCheckpoint ? currentWorkflow.currentStep : null
+      resumedFromStep: resumeFromCheckpoint
+        ? currentWorkflow.currentStep
+        : null,
     });
 
     // Execute workflow asynchronously
@@ -461,7 +471,7 @@ app.post("/workflow/run", async (req, res) => {
 const executeWorkflow = async () => {
   try {
     logger.info("🚀 Starting workflow execution");
-    
+
     let task, script, audioFiles, baseVideoUrl, images;
     let checkpointAssets = currentWorkflow.checkpointAssets || {};
     let completedSteps = currentWorkflow.completedSteps || [];
@@ -480,14 +490,18 @@ const executeWorkflow = async () => {
       }
       currentWorkflow.results.task = task;
       completedSteps.push("sheets/next-task");
-      
+
       // Save checkpoint after task retrieval
-      saveCheckpoint("sheets/next-task", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "sheets/next-task",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info(`✓ Task retrieved: ${task.title}`);
     } else {
       task = currentWorkflow.results.task;
@@ -501,14 +515,18 @@ const executeWorkflow = async () => {
       script = await generateScript(task.title, task.description);
       currentWorkflow.results.script = script;
       completedSteps.push("script/generate");
-      
+
       // Save checkpoint after script generation
-      saveCheckpoint("script/generate", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "script/generate",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info(`✓ Script generated - ${script.length} lines`);
     } else {
       script = currentWorkflow.results.script;
@@ -538,17 +556,21 @@ const executeWorkflow = async () => {
         audioFiles = await generateAudio(script);
         checkpointAssets.audioFile = audioFiles.conversationFile;
       }
-      
+
       currentWorkflow.results.audioFiles = audioFiles;
       completedSteps.push("audio/generate");
-      
+
       // Save checkpoint after audio generation/check
-      saveCheckpoint("audio/generate", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "audio/generate",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info(`✓ Audio ready`);
     } else {
       audioFiles = currentWorkflow.results.audioFiles;
@@ -562,14 +584,18 @@ const executeWorkflow = async () => {
       baseVideoUrl = await getBaseVideo();
       currentWorkflow.results.baseVideoUrl = baseVideoUrl;
       completedSteps.push("video/base");
-      
+
       // Save checkpoint after base video
-      saveCheckpoint("video/base", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "video/base",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info("✓ Base video retrieved");
     } else {
       baseVideoUrl = currentWorkflow.results.baseVideoUrl;
@@ -609,20 +635,24 @@ const executeWorkflow = async () => {
         currentWorkflow.currentStep = "images/generate";
         images = await generateImages(script);
       }
-      
+
       currentWorkflow.results.images = images;
       completedSteps.push("images/generate");
-      
+
       // Save image file paths to checkpoint assets
       checkpointAssets.images = images;
-      
+
       // Save checkpoint after images generation/check
-      saveCheckpoint("images/generate", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "images/generate",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info(`✓ Images ready - ${images.length} images`);
     } else {
       images = currentWorkflow.results.images;
@@ -633,39 +663,47 @@ const executeWorkflow = async () => {
     if (!completedSteps.includes("video/assemble")) {
       logger.info("→ Step 6: Assembling final video");
       currentWorkflow.currentStep = "video/assemble";
-      
+
       // Save pre-assembly checkpoint with all assets
       const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
       const combinedAudioPath = "temp/combined_audio.mp3";
-      
+
       checkpointAssets.subtitlesPath = subtitlesPath;
       checkpointAssets.combinedAudioPath = combinedAudioPath;
       checkpointAssets.baseVideoUrl = baseVideoUrl;
-      
-      saveCheckpoint("video/assemble-prep", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+
+      saveCheckpoint(
+        "video/assemble-prep",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       const finalVideo = await assembleVideo(
         baseVideoUrl,
         images,
         audioFiles,
         script
       );
-      
+
       currentWorkflow.results.finalVideo = finalVideo;
       completedSteps.push("video/assemble");
-      
+
       // Save post-assembly checkpoint
       checkpointAssets.finalVideo = finalVideo;
-      saveCheckpoint("video/assemble", {
-        taskId: currentWorkflow.taskId,
-        results: currentWorkflow.results,
-        completedSteps: completedSteps
-      }, checkpointAssets);
-      
+      saveCheckpoint(
+        "video/assemble",
+        {
+          taskId: currentWorkflow.taskId,
+          results: currentWorkflow.results,
+          completedSteps: completedSteps,
+        },
+        checkpointAssets
+      );
+
       logger.info("✓ Video assembled");
     } else {
       logger.info("♻️ Video already assembled, skipping");
@@ -728,20 +766,22 @@ const executeWorkflow = async () => {
     currentWorkflow.status = "completed";
     currentWorkflow.currentStep = "finished";
     clearCheckpoint();
-    logger.info("🎉 Workflow completed successfully! All assets saved and checkpoint cleared.");
+    logger.info(
+      "🎉 Workflow completed successfully! All assets saved and checkpoint cleared."
+    );
   } catch (error) {
     logger.error(
       `✗ Workflow failed at step ${currentWorkflow.currentStep}: ${error.message}`
     );
     currentWorkflow.status = "error";
     currentWorkflow.error = error.message;
-    
+
     // Save error checkpoint for debugging
     saveCheckpoint(`error/${currentWorkflow.currentStep}`, {
       taskId: currentWorkflow.taskId,
       results: currentWorkflow.results,
       error: error.message,
-      completedSteps: currentWorkflow.completedSteps || []
+      completedSteps: currentWorkflow.completedSteps || [],
     });
     // await sendErrorEmail(currentWorkflow.currentStep, error.message);
   }
@@ -756,7 +796,7 @@ app.get("/workflow/checkpoint", (req, res) => {
         message: "Checkpoint found",
         checkpoint: checkpointData.checkpoint,
         assets: checkpointData.assets,
-        validAssets: validateAssetFiles(checkpointData.assets)
+        validAssets: validateAssetFiles(checkpointData.assets),
       });
     } else {
       res.status(404).json({ message: "No checkpoint found" });
@@ -779,11 +819,13 @@ app.post("/workflow/resume", async (req, res) => {
   try {
     const checkpointData = loadCheckpoint();
     if (!checkpointData) {
-      return res.status(404).json({ message: "No checkpoint found to resume from" });
+      return res
+        .status(404)
+        .json({ message: "No checkpoint found to resume from" });
     }
 
     logger.info("🔄 Manual resume requested from checkpoint");
-    
+
     if (currentWorkflow.status === "running") {
       return res.status(409).json({
         error: "Workflow already running",
@@ -794,7 +836,7 @@ app.post("/workflow/resume", async (req, res) => {
     // Resume from checkpoint
     const { checkpoint, assets } = checkpointData;
     const validAssets = validateAssetFiles(assets);
-    
+
     currentWorkflow = {
       taskId: checkpoint.data.taskId || uuidv4(),
       status: "running",
@@ -802,7 +844,7 @@ app.post("/workflow/resume", async (req, res) => {
       error: null,
       results: checkpoint.data.results || {},
       checkpointAssets: validAssets,
-      completedSteps: checkpoint.completed_steps || []
+      completedSteps: checkpoint.completed_steps || [],
     };
 
     res.json({
@@ -810,13 +852,44 @@ app.post("/workflow/resume", async (req, res) => {
       taskId: currentWorkflow.taskId,
       status: "running",
       resumedFromStep: checkpoint.step,
-      validAssets: Object.keys(validAssets)
+      validAssets: Object.keys(validAssets),
     });
 
     // Start execution
     setImmediate(executeWorkflow);
   } catch (error) {
     res.status(500).json({ error: "Failed to resume from checkpoint" });
+  }
+});
+
+// Test checkpoint system
+app.post("/test/checkpoint", (req, res) => {
+  try {
+    // Create a test checkpoint
+    const testData = {
+      taskId: "test-" + Date.now(),
+      results: {
+        task: { title: "Test Task", description: "Testing checkpoint system" },
+        script: [{ speaker: "Person A", text: "Test script" }],
+      },
+      completedSteps: ["sheets/next-task", "script/generate"],
+    };
+
+    const testAssets = {
+      audioFile: "audio/test.wav",
+      images: [{ filename: "images/test.png" }],
+    };
+
+    const saved = saveCheckpoint("test/checkpoint", testData, testAssets);
+
+    res.json({
+      message: "Test checkpoint created",
+      saved: saved,
+      data: testData,
+      assets: testAssets,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create test checkpoint" });
   }
 });
 
@@ -957,32 +1030,55 @@ app.post("/script/generate", async (req, res) => {
 const generateScript = async (title, description) => {
   logger.info(`→ Generating Telugu-English conversation script for: ${title}`);
 
+  // const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
+  // Description: ${description}
+  
+  // Requirements:
+  // - EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
+  // - Each line should be 13-16 seconds when spoken (35-45 words per line)
+  // - Mix of TELUGU (romanized) and ENGLISH (Indian style) in natural conversation
+  // - Casual, friendly conversation with occasional laughs (*laughs*), expressions like "arre yaar", "aiyo", "chala bagundi"
+  // - Include casual Telugu words: "bro", "andi", "ra", "ka", "le", "mari", "enti"
+  // - Both speakers are from different Telugu states - one from Andhra Pradesh, one from Telangana
+  // - Natural flow with mid-conversation laughs and expressions
+  // - Teach about the topic but in a very casual, friendly way
+  // - Use Indian English phrases: "only", "itself", "what yaar", "no na"
+  
+  // Example style:
+  // "Arre bro, ee ${title} gurinchi cheppava? I'm confused only!"
+  // "Aiyo, simple ga chepthanu! *laughs* See, it's like this only..."
+  
+  // Structure:
+  // Person A (Male): [Casual question with Telugu mix - 35-45 words]
+  // Person B (Female): [Friendly explanation with laugh/expression - 35-45 words] 
+  // Person A (Male): [Follow-up with Telugu expression - 35-45 words]
+  // Person B (Female): [Complete answer with casual advice - 35-45 words]
+  
+  // Return ONLY valid JSON array format (no markdown, no extra text): 
+  // [{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
+
   const prompt = `Create a 55-60 second casual conversation script between two Telugu people from different states in India about "${title}". 
-  Description: ${description}
-  
-  Requirements:
-  - EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
-  - Each line should be 13-16 seconds when spoken (35-45 words per line)
-  - Mix of TELUGU (romanized) and ENGLISH (Indian style) in natural conversation
-  - Casual, friendly conversation with occasional laughs (*laughs*), expressions like "arre yaar", "aiyo", "chala bagundi"
-  - Include casual Telugu words: "bro", "andi", "ra", "ka", "le", "mari", "enti"
-  - Both speakers are from different Telugu states - one from Andhra Pradesh, one from Telangana
-  - Natural flow with mid-conversation laughs and expressions
-  - Teach about the topic but in a very casual, friendly way
-  - Use Indian English phrases: "only", "itself", "what yaar", "no na"
-  
-  Example style:
-  "Arre bro, ee ${title} gurinchi cheppava? I'm confused only!"
-  "Aiyo, simple ga chepthanu! *laughs* See, it's like this only..."
-  
-  Structure:
-  Person A (Male): [Casual question with Telugu mix - 35-45 words]
-  Person B (Female): [Friendly explanation with laugh/expression - 35-45 words] 
-  Person A (Male): [Follow-up with Telugu expression - 35-45 words]
-  Person B (Female): [Complete answer with casual advice - 35-45 words]
-  
-  Return ONLY valid JSON array format (no markdown, no extra text): 
-  [{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
+Description: ${description}
+
+Requirements:
+- EXACTLY 4 lines total: 2 from Person A (Male), 2 from Person B (Female) (alternating: A, B, A, B)
+- Each line should be 13-16 seconds when spoken (35-45 words per line)
+- Mix of TELUGU (romanized) and ENGLISH (Indian style) naturally
+- Casual, friendly conversation with expressions like "arre yaar", "aiyo", "chala bagundi", "enti mari", "haha"
+- Include Telugu words: "bro", "andi", "ra", "le", "mari", "enti"
+- One speaker is from Andhra, the other from Telangana (slight slang difference)
+- Must go a bit deep into the topic, not just surface level — make it interesting to know
+- Keep the flow fun, natural, with mid-conversation laughs and casual Indian English phrases like "only", "no na", "what yaar"
+- Ensure total duration is ~55-60 seconds
+
+Structure:
+Person A (Male): [Casual question with Telugu-English mix - 35-45 words]
+Person B (Female): [Friendly explanation with laugh/expression - 35-45 words]
+Person A (Male): [Follow-up with Telugu-style surprise/comment - 35-45 words]
+Person B (Female): [Complete answer with casual advice/insight - 35-45 words]
+
+Return ONLY valid JSON array format (no markdown, no extra text): 
+[{"speaker": "Person A", "text": "casual mixed conversation"}, {"speaker": "Person B", "text": "friendly response"}]`;
 
   const response = await axios.post(
     "https://api.groq.com/openai/v1/chat/completions",
@@ -2342,6 +2438,14 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
   const outputPath = `videos/final_${Date.now()}.mp4`;
   const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
 
+  // Ensure output directories exist
+  if (!fs.existsSync("videos")) {
+    fs.mkdirSync("videos", { recursive: true });
+  }
+  if (!fs.existsSync("subtitles")) {
+    fs.mkdirSync("subtitles", { recursive: true });
+  }
+
   // Create SRT subtitle file
   createSubtitlesFile(script, subtitlesPath);
 
@@ -2381,54 +2485,70 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
 
   // Prepare audio - now handles single conversation file or multiple files
   const combinedAudioPath = "temp/combined_audio.mp3";
-  await combineAudioFiles(audioFiles, combinedAudioPath);
+
+  try {
+    await combineAudioFiles(audioFiles, combinedAudioPath);
+    logger.info(`✓ Audio prepared: ${combinedAudioPath}`);
+
+    // Verify files exist before FFmpeg
+    if (!fs.existsSync(baseVideoPath)) {
+      throw new Error(`Base video not found: ${baseVideoPath}`);
+    }
+    if (!fs.existsSync(combinedAudioPath)) {
+      throw new Error(`Combined audio not found: ${combinedAudioPath}`);
+    }
+    if (!fs.existsSync(subtitlesPath)) {
+      throw new Error(`Subtitles file not found: ${subtitlesPath}`);
+    }
+
+    logger.info("✓ All input files verified for FFmpeg");
+  } catch (error) {
+    logger.error("❌ Error preparing audio or verifying files:", error.message);
+    throw error;
+  }
 
   return new Promise((resolve, reject) => {
+    // Simplified approach: First add subtitles, then handle images separately
     let command = ffmpeg(baseVideoPath)
       .input(combinedAudioPath)
       .audioCodec("aac")
       .videoCodec("libx264");
 
-    // Add images as inputs
-    images.forEach((image, index) => {
-      command = command.input(image.filename);
-    });
+    // Create a simple filter for subtitles first
+    const subtitleFilter = `subtitles=${subtitlesPath.replace(
+      /\\/g,
+      "/"
+    )}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=2,Bold=1'`;
 
-    // Create complex filter for image overlays and subtitles
-    let filterComplex = [];
-    let currentInput = "[0:v]";
-
-    // Add image overlays - positioned in upper part of video only (top 40% of screen)
-    images.forEach((image, index) => {
-      const startTime = index * 15; // Show each image for 15 seconds
-      const endTime = (index + 1) * 15;
-      const inputIndex = index + 2; // +2 because 0=video, 1=audio
-
-      // Scale image to fit upper portion and position it
-      const overlayFilter = `${currentInput}[${inputIndex}:v]scale=w=min(iw*min(1920/iw\\,432/ih)\\,1920):h=min(ih*min(1920/iw\\,432/ih)\\,432),pad=1920:432:(ow-iw)/2:(oh-ih)/2[scaled${index}];[scaled${index}]setpts=PTS-STARTPTS[timed${index}];[0:v][timed${index}]overlay=0:0:enable='between(t,${startTime},${endTime})'[v${index}]`;
-      filterComplex.push(overlayFilter);
-      currentInput = `[v${index}]`;
-    });
-
-    // Add enhanced subtitle filter with bold white text and dark black border
-    const subtitleFilter = `${currentInput}subtitles=${subtitlesPath}:force_style='FontName=Arial Bold,FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=3,Shadow=2,Bold=1,Alignment=2'[out]`;
-    filterComplex.push(subtitleFilter);
-
-    if (filterComplex.length > 0) {
-      command = command
-        .complexFilter(filterComplex.join(";"))
-        .outputOptions(["-map", "[out]", "-map", "1:a"]);
-    } else {
-      // Fallback if no images - just add subtitles
+    // If we have images, create a simple overlay approach
+    if (images && images.length > 0) {
+      // For now, let's use a simpler approach - just add subtitles
+      // We'll handle image overlays in a future update
       command = command.outputOptions([
-        `-vf subtitles=${subtitlesPath}:force_style='FontName=Arial Bold,FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,BorderStyle=1,Outline=3,Shadow=2,Bold=1,Alignment=2'`,
+        `-vf`,
+        subtitleFilter,
+        `-preset`,
+        `fast`,
+        `-crf`,
+        `23`,
+      ]);
+    } else {
+      // No images, just subtitles
+      command = command.outputOptions([
+        `-vf`,
+        subtitleFilter,
+        `-preset`,
+        `fast`,
+        `-crf`,
+        `23`,
       ]);
     }
 
-    command = command.outputOptions(["-preset fast", "-crf 23"]);
-
     command
       .output(outputPath)
+      .on("start", (commandLine) => {
+        logger.info("FFmpeg command:", commandLine);
+      })
       .on("end", () => {
         logger.info("Video assembly completed:", outputPath);
         resolve(outputPath);
@@ -2446,17 +2566,30 @@ const createSubtitlesFile = (script, subtitlesPath) => {
   let startTime = 0;
 
   script.forEach((line, index) => {
-    const duration = 4; // 4 seconds per line
+    const duration = 15; // 15 seconds per line (matching Telugu conversation pace)
     const endTime = startTime + duration;
 
     srtContent += `${index + 1}\n`;
     srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
-    srtContent += `${line.subtitle}\n\n`;
+    // Use line.text instead of line.subtitle, and handle both speaker and text
+    const subtitleText =
+      line.text ||
+      line.subtitle ||
+      `${line.speaker}: ${line.text}` ||
+      "No text available";
+    srtContent += `${subtitleText}\n\n`;
 
     startTime = endTime;
   });
 
+  // Ensure subtitles directory exists
+  const subtitlesDir = path.dirname(subtitlesPath);
+  if (!fs.existsSync(subtitlesDir)) {
+    fs.mkdirSync(subtitlesDir, { recursive: true });
+  }
+
   fs.writeFileSync(subtitlesPath, srtContent);
+  logger.info(`✓ Subtitle file created: ${subtitlesPath}`);
 };
 
 const formatTime = (seconds) => {
