@@ -1769,7 +1769,7 @@ const combineAudioIntoConversation = async (audioFiles) => {
 
 // Alternative simpler combination using basic concatenation
 const combineAudioFiles = async (audioFiles, outputPath) => {
-  logger.info(`→ Preparing audio for video assembly`);
+  logger.info(`→ Preparing audio for video assembly with volume optimization`);
 
   // Check if audioFiles is the new single-file format
   if (audioFiles && audioFiles.conversationFile) {
@@ -1777,12 +1777,41 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
       `→ Using single conversation file: ${audioFiles.conversationFile}`
     );
 
-    // Copy the single conversation file to the output path
     const sourceFile = audioFiles.conversationFile;
     if (fs.existsSync(sourceFile)) {
-      fs.copyFileSync(sourceFile, outputPath);
-      logger.info(`✓ Audio file prepared: ${outputPath}`);
-      return outputPath;
+      // Process the single audio file to optimize for video
+      return new Promise((resolve, reject) => {
+        ffmpeg()
+          .input(sourceFile)
+          .outputOptions([
+            "-c:a",
+            "mp3",
+            "-b:a",
+            "192k", // Higher bitrate for better quality
+            "-ar",
+            "48000", // Higher sample rate
+            "-af",
+            "volume=2.5,highpass=f=80,lowpass=f=8000", // Volume boost + audio cleanup
+            "-avoid_negative_ts",
+            "make_zero",
+          ])
+          .output(outputPath)
+          .on("start", (commandLine) => {
+            logger.info("🔊 Audio processing command:", commandLine);
+          })
+          .on("end", () => {
+            logger.info(`✓ Audio optimized and prepared: ${outputPath}`);
+            resolve(outputPath);
+          })
+          .on("error", (error) => {
+            logger.error("Audio optimization error:", error);
+            // Fallback: just copy the file
+            fs.copyFileSync(sourceFile, outputPath);
+            logger.info(`✓ Audio file copied (fallback): ${outputPath}`);
+            resolve(outputPath);
+          })
+          .run();
+      });
     } else {
       throw new Error(`Conversation file not found: ${sourceFile}`);
     }
@@ -1802,17 +1831,25 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
         ffmpegCommand = ffmpegCommand.input(audioFile.file);
       });
 
-      // Simple concatenation
+      // Simple concatenation with volume optimization
       const inputs = audioFiles.map((_, index) => `[${index}:0]`).join("");
-      const filterComplex = `${inputs}concat=n=${audioFiles.length}:v=0:a=1[out]`;
+      const filterComplex = `${inputs}concat=n=${audioFiles.length}:v=0:a=1[concat];[concat]volume=2.5,highpass=f=80,lowpass=f=8000[out]`;
 
       ffmpegCommand
         .complexFilter(filterComplex)
-        .outputOptions(["-map", "[out]"])
-        .audioCodec("mp3")
+        .outputOptions([
+          "-map",
+          "[out]",
+          "-c:a",
+          "mp3",
+          "-b:a",
+          "192k",
+          "-ar",
+          "48000",
+        ])
         .output(outputPath)
         .on("end", () => {
-          logger.info(`✓ Audio files combined: ${outputPath}`);
+          logger.info(`✓ Audio files combined and optimized: ${outputPath}`);
           resolve(outputPath);
         })
         .on("error", (error) => {
@@ -2430,9 +2467,6 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     fs.mkdirSync("subtitles", { recursive: true });
   }
 
-  // Create English-only subtitle file
-  createEnglishSubtitlesFile(script, subtitlesPath);
-
   // Handle base video - could be URL or local path
   let baseVideoPath = "temp/base_video.mp4";
 
@@ -2467,12 +2501,19 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     }
   }
 
-  // Prepare audio with proper volume
+  // Prepare audio with proper volume and get actual duration
   const combinedAudioPath = "temp/combined_audio.mp3";
 
   try {
     await combineAudioFiles(audioFiles, combinedAudioPath);
     logger.info(`✓ Audio prepared: ${combinedAudioPath}`);
+
+    // Get actual audio duration for proper subtitle timing
+    const audioDuration = await getAudioDuration(combinedAudioPath);
+    logger.info(`✓ Audio duration detected: ${audioDuration} seconds`);
+
+    // Create English-only subtitle file with proper timing based on audio duration
+    createTimedEnglishSubtitles(script, subtitlesPath, audioDuration);
 
     // Verify files exist before FFmpeg
     if (!fs.existsSync(baseVideoPath)) {
@@ -2491,115 +2532,188 @@ const assembleVideo = async (baseVideoUrl, images, audioFiles, script) => {
     throw error;
   }
 
-  return new Promise(async (resolve, reject) => {
-    logger.info("🎬 Starting simplified Instagram Reel (9:16) video assembly");
+  return new Promise((resolve, reject) => {
+    logger.info(
+      "🎬 Starting Instagram Reel (9:16) video assembly with improved audio/subtitle sync"
+    );
 
-    // Two-step approach: First scale video, then add subtitles in separate pass
-    const tempVideoPath = "temp/temp_scaled_video.mp4";
+    // Two-step approach to avoid complex filter issues
+    const tempScaledPath = "temp/temp_scaled_video.mp4";
 
-    // Step 1: Scale video to Instagram format with audio
-    await new Promise((resolve, reject) => {
-      ffmpeg()
-        .input(baseVideoPath)
-        .input(combinedAudioPath)
-        .outputOptions([
-          // Video processing: Scale to 1080x1920 (9:16)
-          "-vf",
-          "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
-
-          // Audio processing
-          "-c:a",
-          "aac",
-          "-af",
-          "volume=2.0", // Double the audio volume
-
-          // Video encoding
-          "-c:v",
-          "libx264",
-          "-preset",
-          "medium",
-          "-crf",
-          "20",
-          "-pix_fmt",
-          "yuv420p",
-          "-r",
-          "30",
-          "-shortest",
-        ])
-        .output(tempVideoPath)
-        .on("start", (commandLine) => {
-          logger.info("📱 Step 1 - Scaling video FFmpeg command:", commandLine);
-        })
-        .on("end", () => {
-          logger.info("✓ Step 1 completed - Video scaled to 9:16");
-          resolve();
-        })
-        .on("error", (err) => {
-          logger.error("❌ Step 1 error:", err.message);
-          reject(err);
-        })
-        .run();
-    });
-
-    // Step 2: Add subtitles to the scaled video
+    // Step 1: Scale video and add audio with volume boost
     ffmpeg()
-      .input(tempVideoPath)
+      .input(baseVideoPath)
+      .input(combinedAudioPath)
       .outputOptions([
-        // Add subtitles with simpler style
+        // Scale video to Instagram format
         "-vf",
-        `subtitles=${subtitlesPath.replace(
-          /\\/g,
-          "/"
-        )}:force_style='FontSize=28,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=2,Bold=1'`,
-
-        // Copy streams
-        "-c:a",
-        "copy", // Copy audio without re-encoding
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-crf",
-        "23",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        "30",
-
-        // Ensure video and audio sync
+        "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+        
+        // Audio processing with significant volume boost
+        "-af", 
+        "volume=4.0", // Quadruple the volume for better audibility
+        "-c:a", "aac",
+        "-ar", "48000", // High-quality audio sample rate
+        "-b:a", "192k", // Higher audio bitrate
+        
+        // Video encoding
+        "-c:v", "libx264",
+        "-preset", "medium",
+        "-crf", "23",
+        "-pix_fmt", "yuv420p",
+        "-r", "30",
+        
+        // Ensure proper sync
         "-shortest",
-        "-avoid_negative_ts",
-        "make_zero",
+        "-avoid_negative_ts", "make_zero"
       ])
-      .output(outputPath)
+      .output(tempScaledPath)
       .on("start", (commandLine) => {
-        logger.info(
-          "📱 Simplified Instagram Reel FFmpeg command:",
-          commandLine
-        );
-      })
-      .on("progress", (progress) => {
-        if (progress.percent) {
-          logger.info(
-            `📱 Instagram Reel encoding progress: ${Math.round(
-              progress.percent
-            )}%`
-          );
-        }
+        logger.info("📱 Step 1 - Video scaling with audio:", commandLine);
       })
       .on("end", () => {
-        logger.info(
-          `✅ Instagram Reel video assembly completed: ${outputPath}`
-        );
-        resolve(outputPath);
+        logger.info("✓ Step 1 completed - Video scaled with audio");
+        
+        // Step 2: Add Instagram Reel style subtitles
+        ffmpeg()
+          .input(tempScaledPath)
+          .outputOptions([
+            // Add subtitles with Instagram Reel styling
+            "-vf",
+            `subtitles='${subtitlesPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}':force_style='FontName=Arial Black,FontSize=52,PrimaryColour=&Hffffff,OutlineColour=&H000000,Outline=3,Bold=1,Alignment=2,MarginV=150'`,
+            
+            // Copy audio without re-encoding to preserve volume
+            "-c:a", "copy",
+            
+            // Video encoding for final output
+            "-c:v", "libx264",
+            "-preset", "medium",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-r", "30",
+            
+            // Instagram Reel optimization
+            "-movflags", "+faststart",
+            "-max_muxing_queue_size", "1024"
+          ])
+          .output(outputPath)
+          .on("start", (commandLine) => {
+            logger.info("📱 Step 2 - Adding Instagram Reel subtitles:", commandLine);
+          })
+          .on("progress", (progress) => {
+            if (progress.percent) {
+              logger.info(
+                `📱 Instagram Reel encoding progress: ${Math.round(progress.percent)}%`
+              );
+            }
+          })
+          .on("end", () => {
+            logger.info(`✅ Instagram Reel video assembly completed: ${outputPath}`);
+            
+            // Clean up temp files
+            try {
+              if (fs.existsSync(tempScaledPath)) {
+                fs.unlinkSync(tempScaledPath);
+              }
+            } catch (cleanupError) {
+              logger.warn("Could not clean up temp files:", cleanupError.message);
+            }
+            
+            resolve(outputPath);
+          })
+          .on("error", (err) => {
+            logger.error("❌ Step 2 subtitle addition error:", err.message);
+            reject(err);
+          })
+          .run();
       })
       .on("error", (err) => {
-        logger.error("❌ Instagram Reel video assembly error:", err);
-        logger.error("Full error details:", JSON.stringify(err, null, 2));
+        logger.error("❌ Step 1 video scaling error:", err.message);
         reject(err);
       })
       .run();
   });
+};
+
+// Get audio duration using ffprobe
+const getAudioDuration = async (audioPath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(audioPath, (err, metadata) => {
+      if (err) {
+        logger.error("Error getting audio duration:", err);
+        // Fallback to estimated duration based on script length
+        resolve(60); // Default 60 seconds
+        return;
+      }
+
+      const duration = metadata.format.duration;
+      logger.info(`📊 Actual audio duration: ${duration} seconds`);
+      resolve(parseFloat(duration));
+    });
+  });
+};
+
+// Create timed English subtitles based on actual audio duration
+const createTimedEnglishSubtitles = (script, subtitlesPath, audioDuration) => {
+  logger.info(`→ Creating timed English subtitles for ${audioDuration}s audio`);
+
+  let srtContent = "";
+  let currentTime = 0;
+
+  // Filter script to only include lines with English content
+  const englishLines = script
+    .map((line) => ({
+      ...line,
+      englishText: extractEnglishWords(line.text),
+    }))
+    .filter((line) => line.englishText.trim().length > 0);
+
+  if (englishLines.length === 0) {
+    logger.warn("No English content found for subtitles");
+    // Create a fallback subtitle
+    srtContent = `1\n00:00:00,000 --> 00:00:05,000\n[Educational Content]\n\n`;
+    fs.writeFileSync(subtitlesPath, srtContent);
+    return;
+  }
+
+  // Calculate duration per subtitle based on actual audio duration
+  const timePerSubtitle = audioDuration / englishLines.length;
+  const minDuration = 2; // Minimum 2 seconds per subtitle
+  const maxDuration = 8; // Maximum 8 seconds per subtitle
+
+  englishLines.forEach((line, index) => {
+    // Calculate dynamic duration based on text length and available time
+    const textLength = line.englishText.length;
+    const baseDuration = Math.max(
+      minDuration,
+      Math.min(maxDuration, textLength / 8)
+    );
+    const duration = Math.min(baseDuration, timePerSubtitle);
+
+    const startTime = currentTime;
+    const endTime = Math.min(currentTime + duration, audioDuration);
+
+    if (startTime < audioDuration) {
+      srtContent += `${index + 1}\n`;
+      srtContent += `${formatTime(startTime)} --> ${formatTime(endTime)}\n`;
+      srtContent += `${line.englishText}\n\n`;
+    }
+
+    currentTime = endTime;
+
+    // Stop if we've reached the audio duration
+    if (currentTime >= audioDuration) {
+      logger.info(
+        `✓ Subtitles created for full audio duration (${audioDuration}s)`
+      );
+      return;
+    }
+  });
+
+  fs.writeFileSync(subtitlesPath, srtContent);
+  logger.info(
+    `✓ Timed English subtitles created: ${subtitlesPath} (${englishLines.length} subtitles)`
+  );
 };
 
 // Create English-only subtitles (extract English words from mixed Telugu-English text)
