@@ -48,6 +48,104 @@ if (fs.existsSync(ffmpegPath)) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Checkpoint system for workflow recovery
+const CHECKPOINT_FILE = "temp/workflow_checkpoint.json";
+const CHECKPOINT_ASSETS_FILE = "temp/checkpoint_assets.json";
+
+// Ensure temp directory exists
+if (!fs.existsSync("temp")) {
+  fs.mkdirSync("temp", { recursive: true });
+}
+
+// Checkpoint management functions
+const saveCheckpoint = (step, data, assets = {}) => {
+  try {
+    const checkpoint = {
+      timestamp: new Date().toISOString(),
+      step: step,
+      data: data,
+      completed_steps: data.completedSteps || []
+    };
+    
+    // Save main checkpoint data
+    fs.writeFileSync(CHECKPOINT_FILE, JSON.stringify(checkpoint, null, 2));
+    
+    // Save asset information (file paths, timings, etc.)
+    const assetInfo = {
+      timestamp: new Date().toISOString(),
+      assets: assets,
+      step: step
+    };
+    fs.writeFileSync(CHECKPOINT_ASSETS_FILE, JSON.stringify(assetInfo, null, 2));
+    
+    logger.info(`✓ Checkpoint saved for step: ${step}`);
+    return true;
+  } catch (error) {
+    logger.error("❌ Failed to save checkpoint:", error.message);
+    return false;
+  }
+};
+
+const loadCheckpoint = () => {
+  try {
+    if (fs.existsSync(CHECKPOINT_FILE)) {
+      const checkpoint = JSON.parse(fs.readFileSync(CHECKPOINT_FILE, 'utf8'));
+      let assets = {};
+      
+      if (fs.existsSync(CHECKPOINT_ASSETS_FILE)) {
+        const assetData = JSON.parse(fs.readFileSync(CHECKPOINT_ASSETS_FILE, 'utf8'));
+        assets = assetData.assets || {};
+      }
+      
+      logger.info(`✓ Checkpoint loaded from step: ${checkpoint.step}`);
+      return { checkpoint, assets };
+    }
+    return null;
+  } catch (error) {
+    logger.error("❌ Failed to load checkpoint:", error.message);
+    return null;
+  }
+};
+
+const clearCheckpoint = () => {
+  try {
+    if (fs.existsSync(CHECKPOINT_FILE)) fs.unlinkSync(CHECKPOINT_FILE);
+    if (fs.existsSync(CHECKPOINT_ASSETS_FILE)) fs.unlinkSync(CHECKPOINT_ASSETS_FILE);
+    logger.info("✓ Checkpoint cleared");
+  } catch (error) {
+    logger.error("❌ Failed to clear checkpoint:", error.message);
+  }
+};
+
+const validateAssetFiles = (assets) => {
+  const validAssets = {};
+  
+  // Check if files still exist
+  if (assets.audioFile && fs.existsSync(assets.audioFile)) {
+    validAssets.audioFile = assets.audioFile;
+  }
+  
+  if (assets.images && Array.isArray(assets.images)) {
+    validAssets.images = assets.images.filter(img => 
+      img.filename && fs.existsSync(img.filename)
+    );
+  }
+  
+  if (assets.baseVideoPath && fs.existsSync(assets.baseVideoPath)) {
+    validAssets.baseVideoPath = assets.baseVideoPath;
+  }
+  
+  if (assets.subtitlesPath && fs.existsSync(assets.subtitlesPath)) {
+    validAssets.subtitlesPath = assets.subtitlesPath;
+  }
+  
+  if (assets.combinedAudioPath && fs.existsSync(assets.combinedAudioPath)) {
+    validAssets.combinedAudioPath = assets.combinedAudioPath;
+  }
+  
+  return validAssets;
+};
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -295,7 +393,7 @@ let currentWorkflow = {
   results: {},
 };
 
-// 1. POST /workflow/run - Entry point for manual workflow execution
+// 1. POST /workflow/run - Entry point for manual workflow execution with checkpoint support
 app.post("/workflow/run", async (req, res) => {
   try {
     logger.info("Starting workflow execution");
@@ -307,18 +405,47 @@ app.post("/workflow/run", async (req, res) => {
       });
     }
 
-    currentWorkflow = {
-      taskId: uuidv4(),
-      status: "running",
-      currentStep: "sheets/next-task",
-      error: null,
-      results: {},
-    };
+    // Check for existing checkpoint
+    const checkpointData = loadCheckpoint();
+    let resumeFromCheckpoint = false;
+    
+    if (checkpointData && req.body.resume !== false) {
+      const { checkpoint, assets } = checkpointData;
+      const validAssets = validateAssetFiles(assets);
+      
+      if (Object.keys(validAssets).length > 0) {
+        logger.info(`🔄 Resuming workflow from checkpoint: ${checkpoint.step}`);
+        currentWorkflow = {
+          taskId: checkpoint.data.taskId || uuidv4(),
+          status: "running",
+          currentStep: checkpoint.step,
+          error: null,
+          results: checkpoint.data.results || {},
+          checkpointAssets: validAssets,
+          completedSteps: checkpoint.completed_steps || []
+        };
+        resumeFromCheckpoint = true;
+      }
+    }
+
+    if (!resumeFromCheckpoint) {
+      currentWorkflow = {
+        taskId: uuidv4(),
+        status: "running",
+        currentStep: "sheets/next-task",
+        error: null,
+        results: {},
+        completedSteps: []
+      };
+      clearCheckpoint(); // Clear any old checkpoints
+    }
 
     res.json({
-      message: "Workflow started",
+      message: resumeFromCheckpoint ? "Workflow resumed from checkpoint" : "Workflow started",
       taskId: currentWorkflow.taskId,
       status: "running",
+      resumedFromCheckpoint: resumeFromCheckpoint,
+      resumedFromStep: resumeFromCheckpoint ? currentWorkflow.currentStep : null
     });
 
     // Execute workflow asynchronously
@@ -330,108 +457,219 @@ app.post("/workflow/run", async (req, res) => {
   }
 });
 
-// Async workflow execution
+// Async workflow execution with checkpoint support
 const executeWorkflow = async () => {
   try {
     logger.info("🚀 Starting workflow execution");
+    
+    let task, script, audioFiles, baseVideoUrl, images;
+    let checkpointAssets = currentWorkflow.checkpointAssets || {};
+    let completedSteps = currentWorkflow.completedSteps || [];
 
-    // Step 1: Get next task from sheets
-    logger.info("→ Step 1: Getting next task");
-    currentWorkflow.currentStep = "sheets/next-task";
-    const task = await getNextTask();
-    if (!task) {
-      currentWorkflow.status = "completed";
-      currentWorkflow.currentStep = "no-tasks";
-      logger.info("✓ No pending tasks found");
-      return;
-    }
-    currentWorkflow.results.task = task;
-    logger.info(`✓ Task retrieved: ${task.title}`);
-
-    // Step 2: Generate script
-    logger.info("→ Step 2: Generating script");
-    currentWorkflow.currentStep = "script/generate";
-    const script = await generateScript(task.title, task.description);
-    currentWorkflow.results.script = script;
-    logger.info(`✓ Script generated - ${script.length} lines`);
-
-    // Step 3: Generate audio (skip if already exists)
-    logger.info("→ Step 3: Checking for existing audio");
-    currentWorkflow.currentStep = "audio/check";
-
-    let audioFiles;
-    const existingAudioFile = "audio/conversation_single_call.wav";
-
-    if (fs.existsSync(existingAudioFile)) {
-      logger.info(`✓ Audio file already exists: ${existingAudioFile}`);
-      logger.info("⏩ Skipping audio generation step");
-      audioFiles = {
-        conversationFile: existingAudioFile,
-        totalSegments: script.length,
-        apiCallsUsed: 0,
-        message: "Using existing audio file - skipped generation",
-      };
-    } else {
-      logger.info("🎵 No existing audio found, generating new audio");
-      currentWorkflow.currentStep = "audio/generate";
-      audioFiles = await generateAudio(script);
-    }
-    currentWorkflow.results.audioFiles = audioFiles;
-
-    // Step 4: Get base video from Filebase (existing uploaded video)
-    logger.info("→ Step 4: Getting base video");
-    currentWorkflow.currentStep = "video/base";
-    const baseVideoUrl = await getBaseVideo();
-    currentWorkflow.results.baseVideoUrl = baseVideoUrl;
-    logger.info("✓ Base video retrieved");
-
-    // Step 5: Generate images (skip if already exist)
-    logger.info("→ Step 5: Checking for existing images");
-    currentWorkflow.currentStep = "images/check";
-
-    let images;
-    const existingImages = [];
-
-    // Check for existing images (image_0.png to image_4.png)
-    for (let i = 0; i < 5; i++) {
-      const imagePath = `images/image_${i}.png`;
-      if (fs.existsSync(imagePath)) {
-        existingImages.push({
-          index: i,
-          filename: imagePath,
-          prompt: `Existing image ${i}`,
-        });
-        logger.info(`✓ Found existing image: ${imagePath}`);
+    // Step 1: Get next task from sheets (with checkpoint)
+    if (!completedSteps.includes("sheets/next-task")) {
+      logger.info("→ Step 1: Getting next task");
+      currentWorkflow.currentStep = "sheets/next-task";
+      task = await getNextTask();
+      if (!task) {
+        currentWorkflow.status = "completed";
+        currentWorkflow.currentStep = "no-tasks";
+        clearCheckpoint();
+        logger.info("✓ No pending tasks found");
+        return;
       }
-    }
-
-    if (existingImages.length >= 5) {
-      logger.info("✅ All 5 images already exist, skipping generation");
-      logger.info("⏩ Skipping image generation step");
-      images = existingImages;
+      currentWorkflow.results.task = task;
+      completedSteps.push("sheets/next-task");
+      
+      // Save checkpoint after task retrieval
+      saveCheckpoint("sheets/next-task", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info(`✓ Task retrieved: ${task.title}`);
     } else {
-      logger.info(
-        `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
-          5 - existingImages.length
-        }`
-      );
-      currentWorkflow.currentStep = "images/generate";
-      images = await generateImages(script);
+      task = currentWorkflow.results.task;
+      logger.info(`♻️ Resuming with task: ${task.title}`);
     }
-    currentWorkflow.results.images = images;
-    logger.info(`✓ Images ready - ${images.length} images`);
 
-    // Step 6: Assemble video
-    logger.info("→ Step 6: Assembling final video");
-    currentWorkflow.currentStep = "video/assemble";
-    const finalVideo = await assembleVideo(
-      baseVideoUrl,
-      images,
-      audioFiles,
-      script
-    );
-    currentWorkflow.results.finalVideo = finalVideo;
-    logger.info("✓ Video assembled");
+    // Step 2: Generate script (with checkpoint)
+    if (!completedSteps.includes("script/generate")) {
+      logger.info("→ Step 2: Generating script");
+      currentWorkflow.currentStep = "script/generate";
+      script = await generateScript(task.title, task.description);
+      currentWorkflow.results.script = script;
+      completedSteps.push("script/generate");
+      
+      // Save checkpoint after script generation
+      saveCheckpoint("script/generate", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info(`✓ Script generated - ${script.length} lines`);
+    } else {
+      script = currentWorkflow.results.script;
+      logger.info(`♻️ Using existing script - ${script.length} lines`);
+    }
+
+    // Step 3: Generate audio (skip if already exists) (with checkpoint)
+    if (!completedSteps.includes("audio/generate")) {
+      logger.info("→ Step 3: Checking for existing audio");
+      currentWorkflow.currentStep = "audio/check";
+
+      const existingAudioFile = "audio/conversation_single_call.wav";
+
+      if (fs.existsSync(existingAudioFile)) {
+        logger.info(`✓ Audio file already exists: ${existingAudioFile}`);
+        logger.info("⏩ Skipping audio generation step");
+        audioFiles = {
+          conversationFile: existingAudioFile,
+          totalSegments: script.length,
+          apiCallsUsed: 0,
+          message: "Using existing audio file - skipped generation",
+        };
+        checkpointAssets.audioFile = existingAudioFile;
+      } else {
+        logger.info("🎵 No existing audio found, generating new audio");
+        currentWorkflow.currentStep = "audio/generate";
+        audioFiles = await generateAudio(script);
+        checkpointAssets.audioFile = audioFiles.conversationFile;
+      }
+      
+      currentWorkflow.results.audioFiles = audioFiles;
+      completedSteps.push("audio/generate");
+      
+      // Save checkpoint after audio generation/check
+      saveCheckpoint("audio/generate", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info(`✓ Audio ready`);
+    } else {
+      audioFiles = currentWorkflow.results.audioFiles;
+      logger.info(`♻️ Using existing audio data`);
+    }
+
+    // Step 4: Get base video (with checkpoint)
+    if (!completedSteps.includes("video/base")) {
+      logger.info("→ Step 4: Getting base video");
+      currentWorkflow.currentStep = "video/base";
+      baseVideoUrl = await getBaseVideo();
+      currentWorkflow.results.baseVideoUrl = baseVideoUrl;
+      completedSteps.push("video/base");
+      
+      // Save checkpoint after base video
+      saveCheckpoint("video/base", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info("✓ Base video retrieved");
+    } else {
+      baseVideoUrl = currentWorkflow.results.baseVideoUrl;
+      logger.info(`♻️ Using existing base video URL`);
+    }
+
+    // Step 5: Generate images (skip if already exist) (with checkpoint)
+    if (!completedSteps.includes("images/generate")) {
+      logger.info("→ Step 5: Checking for existing images");
+      currentWorkflow.currentStep = "images/check";
+
+      const existingImages = [];
+
+      // Check for existing images (image_0.png to image_4.png)
+      for (let i = 0; i < 5; i++) {
+        const imagePath = `images/image_${i}.png`;
+        if (fs.existsSync(imagePath)) {
+          existingImages.push({
+            index: i,
+            filename: imagePath,
+            prompt: `Existing image ${i}`,
+          });
+          logger.info(`✓ Found existing image: ${imagePath}`);
+        }
+      }
+
+      if (existingImages.length >= 5) {
+        logger.info("✅ All 5 images already exist, skipping generation");
+        logger.info("⏩ Skipping image generation step");
+        images = existingImages;
+      } else {
+        logger.info(
+          `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
+            5 - existingImages.length
+          }`
+        );
+        currentWorkflow.currentStep = "images/generate";
+        images = await generateImages(script);
+      }
+      
+      currentWorkflow.results.images = images;
+      completedSteps.push("images/generate");
+      
+      // Save image file paths to checkpoint assets
+      checkpointAssets.images = images;
+      
+      // Save checkpoint after images generation/check
+      saveCheckpoint("images/generate", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info(`✓ Images ready - ${images.length} images`);
+    } else {
+      images = currentWorkflow.results.images;
+      logger.info(`♻️ Using existing images - ${images.length} images`);
+    }
+
+    // Step 6: Assemble video (with checkpoint and detailed asset tracking)
+    if (!completedSteps.includes("video/assemble")) {
+      logger.info("→ Step 6: Assembling final video");
+      currentWorkflow.currentStep = "video/assemble";
+      
+      // Save pre-assembly checkpoint with all assets
+      const subtitlesPath = `subtitles/subtitles_${Date.now()}.srt`;
+      const combinedAudioPath = "temp/combined_audio.mp3";
+      
+      checkpointAssets.subtitlesPath = subtitlesPath;
+      checkpointAssets.combinedAudioPath = combinedAudioPath;
+      checkpointAssets.baseVideoUrl = baseVideoUrl;
+      
+      saveCheckpoint("video/assemble-prep", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      const finalVideo = await assembleVideo(
+        baseVideoUrl,
+        images,
+        audioFiles,
+        script
+      );
+      
+      currentWorkflow.results.finalVideo = finalVideo;
+      completedSteps.push("video/assemble");
+      
+      // Save post-assembly checkpoint
+      checkpointAssets.finalVideo = finalVideo;
+      saveCheckpoint("video/assemble", {
+        taskId: currentWorkflow.taskId,
+        results: currentWorkflow.results,
+        completedSteps: completedSteps
+      }, checkpointAssets);
+      
+      logger.info("✓ Video assembled");
+    } else {
+      logger.info("♻️ Video already assembled, skipping");
+    }
 
     // Step 7: Upload final video to Filebase
     logger.info("→ Step 7: Uploading to Filebase");
@@ -486,18 +724,101 @@ const executeWorkflow = async () => {
     );
     logger.info("✓ Notification sent");
 
+    // Complete workflow and clear checkpoint
     currentWorkflow.status = "completed";
     currentWorkflow.currentStep = "finished";
-    logger.info("🎉 Workflow completed successfully");
+    clearCheckpoint();
+    logger.info("🎉 Workflow completed successfully! All assets saved and checkpoint cleared.");
   } catch (error) {
     logger.error(
       `✗ Workflow failed at step ${currentWorkflow.currentStep}: ${error.message}`
     );
     currentWorkflow.status = "error";
     currentWorkflow.error = error.message;
+    
+    // Save error checkpoint for debugging
+    saveCheckpoint(`error/${currentWorkflow.currentStep}`, {
+      taskId: currentWorkflow.taskId,
+      results: currentWorkflow.results,
+      error: error.message,
+      completedSteps: currentWorkflow.completedSteps || []
+    });
     // await sendErrorEmail(currentWorkflow.currentStep, error.message);
   }
 };
+
+// Checkpoint management endpoints
+app.get("/workflow/checkpoint", (req, res) => {
+  try {
+    const checkpointData = loadCheckpoint();
+    if (checkpointData) {
+      res.json({
+        message: "Checkpoint found",
+        checkpoint: checkpointData.checkpoint,
+        assets: checkpointData.assets,
+        validAssets: validateAssetFiles(checkpointData.assets)
+      });
+    } else {
+      res.status(404).json({ message: "No checkpoint found" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load checkpoint" });
+  }
+});
+
+app.delete("/workflow/checkpoint", (req, res) => {
+  try {
+    clearCheckpoint();
+    res.json({ message: "Checkpoint cleared successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to clear checkpoint" });
+  }
+});
+
+app.post("/workflow/resume", async (req, res) => {
+  try {
+    const checkpointData = loadCheckpoint();
+    if (!checkpointData) {
+      return res.status(404).json({ message: "No checkpoint found to resume from" });
+    }
+
+    logger.info("🔄 Manual resume requested from checkpoint");
+    
+    if (currentWorkflow.status === "running") {
+      return res.status(409).json({
+        error: "Workflow already running",
+        currentStep: currentWorkflow.currentStep,
+      });
+    }
+
+    // Resume from checkpoint
+    const { checkpoint, assets } = checkpointData;
+    const validAssets = validateAssetFiles(assets);
+    
+    currentWorkflow = {
+      taskId: checkpoint.data.taskId || uuidv4(),
+      status: "running",
+      currentStep: checkpoint.step,
+      error: null,
+      results: checkpoint.data.results || {},
+      checkpointAssets: validAssets,
+      completedSteps: checkpoint.completed_steps || []
+    };
+
+    res.json({
+      message: "Workflow resumed from checkpoint",
+      taskId: currentWorkflow.taskId,
+      status: "running",
+      resumedFromStep: checkpoint.step,
+      validAssets: Object.keys(validAssets)
+    });
+
+    // Start execution
+    setImmediate(executeWorkflow);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to resume from checkpoint" });
+  }
+});
 
 // POST /files/cleanup - Remove existing audio and image files to force regeneration
 app.post("/files/cleanup", (req, res) => {
