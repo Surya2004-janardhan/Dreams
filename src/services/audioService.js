@@ -1,14 +1,8 @@
 const { GoogleGenAI } = require("@google/genai");
-const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
 const wav = require("wav");
-
-// Initialize Google GenAI client
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
-});
 
 // Save WAV file helper function
 const saveWaveFile = async (
@@ -33,119 +27,248 @@ const saveWaveFile = async (
   });
 };
 
-// Generate TTS audio using OpenAI API
-const generateTTSAudio = async (script, voice = "alloy") => {
-  try {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is required for TTS generation");
-    }
-
-    logger.info(`🎤 Generating TTS audio with OpenAI (${voice} voice)...`);
-
-    const response = await axios.post(
-      "https://api.openai.com/v1/audio/speech",
-      {
-        model: "tts-1",
-        input: script,
-        voice: voice,
-        response_format: "wav",
-        speed: 1.2, // Slightly faster for 70-second target
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        responseType: "arraybuffer",
+// Generate TTS audio using Gemini API with retry logic
+const generateTTSAudio = async (script, speaker = "Raj", maxRetries = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is required for TTS generation");
       }
-    );
 
-    const audioBuffer = Buffer.from(response.data);
-    logger.info(
-      `✓ Generated TTS audio using OpenAI API (${audioBuffer.length} bytes)`
-    );
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    return audioBuffer;
-  } catch (error) {
-    logger.error(`TTS generation failed: ${error.message}`);
+      logger.info(
+        `🎤 Generating TTS audio with Gemini (${speaker} voice) - Attempt ${attempt}/${maxRetries}...`
+      );
 
-    // Fallback: Create a simple WAV header for placeholder
-    const sampleRate = 22050;
-    const duration = Math.max(1, Math.ceil(script.length / 10)); // Estimate duration
-    const samples = sampleRate * duration;
-    const buffer = Buffer.alloc(44 + samples * 2);
+      const prompt = `Convert this dialogue segment to natural Indian English speech with expressive and informative delivery. Speaker: ${speaker}
+Text: ${script}`;
 
-    // WAV header
-    buffer.write("RIFF", 0);
-    buffer.writeUInt32LE(36 + samples * 2, 4);
-    buffer.write("WAVE", 8);
-    buffer.write("fmt ", 12);
-    buffer.writeUInt32LE(16, 16);
-    buffer.writeUInt16LE(1, 20);
-    buffer.writeUInt16LE(1, 22);
-    buffer.writeUInt32LE(sampleRate, 24);
-    buffer.writeUInt32LE(sampleRate * 2, 28);
-    buffer.writeUInt16LE(2, 32);
-    buffer.writeUInt16LE(16, 34);
-    buffer.write("data", 36);
-    buffer.writeUInt32LE(samples * 2, 40);
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName:
+                  speaker === "Raj" ? "en-IN-Standard-C" : "en-IN-Standard-A", // Male and female Indian voices
+              },
+            },
+          },
+        },
+      });
 
-    // Generate simple tone for placeholder
-    for (let i = 0; i < samples; i++) {
-      const sample = Math.sin((i * 440 * 2 * Math.PI) / sampleRate) * 16383;
-      buffer.writeInt16LE(sample, 44 + i * 2);
+      const data =
+        response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (!data) {
+        throw new Error("No audio data received from Gemini TTS");
+      }
+
+      const audioBuffer = Buffer.from(data, "base64");
+      logger.info(
+        `✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`
+      );
+
+      return audioBuffer;
+    } catch (error) {
+      logger.warn(`TTS attempt ${attempt} failed:`, error.message);
+
+      if (attempt === maxRetries) {
+        logger.error(`❌ All ${maxRetries} TTS attempts failed`);
+        break;
+      }
+
+      // Wait before retrying (exponential backoff)
+      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      logger.info(`⏳ Waiting ${waitTime}ms before retry...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
-
-    logger.warn("⚠️ Using placeholder audio due to TTS API failure");
-    return buffer;
   }
+
+  // All attempts failed, use fallback
+  logger.warn("⚠️ Using placeholder audio due to TTS API failure");
+
+  // Fallback: Create a simple WAV header for placeholder
+  const sampleRate = 22050;
+  const duration = Math.max(1, Math.ceil(script.length / 10)); // Estimate duration
+  const samples = sampleRate * duration;
+  const buffer = Buffer.alloc(44 + samples * 2);
+
+  // WAV header
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + samples * 2, 4);
+  buffer.write("WAVE", 8);
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(1, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28);
+  buffer.writeUInt16LE(2, 32);
+  buffer.writeUInt16LE(16, 34);
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(samples * 2, 40);
+
+  // Generate simple tone for placeholder
+  for (let i = 0; i < samples; i++) {
+    const sample = Math.sin((i * 440 * 2 * Math.PI) / sampleRate) * 16383;
+    buffer.writeInt16LE(sample, 44 + i * 2);
+  }
+
+  return buffer;
 };
 
-// Main audio generation function - Single call for entire conversation
+// Main audio generation function - Multi-speaker support
 const generateAudioWithBatchingStrategy = async (script) => {
   try {
     logger.info("🎤 Starting multi-speaker TTS audio generation...");
 
-    // Generate audio for the entire conversation in one call
-    logger.info(
-      "🔄 Generating audio for entire conversation with multi-speaker voices"
-    );
+    // Parse script to separate Raj and Rani dialogues
+    const dialogues = parseScriptDialogues(script);
 
-    try {
-      // Use the actual script content instead of hardcoded prompt
-      const customPrompt = `TTS the following conversation between Raj and Rani:
-${script}`;
-
-      const audioBuffer = await generateTTSAudio(customPrompt, "alloy");
+    if (dialogues.length === 0) {
+      logger.warn("⚠️ No dialogues found, using single voice");
+      // Fallback to single voice
+      const audioBuffer = await generateTTSAudio(script, "Raj"); // Default to Raj voice for single speaker
       const conversationFile = path.resolve(
         `audio/conversation_${Date.now()}.wav`
       );
-
       await saveWaveFile(conversationFile, audioBuffer);
-
-      logger.info(`✓ Generated complete conversation: ${conversationFile}`);
 
       return {
         conversationFile: conversationFile,
         segments: [
           {
             file: conversationFile,
-            speaker: "multi-speaker",
+            speaker: "single-speaker",
             text: script,
-            duration: Math.ceil(script.length / 16), // Estimate duration for whole conversation with faster speaking rate (70 seconds target)
+            duration: Math.ceil(script.length / 16),
           },
         ],
         totalSegments: 1,
         apiCallsUsed: 1,
       };
-    } catch (error) {
-      logger.error("Failed to generate conversation audio:", error.message);
-      throw error;
     }
+
+    // Generate audio for each dialogue segment
+    const audioSegments = [];
+    let totalDuration = 0;
+
+    for (const dialogue of dialogues) {
+      try {
+        const voice = dialogue.speaker; // Use speaker name directly for Gemini TTS
+        const audioBuffer = await generateTTSAudio(dialogue.text, voice);
+
+        const segmentFile = path.resolve(
+          `audio/segment_${dialogue.speaker}_${Date.now()}_${Math.random()
+            .toString(36)
+            .substr(2, 9)}.wav`
+        );
+        await saveWaveFile(segmentFile, audioBuffer);
+
+        audioSegments.push({
+          file: segmentFile,
+          speaker: dialogue.speaker,
+          text: dialogue.text,
+          duration: Math.ceil(dialogue.text.length / 16),
+          voice: voice,
+        });
+
+        totalDuration += Math.ceil(dialogue.text.length / 16);
+
+        // Small delay between segments to avoid rate limits
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        logger.error(
+          `Failed to generate audio for ${dialogue.speaker}:`,
+          error.message
+        );
+        // Continue with other segments
+      }
+    }
+
+    // Combine all audio segments
+    const conversationFile = path.resolve(
+      `audio/conversation_${Date.now()}.wav`
+    );
+
+    if (audioSegments.length === 1) {
+      // Only one segment, just copy it
+      fs.copyFileSync(audioSegments[0].file, conversationFile);
+    } else {
+      // Combine multiple segments
+      await combineAudioSegments(audioSegments, conversationFile);
+    }
+
+    logger.info(`✓ Generated complete conversation: ${conversationFile}`);
+
+    return {
+      conversationFile: conversationFile,
+      segments: audioSegments,
+      totalSegments: audioSegments.length,
+      apiCallsUsed: audioSegments.length,
+    };
   } catch (error) {
     logger.error("❌ Audio generation failed:", error.message);
     throw error;
   }
+};
+
+// Parse script to extract Raj and Rani dialogues
+const parseScriptDialogues = (script) => {
+  const dialogues = [];
+  const lines = script.split("\n").filter((line) => line.trim());
+
+  for (const line of lines) {
+    const rajMatch = line.match(/^Raj:\s*(.+)/i);
+    const raniMatch = line.match(/^Rani:\s*(.+)/i);
+
+    if (rajMatch) {
+      dialogues.push({
+        speaker: "Raj",
+        text: rajMatch[1].trim(),
+      });
+    } else if (raniMatch) {
+      dialogues.push({
+        speaker: "Rani",
+        text: raniMatch[1].trim(),
+      });
+    }
+  }
+
+  logger.info(`📝 Parsed ${dialogues.length} dialogue segments`);
+  return dialogues;
+};
+
+// Combine multiple audio segments
+const combineAudioSegments = async (segments, outputFile) => {
+  return new Promise((resolve, reject) => {
+    let ffmpegCommand = require("fluent-ffmpeg")();
+
+    segments.forEach((segment) => {
+      ffmpegCommand = ffmpegCommand.input(segment.file);
+    });
+
+    const inputs = segments.map((_, index) => `[${index}:0]`).join("");
+    const filterComplex = `${inputs}concat=n=${segments.length}:v=0:a=1[out]`;
+
+    ffmpegCommand
+      .complexFilter(filterComplex)
+      .outputOptions(["-map", "[out]"])
+      .audioCodec("pcm_s16le")
+      .output(outputFile)
+      .on("end", () => {
+        logger.info(`✓ Audio segments combined: ${outputFile}`);
+        resolve(outputFile);
+      })
+      .on("error", (error) => {
+        logger.error("Audio combination error:", error);
+        reject(error);
+      })
+      .run();
+  });
 };
 
 module.exports = {
