@@ -3,167 +3,168 @@ const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
-const { parseConversationTiming } = require("../utils/subtitles");
-
-// Initialize Google GenAI client for Imagen
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
-
-// Groq API configuration for script analysis
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /**
- * Analyze script and determine where images should be placed with timing
+ * Parse SRT subtitle file and extract segments with timestamps
  */
-const analyzeScriptForImagePlacement = async (script) => {
+const parseSRTFile = (srtFilePath) => {
   try {
-    // Get conversation timing from subtitles utility
-    const segments = parseConversationTiming(script);
+    const content = fs.readFileSync(srtFilePath, "utf8");
+    const segments = [];
+    const blocks = content.split("\n\n").filter((block) => block.trim());
 
-    // Analyze script to identify key visual concepts
-    const analysisPrompt = `Analyze this educational script and identify key concepts that would benefit from visual illustration. Focus on complex explanations, examples, and detailed topics.
+    blocks.forEach((block) => {
+      const lines = block.split("\n").filter((line) => line.trim());
+      if (lines.length >= 3) {
+        // Skip the sequence number (first line)
+        const timestampLine = lines[1];
+        const textLines = lines.slice(2);
 
-Script: ${script}
-
-For each visualization point, specify:
-1. The concept being explained
-2. A detailed image prompt for educational illustration
-3. Which part of the conversation this relates to
-
-Respond in this exact JSON format:
-{
-  "visualizations": [
-    {
-      "concept": "brief description of concept",
-      "prompt": "detailed image prompt for educational illustration",
-      "keywords": ["key", "words", "to", "match"],
-      "complexity": "high/medium/low"
-    }
-  ]
-}`;
-
-    const groqResponse = await axios.post(
-      GROQ_API_URL,
-      {
-        model: "llama3-8b-8192",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an expert educational content analyzer who identifies key concepts that need visual illustration for better understanding.",
-          },
-          {
-            role: "user",
-            content: analysisPrompt,
-          },
-        ],
-        temperature: 0.4,
-        max_tokens: 2000,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-      }
-    );
-
-    let visualizations;
-    try {
-      const analysisResult = JSON.parse(
-        groqResponse.data.choices[0].message.content
-      );
-      visualizations = analysisResult.visualizations;
-    } catch (parseError) {
-      logger.warn("⚠️ Failed to parse LLM analysis, using fallback");
-      visualizations = [
-        {
-          concept: "Main topic introduction",
-          prompt: "Educational illustration showing the main concept",
-          keywords: ["introduction", "concept", "main"],
-          complexity: "medium",
-        },
-      ];
-    }
-
-    // Match visualizations to conversation segments based on keywords
-    const imageTimings = [];
-
-    visualizations.forEach((viz, vizIndex) => {
-      let bestMatch = null;
-      let bestScore = 0;
-
-      segments.forEach((segment, segmentIndex) => {
-        const segmentText = segment.text.toLowerCase();
-        const keywordMatches = viz.keywords.filter((keyword) =>
-          segmentText.includes(keyword.toLowerCase())
-        ).length;
-
-        const score = keywordMatches / viz.keywords.length;
-
-        if (score > bestScore && score > 0.3) {
-          // At least 30% keyword match
-          bestScore = score;
-          bestMatch = {
-            segmentIndex,
-            segment,
-            matchScore: score,
-          };
-        }
-      });
-
-      // If no good match found, distribute evenly
-      if (!bestMatch && segments.length > 0) {
-        const evenDistributionIndex = Math.floor(
-          (vizIndex / visualizations.length) * segments.length
+        // Parse timestamp line: "00:00:01,500 --> 00:00:04,200"
+        const timestampMatch = timestampLine.match(
+          /(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/
         );
-        bestMatch = {
-          segmentIndex: evenDistributionIndex,
-          segment: segments[evenDistributionIndex],
-          matchScore: 0.1, // Low score for even distribution
-        };
-      }
+        if (timestampMatch) {
+          const startTimeStr = timestampMatch[1];
+          const endTimeStr = timestampMatch[2];
 
-      if (bestMatch) {
-        imageTimings.push({
-          ...viz,
-          segmentIndex: bestMatch.segmentIndex,
-          startTime: bestMatch.segment.startTime,
-          endTime: bestMatch.segment.endTime,
-          duration: bestMatch.segment.duration,
-          matchedText: bestMatch.segment.text,
-          matchScore: bestMatch.matchScore,
-        });
+          // Convert to seconds
+          const startTime = timeStringToSeconds(startTimeStr);
+          const endTime = timeStringToSeconds(endTimeStr);
+          const text = textLines.join(" ").trim();
+
+          segments.push({
+            startTime,
+            endTime,
+            duration: endTime - startTime,
+            text,
+          });
+        }
       }
     });
 
-    // Sort by start time
-    imageTimings.sort((a, b) => a.startTime - b.startTime);
-
-    logger.info(
-      `📊 Mapped ${imageTimings.length} images to conversation segments`
-    );
-
-    return imageTimings;
+    logger.info(`📝 Parsed ${segments.length} subtitle segments from SRT file`);
+    return segments;
   } catch (error) {
-    logger.error("Failed to analyze script for image placement:", error);
+    logger.error("❌ Failed to parse SRT file:", error.message);
     return [];
   }
 };
 
 /**
- * Generate contextual educational images with timing information
+ * Convert SRT timestamp string to seconds
  */
-const generateImages = async (script) => {
+const timeStringToSeconds = (timeStr) => {
+  const match = timeStr.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+  if (match) {
+    const hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const seconds = parseInt(match[3]);
+    const milliseconds = parseInt(match[4]);
+    return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
+  }
+  return 0;
+};
+
+/**
+ * Divide total duration into 5 equal chunks and collect subtitle text for each
+ */
+const createImageChunksFromSubtitles = (
+  subtitleSegments,
+  totalDuration = 60
+) => {
+  const chunks = [];
+  const chunkDuration = totalDuration / 5; // ~12 seconds each
+
+  for (let i = 0; i < 5; i++) {
+    const chunkStart = i * chunkDuration;
+    const chunkEnd = (i + 1) * chunkDuration;
+
+    // Collect all subtitle text that falls within this chunk
+    const chunkTexts = [];
+    subtitleSegments.forEach((segment) => {
+      // Check if segment overlaps with chunk
+      if (segment.startTime < chunkEnd && segment.endTime > chunkStart) {
+        chunkTexts.push(segment.text);
+      }
+    });
+
+    const mergedText = chunkTexts.join(" ").trim();
+
+    chunks.push({
+      index: i + 1,
+      startTime: chunkStart,
+      endTime: chunkEnd,
+      duration: chunkDuration,
+      text: mergedText,
+      subtitleCount: chunkTexts.length,
+    });
+
+    logger.info(
+      `📊 Chunk ${i + 1}: ${chunkStart.toFixed(1)}s-${chunkEnd.toFixed(1)}s (${
+        chunkTexts.length
+      } subtitle segments)`
+    );
+  }
+
+  return chunks;
+};
+
+/**
+ * Generate image using Gemini Imagen API
+ */
+const generateImageWithGemini = async (prompt, index) => {
   try {
-    logger.info("🖼️ Starting contextual image generation with timing...");
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    });
 
-    // Step 1: Analyze script and determine image placement
-    const imageTimings = await analyzeScriptForImagePlacement(script);
+    logger.info(`🎨 Generating image ${index} with Gemini Imagen...`);
 
-    if (imageTimings.length === 0) {
-      logger.warn("No image timings determined, creating basic set");
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image-preview",
+      contents: prompt,
+    });
+
+    // Process the response
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
+
+        const imagePath = path.resolve(
+          `images/gemini_image_${index}_${Date.now()}.png`
+        );
+        fs.writeFileSync(imagePath, buffer);
+
+        logger.info(`✅ Image ${index} saved: ${imagePath}`);
+        return imagePath;
+      }
+    }
+
+    throw new Error("No image data received from Gemini");
+  } catch (error) {
+    logger.error(`❌ Failed to generate image ${index}:`, error.message);
+    throw error;
+  }
+};
+
+/**
+ * Generate contextual educational images using subtitle timing
+ */
+const generateImages = async (subtitlesPath) => {
+  try {
+    logger.info("🖼️ Starting image generation using subtitle timing...");
+
+    // Step 1: Parse SRT file
+    const subtitleSegments = parseSRTFile(subtitlesPath);
+    if (subtitleSegments.length === 0) {
+      logger.warn("⚠️ No subtitle segments found, cannot generate images");
       return [];
     }
+
+    // Step 2: Create 5 equal chunks from subtitles
+    const imageChunks = createImageChunksFromSubtitles(subtitleSegments);
 
     // Ensure images directory exists
     if (!fs.existsSync("images")) {
@@ -173,127 +174,100 @@ const generateImages = async (script) => {
     const generatedImages = [];
     let successCount = 0;
 
-    // Step 2: Generate images with enhanced prompts
-    for (let i = 0; i < imageTimings.length; i++) {
-      const timing = imageTimings[i];
-
+    // Step 3: Generate images for each chunk
+    for (const chunk of imageChunks) {
       try {
-        // Create enhanced educational prompt
-        const enhancedPrompt = `Educational illustration: ${timing.prompt}
+        if (!chunk.text || chunk.text.trim().length === 0) {
+          logger.warn(
+            `⚠️ Chunk ${chunk.index} has no text content, skipping image generation`
+          );
+          continue;
+        }
 
-Style requirements:
-- Clean, professional educational design
-- 16:9 aspect ratio suitable for video overlay
-- Bright, engaging colors suitable for learning
-- Clear visual hierarchy
-- Minimal text, focus on visual explanation
-- High contrast for video overlay
-- Indian educational context where appropriate
-- Modern, appealing design for social media
+        // Create educational image prompt based on subtitle text
+        const imagePrompt = `Educational illustration for video content:
 
-Content focus: ${timing.concept}
-Matches conversation about: "${timing.matchedText.substring(0, 100)}..."`;
+Context from conversation: "${chunk.text}"
+
+Create a clean, professional educational image that visually represents the concepts being discussed in this part of the conversation. The image should:
+
+- Be suitable for 16:9 video overlay
+- Use bright, engaging colors for learning
+- Have clear visual hierarchy
+- Focus on visual explanation rather than text
+- Be modern and appealing for social media
+- Represent the key educational concepts from the conversation
+- Have high contrast for good video visibility
+
+Style: Educational, professional, engaging, modern design`;
 
         logger.info(
-          `🎨 Generating image ${i + 1}/${imageTimings.length}: ${
-            timing.concept
-          }`
-        );
-        logger.info(
-          `⏰ Timing: ${timing.startTime.toFixed(
+          `🎨 Generating image ${
+            chunk.index
+          }/5 for time ${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(
             1
-          )}s - ${timing.endTime.toFixed(1)}s`
+          )}s`
+        );
+        logger.info(
+          `📝 Context: "${chunk.text.substring(0, 100)}${
+            chunk.text.length > 100 ? "..." : ""
+          }"`
         );
 
-        // For now, create enhanced placeholder (in real implementation, use Imagen API)
-        const imagePath = path.resolve(
-          `images/educational_image_${i + 1}_${Date.now()}.png`
+        // Generate image using Gemini
+        const imagePath = await generateImageWithGemini(
+          imagePrompt,
+          chunk.index
         );
-
-        // Create a better placeholder image (colorful educational placeholder)
-        const placeholderImageBuffer = createEducationalPlaceholder(
-          timing.concept,
-          i + 1
-        );
-
-        fs.writeFileSync(imagePath, placeholderImageBuffer);
 
         const imageInfo = {
-          index: i + 1,
+          index: chunk.index,
           filename: imagePath,
-          concept: timing.concept,
-          prompt: enhancedPrompt,
+          concept: `Educational illustration for segment ${chunk.index}`,
+          prompt: imagePrompt,
           timing: {
-            startTime: timing.startTime,
-            endTime: timing.endTime,
-            duration: timing.duration,
-            segmentIndex: timing.segmentIndex,
+            startTime: chunk.startTime,
+            endTime: chunk.endTime,
+            duration: chunk.duration,
           },
           placement: {
-            fromTime: timing.startTime,
-            toTime: timing.endTime,
-            matchedText: timing.matchedText,
-            matchScore: timing.matchScore,
+            fromTime: chunk.startTime,
+            toTime: chunk.endTime,
+            subtitleText: chunk.text,
+            subtitleCount: chunk.subtitleCount,
           },
         };
 
         generatedImages.push(imageInfo);
         successCount++;
 
-        logger.info(`✅ Image ${i + 1} generated with timing: ${imagePath}`);
-        logger.info(
-          `📍 Placement: ${timing.startTime.toFixed(
-            1
-          )}s to ${timing.endTime.toFixed(1)}s`
-        );
+        logger.info(`✅ Image ${chunk.index} generated successfully`);
 
-        // Small delay between generations
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Small delay between generations to avoid rate limits
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (imageError) {
         logger.error(
-          `❌ Failed to generate image ${i + 1}:`,
+          `❌ Failed to generate image ${chunk.index}:`,
           imageError.message
         );
-        // Continue with next image
+        // Continue with next chunk
       }
     }
 
     logger.info(
-      `📊 Image generation complete: ${successCount}/${imageTimings.length} successful`
+      `📊 Image generation complete: ${successCount}/5 chunks processed`
     );
-    logger.info(`🎯 Images are timed and ready for video overlay`);
+    logger.info(`🎯 Images are perfectly timed with subtitle segments`);
 
     return generatedImages;
   } catch (error) {
-    logger.error("❌ Contextual image generation failed:", error.message);
+    logger.error("❌ Image generation failed:", error.message);
     return [];
   }
 };
 
-/**
- * Create an educational placeholder image (in lieu of actual image generation)
- */
-const createEducationalPlaceholder = (concept, index) => {
-  // Create a simple colored PNG placeholder
-  // This is a minimal 100x56 pixel PNG (16:9 ratio) with text overlay simulation
-
-  // In a real implementation, this would call actual image generation APIs
-  // For now, returning a base64 encoded colored placeholder
-
-  const colors = [
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4nGP4//8/AzYwiqEAAO4AAf9j5X4AAAAASUVORK5CYII=", // Red
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4nGP4/4MBGzBGMQAAEAAB/8j5X4AAAAASUVORK5CYII=", // Green
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4nGP48+cPAzZgjGIAABAAAb/I+V+AAAAABJRU5ErkJggg==", // Blue
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4nGP4/5MBGzBGMQAACAAB/8j5X4AAAAASUVORK5CYII=", // Yellow
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4nGP4+5MBGzBGMQAACgAB/8j5X4AAAAASUVORK5CYII=", // Purple
-  ];
-
-  const colorIndex = (index - 1) % colors.length;
-  return Buffer.from(colors[colorIndex], "base64");
-};
-
 module.exports = {
   generateImages,
-  analyzeScriptForImagePlacement,
-  createEducationalPlaceholder,
+  parseSRTFile,
+  createImageChunksFromSubtitles,
 };
