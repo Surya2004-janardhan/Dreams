@@ -32,52 +32,35 @@ const saveWaveFile = async (
   });
 };
 
-// Generate TTS audio using new Gemini API with multi-speaker support for entire conversation
-const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
+// Generate TTS audio using Gemini API - exact reference implementation
+const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
   try {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY is required for TTS generation");
     }
 
-    // For multi-speaker, use the conversation text directly
-    const customPrompt = `Convert this entire conversation to natural-sounding Indian English speech with authentic accents and engaging delivery. Use different voices for different speakers:
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    });
 
-CONVERSATION TO SPEAK:
-${text}
-
-VOICE CHARACTERISTICS:
-- Speaker A (Female): Warm, enthusiastic, conversational Indian English accent
-- Speaker B (Male): Confident, knowledgeable, friendly Indian English accent
-
-DELIVERY STYLE:
-- Natural conversation flow with appropriate pauses between speakers
-- Enthusiastic and engaging tone throughout
-- Authentic Indian English pronunciation and intonation
-- Educational yet conversational approach
-- Include natural "hmm", "you know", "actually" fillers where appropriate
-- Vary speaking pace for emphasis on important points
-- Sound like two friends having an interesting discussion
-
-IMPORTANT: Maintain clear distinction between speakers and natural conversation flow.`;
-
-    const response = await genAI.models.generateContent({
+    const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: customPrompt }] }],
+      contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
           multiSpeakerVoiceConfig: {
             speakerVoiceConfigs: [
               {
-                speaker: "A",
+                speaker: "Joe",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Female voice
+                  prebuiltVoiceConfig: { voiceName: "Kore" },
                 },
               },
               {
-                speaker: "B",
+                speaker: "Jane",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Male voice
+                  prebuiltVoiceConfig: { voiceName: "Puck" },
                 },
               },
             ],
@@ -140,10 +123,16 @@ const generateAudioWithBatchingStrategy = async (script) => {
     logger.info("🎤 Starting multi-speaker TTS audio generation...");
 
     // Generate audio for the entire conversation in one call
-    logger.info("🔄 Generating audio for entire conversation with multi-speaker voices");
+    logger.info(
+      "🔄 Generating audio for entire conversation with multi-speaker voices"
+    );
 
     try {
-      const audioBuffer = await generateTTSAudio(script, "multi-speaker");
+      // Use the actual script content instead of hardcoded prompt
+      const customPrompt = `TTS the following conversation between Joe and Jane:
+${script}`;
+
+      const audioBuffer = await generateTTSAudio(customPrompt, "multi-speaker");
       const conversationFile = path.resolve(
         `audio/conversation_${Date.now()}.wav`
       );
@@ -154,12 +143,14 @@ const generateAudioWithBatchingStrategy = async (script) => {
 
       return {
         conversationFile: conversationFile,
-        segments: [{
-          file: conversationFile,
-          speaker: "multi-speaker",
-          text: script,
-          duration: Math.ceil(script.length / 15), // Estimate duration for whole conversation
-        }],
+        segments: [
+          {
+            file: conversationFile,
+            speaker: "multi-speaker",
+            text: script,
+            duration: Math.ceil(script.length / 15), // Estimate duration for whole conversation
+          },
+        ],
         totalSegments: 1,
         apiCallsUsed: 1,
       };
