@@ -1,8 +1,68 @@
 const { GoogleGenAI } = require("@google/genai");
-const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
+
+/**
+ * Generate image using Gemini API
+ */
+const generateImageWithGemini = async (prompt, index) => {
+  try {
+    logger.info(`🎨 Generating image ${index} with Gemini...`);
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-image-preview",
+      contents: prompt,
+    });
+
+    for (const part of response.candidates[0].content.parts) {
+      if (part.text) {
+        logger.info(`Gemini response text: ${part.text}`);
+      } else if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
+
+        const imagePath = path.resolve(
+          `images/gemini_image_${index}_${Date.now()}.png`
+        );
+        fs.writeFileSync(imagePath, buffer);
+
+        logger.info(`✅ Image ${index} saved: ${imagePath}`);
+        return imagePath;
+      }
+    }
+
+    throw new Error("No image data received from Gemini");
+  } catch (error) {
+    logger.error(`❌ Failed to generate image ${index}:`, error.message);
+
+    // Create a simple fallback image
+    try {
+      const imagePath = path.resolve(
+        `images/fallback_image_${index}_${Date.now()}.png`
+      );
+      // Create a minimal 1x1 pixel PNG as fallback
+      const minimalPNG = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+        0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0x00,
+        0xff, 0xff, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+        0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+      ]);
+      fs.writeFileSync(imagePath, minimalPNG);
+      logger.info(`✅ Fallback image ${index} created: ${imagePath}`);
+      return imagePath;
+    } catch (fallbackError) {
+      logger.error(`❌ Fallback image creation failed:`, fallbackError.message);
+      throw error;
+    }
+  }
+};
 
 /**
  * Parse SRT subtitle file and extract segments with timestamps
@@ -108,77 +168,6 @@ const createImageChunksFromSubtitles = (
   }
 
   return chunks;
-};
-
-/**
- * Generate image using Gemini Imagen API
- */
-const generateImageWithGemini = async (prompt, index) => {
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
-    });
-
-    logger.info(`🎨 Generating image ${index} with Gemini Imagen...`);
-
-    const model = ai.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      generationConfig: {
-        responseMimeType: "image/png",
-      },
-    });
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-
-    // Check if response has image data
-    if (
-      response.candidates &&
-      response.candidates[0] &&
-      response.candidates[0].content
-    ) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          const imageData = part.inlineData.data;
-          const buffer = Buffer.from(imageData, "base64");
-
-          const imagePath = path.resolve(
-            `images/gemini_image_${index}_${Date.now()}.png`
-          );
-          fs.writeFileSync(imagePath, buffer);
-
-          logger.info(`✅ Image ${index} saved: ${imagePath}`);
-          return imagePath;
-        }
-      }
-    }
-
-    throw new Error("No image data received from Gemini");
-  } catch (error) {
-    logger.error(`❌ Failed to generate image ${index}:`, error.message);
-
-    // Create a simple fallback image
-    try {
-      const imagePath = path.resolve(
-        `images/fallback_image_${index}_${Date.now()}.png`
-      );
-      // Create a minimal 1x1 pixel PNG as fallback
-      const minimalPNG = Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
-        0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0x00,
-        0xff, 0xff, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
-        0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-      ]);
-      fs.writeFileSync(imagePath, minimalPNG);
-      logger.info(`✅ Fallback image ${index} created: ${imagePath}`);
-      return imagePath;
-    } catch (fallbackError) {
-      logger.error(`❌ Fallback image creation failed:`, fallbackError.message);
-      throw error; // Throw original error
-    }
-  }
 };
 
 /**
