@@ -1,4 +1,6 @@
+const ffmpegPath = require("ffmpeg-static");
 const ffmpeg = require("fluent-ffmpeg");
+ffmpeg.setFfmpegPath(ffmpegPath);
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
@@ -132,12 +134,6 @@ const composeVideo = async (
     logger.info("🎬 Starting final video composition...");
 
     const outputPath = path.resolve(`videos/final_video_${Date.now()}.mp4`);
-    const tempDir = "temp";
-
-    // Ensure temp directory exists
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
 
     logger.info(`📹 Base video: ${baseVideoPath}`);
     logger.info(`🎵 Audio: ${audioPath}`);
@@ -148,71 +144,111 @@ const composeVideo = async (
     if (!fs.existsSync(baseVideoPath)) {
       throw new Error(`Base video file not found: ${baseVideoPath}`);
     }
-    if (!fs.existsSync(audioPath)) {
+    if (audioPath && !fs.existsSync(audioPath)) {
       throw new Error(`Audio file not found: ${audioPath}`);
     }
 
     return new Promise((resolve, reject) => {
-      let command = ffmpeg()
-        .input(baseVideoPath) // Base video
-        .input(audioPath); // Audio track
+      // FFmpeg is already configured with static path at module level
+      let command = ffmpeg().input(baseVideoPath); // Input 0: base video
+
+      // Add audio input if provided
+      if (audioPath) {
+        command = command.input(audioPath); // Input 1: audio
+      }
 
       // Filter out images that don't exist and add valid image inputs
       const validImages = images.filter((image) =>
         fs.existsSync(image.filename)
       );
+
+      // Add image inputs (inputs 2, 3, 4, 5, 6 for images)
       validImages.forEach((image) => {
         command = command.input(image.filename);
       });
 
-      // Simplified approach: create video in steps
-      if (validImages.length === 0) {
-        // No images - just combine video and audio
-        command
-          .outputOptions([
-            "-c:v libx264",
-            "-preset fast",
-            "-crf 23",
-            "-c:a aac",
-            "-b:a 128k",
-            "-movflags +faststart",
-            "-pix_fmt yuv420p",
-            "-r 30",
-            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black",
-          ])
-          .output(outputPath);
+      // Build complex filter for multiple image overlays with timing and subtitles
+      let filterParts = [];
+
+      // Scale base video to 1080:1920 with black padding
+      filterParts.push(
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
+      );
+
+      // Scale each image to 1000:500 with white padding
+      validImages.forEach((image, index) => {
+        const inputIndex = index + (audioPath ? 2 : 1); // Images start from input 2 if audio, input 1 if no audio
+        filterParts.push(
+          `[${inputIndex}:v]scale=1000:500:force_original_aspect_ratio=decrease,pad=1000:500:(ow-iw)/2:(oh-ih)/2:white[img${index}]`
+        );
+      });
+
+      // Create overlay chain with timing
+      let currentVideo = "[base]";
+      validImages.forEach((image, index) => {
+        const startTime = image.timing.startTime;
+        const endTime = image.timing.endTime;
+        const nextVideo =
+          index === validImages.length - 1
+            ? "[video_with_overlays]"
+            : `[v${index}]`;
+
+        filterParts.push(
+          `${currentVideo}[img${index}]overlay=40:200:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
+        );
+
+        currentVideo = nextVideo;
+      });
+
+      // If no subtitles, just use the video with overlays as final
+      filterParts.push(`[video_with_overlays]copy[final_video]`);
+
+      // Set up output options
+      const outputOptions = [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "23",
+        "-movflags",
+        "+faststart",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+      ];
+
+      // Map video stream
+      outputOptions.push("-map", "[final_video]");
+
+      // Map audio stream - use the provided audio if available, otherwise use base video audio
+      if (audioPath) {
+        outputOptions.push("-map", "1:a");
+        outputOptions.push("-c:a", "aac");
+        outputOptions.push("-b:a", "192k");
       } else {
-        // Simple overlay approach - overlay first image for now
-        const firstImage = validImages[0];
-        command
-          .input(firstImage.filename)
-          .complexFilter([
-            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]",
-            "[2:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black[img]",
-            "[base][img]overlay=0:0:enable='between(t,0,70)'[final_video]",
-          ])
-          .outputOptions([
-            "-c:v libx264",
-            "-preset fast",
-            "-crf 23",
-            "-c:a aac",
-            "-b:a 128k",
-            "-movflags +faststart",
-            "-pix_fmt yuv420p",
-            "-r 30",
-            "-map [final_video]",
-            "-map 1:a",
-          ])
-          .output(outputPath);
+        // Use audio from base video if no separate audio provided
+        outputOptions.push("-map", "0:a");
+        outputOptions.push("-c:a", "copy");
       }
 
-      // Add subtitles if they exist
+      // Add subtitles as a separate video filter if they exist
       if (fs.existsSync(subtitlesPath)) {
-        const simpleSubtitlesPath = subtitlesPath.replace(/\\/g, "/");
-        command.outputOptions([
-          `-vf subtitles='${simpleSubtitlesPath}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'`,
-        ]);
+        const simpleSubtitlesPath = subtitlesPath
+          .replace(/\\/g, "\\\\")
+          .replace(/:/g, "\\:")
+          .replace(/'/g, "\\'");
+        outputOptions.push(
+          "-vf",
+          `subtitles='${simpleSubtitlesPath}':force_style='FontName=Poppins,FontSize=48,PrimaryColour=&HFFFFFF&,OutlineColour=&H000000&,BorderStyle=1,Outline=2'`
+        );
       }
+
+      command
+        .complexFilter(filterParts.join(";"))
+        .outputOptions(outputOptions)
+        .output(outputPath);
 
       command
         .on("start", (commandLine) => {
