@@ -157,18 +157,19 @@ const composeVideo = async (
         .input(baseVideoPath) // Base video
         .input(audioPath); // Audio track
 
-      // Add image inputs if available
-      images.forEach((image, index) => {
-        if (fs.existsSync(image.filename)) {
-          command = command.input(image.filename);
-        }
+      // Filter out images that don't exist and add valid image inputs
+      const validImages = images.filter((image) =>
+        fs.existsSync(image.filename)
+      );
+      validImages.forEach((image) => {
+        command = command.input(image.filename);
       });
 
       // Configure video filters
       let filterComplex = [];
 
       // Simplified filter logic
-      if (images.length === 0) {
+      if (validImages.length === 0) {
         // No images - just scale base video
         filterComplex.push(
           "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[final_video]"
@@ -182,28 +183,28 @@ const composeVideo = async (
         let currentVideoRef = "[base]";
 
         // Add image overlays with timing
-        images.forEach((image, index) => {
-          if (fs.existsSync(image.filename)) {
-            const inputIndex = 2 + index; // 0=base video, 1=audio, 2+=images
-            const startTime = image.timing.startTime;
-            const endTime = image.timing.endTime;
+        validImages.forEach((image, index) => {
+          const inputIndex = 2 + index; // 0=base video, 1=audio, 2+=images
+          const startTime = image.timing.startTime;
+          const endTime = image.timing.endTime;
 
-            // Scale image to fit in top 50% of video (leaving space for subtitles)
-            filterComplex.push(
-              `[${inputIndex}:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black:eval=frame[img${index}]`
-            );
+          // Scale image to fit in top 50% of video (leaving space for subtitles)
+          filterComplex.push(
+            `[${inputIndex}:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black:eval=frame[img${index}]`
+          );
 
-            // Overlay image on video with fade in/out
-            const nextVideoRef =
-              index === images.length - 1 ? "[final_video]" : `[video${index}]`;
-            filterComplex.push(
-              `${currentVideoRef}[img${index}]overlay=0:0:enable='between(t,${startTime},${endTime})':eval=frame:format=auto,fade=t=in:st=${startTime}:d=0.5:alpha=1,fade=t=out:st=${
-                endTime - 0.5
-              }:d=0.5:alpha=1${nextVideoRef}`
-            );
+          // Overlay image on video with fade in/out
+          const nextVideoRef =
+            index === validImages.length - 1
+              ? "[final_video]"
+              : `[video${index}]`;
+          filterComplex.push(
+            `${currentVideoRef}[img${index}]overlay=0:0:enable='between(t,${startTime},${endTime})':eval=frame:format=auto,fade=t=in:st=${startTime}:d=0.5:alpha=1,fade=t=out:st=${
+              endTime - 0.5
+            }:d=0.5:alpha=1${nextVideoRef}`
+          );
 
-            currentVideoRef = nextVideoRef;
-          }
+          currentVideoRef = nextVideoRef;
         });
       }
 

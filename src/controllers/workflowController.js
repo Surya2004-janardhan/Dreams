@@ -510,8 +510,59 @@ const runAutomatedWorkflow = async (req, res) => {
       currentWorkflow.currentStep = "subtitles/generate";
 
       const subtitlesPath = path.resolve(`subtitles/subtitles_${taskId}.srt`);
+      // Get audio file path - try workflow results first, then fallback to audio folder
+      let audioFilePath = null;
+
+      if (
+        currentWorkflow.results.audio &&
+        currentWorkflow.results.audio.conversationFile
+      ) {
+        audioFilePath = currentWorkflow.results.audio.conversationFile;
+        logger.info(`🎵 Using workflow audio file: ${audioFilePath}`);
+      } else {
+        // Fallback: Find the latest audio file in the audio folder
+        try {
+          if (!fs.existsSync("audio")) {
+            fs.mkdirSync("audio", { recursive: true });
+          }
+
+          const audioFiles = fs
+            .readdirSync("audio")
+            .filter((file) => file.endsWith(".wav") || file.endsWith(".mp3"))
+            .map((file) => ({
+              name: file,
+              path: path.join("audio", file),
+              stats: fs.statSync(path.join("audio", file)),
+            }))
+            .sort((a, b) => b.stats.mtime - a.stats.mtime); // Sort by modification time, newest first
+
+          logger.info(
+            `📁 Found ${audioFiles.length} audio files in audio folder`
+          );
+          if (audioFiles.length > 0) {
+            logger.info(
+              `🎵 Latest audio file: ${audioFiles[0].name} (${audioFiles[0].stats.mtime})`
+            );
+            audioFilePath = audioFiles[0].path;
+            logger.info(
+              `🎵 Using latest audio file from folder: ${audioFilePath}`
+            );
+
+            // Validate the file exists and is readable
+            if (!fs.existsSync(audioFilePath)) {
+              throw new Error(`Audio file not found: ${audioFilePath}`);
+            }
+          } else {
+            throw new Error("No audio files found in audio folder");
+          }
+        } catch (error) {
+          logger.error("❌ Failed to find audio file:", error.message);
+          throw new Error("No audio file available for subtitle generation");
+        }
+      }
+
       const subtitlesResult = await createSubtitlesFromAudio(
-        currentWorkflow.results.audio.conversationFile,
+        audioFilePath,
         subtitlesPath
       );
 

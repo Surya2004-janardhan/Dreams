@@ -86,7 +86,7 @@ const sendSuccessNotification = async (taskData, results) => {
       html: htmlContent,
     };
 
-    await transporter.sendMail(mailOptions);
+    // await transporter.sendMail(mailOptions);
     logger.info(`✅ Success notification email sent for: ${taskData.idea}`);
   } catch (error) {
     logger.error("Failed to send success notification:", error);
@@ -162,7 +162,7 @@ ${error.stack}
       html: htmlContent,
     };
 
-    await transporter.sendMail(mailOptions);
+    // await transporter.sendMail(mailOptions);
     logger.info(`✅ Error notification email sent for failed task`);
   } catch (emailError) {
     logger.error("Failed to send error notification:", emailError);
