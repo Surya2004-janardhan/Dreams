@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
 const { getGoogleDriveClient } = require("../config/google");
+// Load FFmpeg configuration
+require("../config/ffmpeg");
 
 /**
  * Get base video from Google Drive or local videos folder
@@ -142,6 +144,14 @@ const composeVideo = async (
     logger.info(`🖼️ Images: ${images.length} files`);
     logger.info(`📝 Subtitles: ${subtitlesPath}`);
 
+    // Validate input files exist
+    if (!fs.existsSync(baseVideoPath)) {
+      throw new Error(`Base video file not found: ${baseVideoPath}`);
+    }
+    if (!fs.existsSync(audioPath)) {
+      throw new Error(`Audio file not found: ${audioPath}`);
+    }
+
     return new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(baseVideoPath) // Base video
@@ -157,61 +167,61 @@ const composeVideo = async (
       // Configure video filters
       let filterComplex = [];
 
-      // Start with base video scaled to 1080x1920 (9:16 ratio for shorts)
-      filterComplex.push(
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
-      );
-
-      let currentVideoRef = "[base]";
-
-      // Add image overlays with timing
-      images.forEach((image, index) => {
-        if (fs.existsSync(image.filename)) {
-          const inputIndex = 2 + index; // 0=base video, 1=audio, 2+=images
-          const startTime = image.timing.startTime;
-          const endTime = image.timing.endTime;
-
-          // Scale image to fit in top 50% of video (leaving space for subtitles)
-          filterComplex.push(
-            `[${inputIndex}:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black:eval=frame[img${index}]`
-          );
-
-          // Overlay image on video with fade in/out
-          const nextVideoRef =
-            index === images.length - 1 ? "[final_video]" : `[video${index}]`;
-          filterComplex.push(
-            `${currentVideoRef}[img${index}]overlay=0:0:enable='between(t,${startTime},${endTime})':eval=frame:format=auto,fade=t=in:st=${startTime}:d=0.5:alpha=1,fade=t=out:st=${
-              endTime - 0.5
-            }:d=0.5:alpha=1${nextVideoRef}`
-          );
-
-          currentVideoRef = nextVideoRef;
-        }
-      });
-
-      // If no images were processed, rename base to final_video
-      if (images.length === 0 && !fs.existsSync(subtitlesPath)) {
-        filterComplex[0] = filterComplex[0].replace("[base]", "[final_video]");
-      }
-
-      // Add subtitles to the filter complex if available
-      if (fs.existsSync(subtitlesPath)) {
-        // Convert subtitles path to use forward slashes and escape for FFmpeg
-        const escapedSubtitlesPath = subtitlesPath
-          .replace(/\\/g, "/")
-          .replace(/:/g, "\\:");
+      // Simplified filter logic
+      if (images.length === 0) {
+        // No images - just scale base video
         filterComplex.push(
-          `${currentVideoRef}subtitles='${escapedSubtitlesPath}':force_style='FontName=Poppins-Bold,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'[final_video]`
+          "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[final_video]"
         );
-      } else if (images.length === 0) {
-        // If no subtitles and no images, ensure base is renamed to final_video
-        filterComplex[0] = filterComplex[0].replace("[base]", "[final_video]");
+      } else {
+        // Has images - use complex overlay logic
+        filterComplex.push(
+          "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
+        );
+
+        let currentVideoRef = "[base]";
+
+        // Add image overlays with timing
+        images.forEach((image, index) => {
+          if (fs.existsSync(image.filename)) {
+            const inputIndex = 2 + index; // 0=base video, 1=audio, 2+=images
+            const startTime = image.timing.startTime;
+            const endTime = image.timing.endTime;
+
+            // Scale image to fit in top 50% of video (leaving space for subtitles)
+            filterComplex.push(
+              `[${inputIndex}:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black:eval=frame[img${index}]`
+            );
+
+            // Overlay image on video with fade in/out
+            const nextVideoRef =
+              index === images.length - 1 ? "[final_video]" : `[video${index}]`;
+            filterComplex.push(
+              `${currentVideoRef}[img${index}]overlay=0:0:enable='between(t,${startTime},${endTime})':eval=frame:format=auto,fade=t=in:st=${startTime}:d=0.5:alpha=1,fade=t=out:st=${
+                endTime - 0.5
+              }:d=0.5:alpha=1${nextVideoRef}`
+            );
+
+            currentVideoRef = nextVideoRef;
+          }
+        });
       }
 
       command
         .complexFilter(filterComplex.join(";"))
         .map("[final_video]") // Use the final video output
-        .map("[1:a]") // Use the audio from input 1
+        .map("[1:a]"); // Use the audio from input 1
+
+      // Add subtitles using vf option (not in complex filter to avoid conflicts)
+      if (fs.existsSync(subtitlesPath)) {
+        // Use simple forward slashes and proper escaping
+        const simpleSubtitlesPath = subtitlesPath.replace(/\\/g, "/");
+        command.outputOptions([
+          `-vf subtitles='${simpleSubtitlesPath}':force_style='FontName=Poppins-Bold,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'`,
+        ]);
+      }
+
+      command
         .outputOptions([
           "-c:v libx264",
           "-preset fast",
@@ -221,9 +231,7 @@ const composeVideo = async (
           "-movflags +faststart",
           "-pix_fmt yuv420p",
           "-r 30",
-        ]);
-
-      command
+        ])
         .output(outputPath)
         .on("start", (commandLine) => {
           logger.info("🔄 FFmpeg process started with command:");

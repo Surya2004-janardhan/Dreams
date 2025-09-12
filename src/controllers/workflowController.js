@@ -10,7 +10,7 @@ const {
 } = require("../services/videoProcessingService");
 const {
   createSubtitlesFile,
-  parseConversationTiming,
+  createSubtitlesFromAudio,
 } = require("../utils/subtitles");
 const { getNextTask, updateSheetStatus } = require("../services/sheetsService");
 const { uploadToBothPlatforms } = require("../services/socialMediaService");
@@ -510,16 +510,12 @@ const runAutomatedWorkflow = async (req, res) => {
       currentWorkflow.currentStep = "subtitles/generate";
 
       const subtitlesPath = path.resolve(`subtitles/subtitles_${taskId}.srt`);
-      const subtitlesResult = createSubtitlesFile(
-        currentWorkflow.results.script,
+      const subtitlesResult = await createSubtitlesFromAudio(
+        currentWorkflow.results.audio.conversationFile,
         subtitlesPath
       );
 
-      if (!subtitlesResult.success) {
-        throw new Error("Failed to create subtitles");
-      }
-
-      currentWorkflow.results.subtitles = subtitlesPath;
+      currentWorkflow.results.subtitles = subtitlesResult.subtitlesPath;
 
       completedSteps.push("subtitles/generate");
       currentWorkflow.completedSteps = completedSteps;
@@ -574,7 +570,7 @@ const runAutomatedWorkflow = async (req, res) => {
       logger.info("→ Step 6: Generating contextual educational images");
       currentWorkflow.currentStep = "images/generate";
 
-      const images = await generateImages(currentWorkflow.results.script);
+      const images = await generateImages(currentWorkflow.results.subtitles);
       currentWorkflow.results.images = images;
 
       completedSteps.push("images/generate");
