@@ -6,7 +6,7 @@ const wav = require("wav");
 
 // Initialize Google GenAI client
 const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
 });
 
 // Save WAV file helper function
@@ -52,20 +52,20 @@ const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
           multiSpeakerVoiceConfig: {
             speakerVoiceConfigs: [
               {
-                speaker: "Joe",
+                speaker: "Raj",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Male voice
+                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Male voice
                 },
               },
               {
-                speaker: "Jane",
+                speaker: "Rani",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Female voice
+                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Female voice
                 },
               },
             ],
           },
-          speakingRate: 1.2, // Slightly faster speaking rate for 60-second target
+          speakingRate: 1.2, // Slightly faster speaking rate for 70-second target
         },
       },
     });
@@ -88,7 +88,7 @@ const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
 
     // Fallback: Create a simple WAV header for placeholder
     const sampleRate = 22050;
-    const duration = Math.max(1, Math.ceil(text.length / 10)); // Estimate duration
+    const duration = Math.max(1, Math.ceil(prompt.length / 10)); // Estimate duration
     const samples = sampleRate * duration;
     const buffer = Buffer.alloc(44 + samples * 2);
 
@@ -130,7 +130,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
 
     try {
       // Use the actual script content instead of hardcoded prompt
-      const customPrompt = `TTS the following conversation between Joe and Jane:
+      const customPrompt = `TTS the following conversation between Raj and Rani:
 ${script}`;
 
       const audioBuffer = await generateTTSAudio(customPrompt, "multi-speaker");
@@ -149,7 +149,7 @@ ${script}`;
             file: conversationFile,
             speaker: "multi-speaker",
             text: script,
-            duration: Math.ceil(script.length / 18), // Estimate duration for whole conversation with faster speaking rate
+            duration: Math.ceil(script.length / 16), // Estimate duration for whole conversation with faster speaking rate (70 seconds target)
           },
         ],
         totalSegments: 1,
