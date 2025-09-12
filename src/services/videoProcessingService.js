@@ -165,78 +165,59 @@ const composeVideo = async (
         command = command.input(image.filename);
       });
 
-      // Configure video filters
-      let filterComplex = [];
-
-      // Simplified filter logic
+      // Simplified approach: create video in steps
       if (validImages.length === 0) {
-        // No images - just scale base video
-        filterComplex.push(
-          "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[final_video]"
-        );
+        // No images - just combine video and audio
+        command
+          .outputOptions([
+            "-c:v libx264",
+            "-preset fast",
+            "-crf 23",
+            "-c:a aac",
+            "-b:a 128k",
+            "-movflags +faststart",
+            "-pix_fmt yuv420p",
+            "-r 30",
+            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black",
+          ])
+          .output(outputPath);
       } else {
-        // Has images - use complex overlay logic
-        filterComplex.push(
-          "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
-        );
-
-        let currentVideoRef = "[base]";
-
-        // Add image overlays with timing
-        validImages.forEach((image, index) => {
-          const inputIndex = 2 + index; // 0=base video, 1=audio, 2+=images
-          const startTime = image.timing.startTime;
-          const endTime = image.timing.endTime;
-
-          // Scale image to fit in top 50% of video (leaving space for subtitles)
-          filterComplex.push(
-            `[${inputIndex}:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black:eval=frame[img${index}]`
-          );
-
-          // Overlay image on video with fade in/out
-          const nextVideoRef =
-            index === validImages.length - 1
-              ? "[final_video]"
-              : `[video${index}]`;
-          filterComplex.push(
-            `${currentVideoRef}[img${index}]overlay=0:0:enable='between(t,${startTime},${endTime})':eval=frame:format=auto,fade=t=in:st=${startTime}:d=0.5:alpha=1,fade=t=out:st=${
-              endTime - 0.5
-            }:d=0.5:alpha=1${nextVideoRef}`
-          );
-
-          currentVideoRef = nextVideoRef;
-        });
+        // Simple overlay approach - overlay first image for now
+        const firstImage = validImages[0];
+        command
+          .input(firstImage.filename)
+          .complexFilter([
+            "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]",
+            "[2:v]scale=1080:540:force_original_aspect_ratio=decrease,pad=1080:540:(ow-iw)/2:(oh-ih)/2:black[img]",
+            "[base][img]overlay=0:0:enable='between(t,0,70)'[final_video]",
+          ])
+          .outputOptions([
+            "-c:v libx264",
+            "-preset fast",
+            "-crf 23",
+            "-c:a aac",
+            "-b:a 128k",
+            "-movflags +faststart",
+            "-pix_fmt yuv420p",
+            "-r 30",
+            "-map [final_video]",
+            "-map 1:a",
+          ])
+          .output(outputPath);
       }
 
-      command
-        .complexFilter(filterComplex.join(";"))
-        .map("[final_video]") // Use the final video output
-        .map("[1:a]"); // Use the audio from input 1
-
-      // Add subtitles using vf option (not in complex filter to avoid conflicts)
+      // Add subtitles if they exist
       if (fs.existsSync(subtitlesPath)) {
-        // Use simple forward slashes and proper escaping
         const simpleSubtitlesPath = subtitlesPath.replace(/\\/g, "/");
         command.outputOptions([
-          `-vf subtitles='${simpleSubtitlesPath}':force_style='FontName=Poppins-Bold,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'`,
+          `-vf subtitles='${simpleSubtitlesPath}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'`,
         ]);
       }
 
       command
-        .outputOptions([
-          "-c:v libx264",
-          "-preset fast",
-          "-crf 23",
-          "-c:a aac",
-          "-b:a 128k",
-          "-movflags +faststart",
-          "-pix_fmt yuv420p",
-          "-r 30",
-        ])
-        .output(outputPath)
         .on("start", (commandLine) => {
           logger.info("🔄 FFmpeg process started with command:");
-          logger.info(commandLine.substring(0, 200) + "...");
+          logger.info(commandLine);
         })
         .on("progress", (progress) => {
           if (progress.percent) {
@@ -250,13 +231,13 @@ const composeVideo = async (
           resolve({
             success: true,
             videoPath: outputPath,
-            duration: null, // Could be extracted from ffmpeg output
+            duration: null,
             format: "mp4",
             resolution: "1080x1920",
           });
         })
         .on("error", (error) => {
-          logger.error("❌ Video composition failed:", error);
+          logger.error("❌ Video composition failed:", error.message);
           reject(error);
         })
         .run();

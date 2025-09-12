@@ -1,4 +1,5 @@
 const { GoogleGenAI } = require("@google/genai");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
@@ -32,54 +33,36 @@ const saveWaveFile = async (
   });
 };
 
-// Generate TTS audio using Gemini API - exact reference implementation
-const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
+// Generate TTS audio using OpenAI API
+const generateTTSAudio = async (script, voice = "alloy") => {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error("GEMINI_API_KEY is required for TTS generation");
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is required for TTS generation");
     }
 
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY,
-    });
+    logger.info(`🎤 Generating TTS audio with OpenAI (${voice} voice)...`);
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          multiSpeakerVoiceConfig: {
-            speakerVoiceConfigs: [
-              {
-                speaker: "Raj",
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Male voice
-                },
-              },
-              {
-                speaker: "Rani",
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Female voice
-                },
-              },
-            ],
-          },
-          speakingRate: 1.2, // Slightly faster speaking rate for 70-second target
-        },
+    const response = await axios.post(
+      "https://api.openai.com/v1/audio/speech",
+      {
+        model: "tts-1",
+        input: script,
+        voice: voice,
+        response_format: "wav",
+        speed: 1.2, // Slightly faster for 70-second target
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        responseType: "arraybuffer",
+      }
+    );
 
-    const data =
-      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (!data) {
-      throw new Error("No audio data received from Gemini TTS API");
-    }
-
-    const audioBuffer = Buffer.from(data, "base64");
+    const audioBuffer = Buffer.from(response.data);
     logger.info(
-      `✓ Generated multi-speaker TTS audio using Gemini API (${audioBuffer.length} bytes)`
+      `✓ Generated TTS audio using OpenAI API (${audioBuffer.length} bytes)`
     );
 
     return audioBuffer;
@@ -88,7 +71,7 @@ const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
 
     // Fallback: Create a simple WAV header for placeholder
     const sampleRate = 22050;
-    const duration = Math.max(1, Math.ceil(prompt.length / 10)); // Estimate duration
+    const duration = Math.max(1, Math.ceil(script.length / 10)); // Estimate duration
     const samples = sampleRate * duration;
     const buffer = Buffer.alloc(44 + samples * 2);
 
@@ -133,7 +116,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
       const customPrompt = `TTS the following conversation between Raj and Rani:
 ${script}`;
 
-      const audioBuffer = await generateTTSAudio(customPrompt, "multi-speaker");
+      const audioBuffer = await generateTTSAudio(customPrompt, "alloy");
       const conversationFile = path.resolve(
         `audio/conversation_${Date.now()}.wav`
       );
