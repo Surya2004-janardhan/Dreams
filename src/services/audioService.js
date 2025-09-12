@@ -9,36 +9,6 @@ const genAI = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-// Parse conversation into segments with speaker identification
-const parseConversation = (script) => {
-  const lines = script.split("\n").filter((line) => line.trim());
-  const segments = [];
-
-  lines.forEach((line) => {
-    if (line.includes("Speaker A:")) {
-      const content = line.replace("Speaker A:", "").trim();
-      if (content) {
-        segments.push({
-          speaker: "female",
-          text: content,
-          voice: "en-IN-Wavenet-A", // Indian English Female voice
-        });
-      }
-    } else if (line.includes("Speaker B:")) {
-      const content = line.replace("Speaker B:", "").trim();
-      if (content) {
-        segments.push({
-          speaker: "male",
-          text: content,
-          voice: "en-IN-Wavenet-B", // Indian English Male voice
-        });
-      }
-    }
-  });
-
-  return segments;
-};
-
 // Save WAV file helper function
 const saveWaveFile = async (
   filename,
@@ -62,41 +32,33 @@ const saveWaveFile = async (
   });
 };
 
-// Generate TTS audio using new Gemini API with multi-speaker support
+// Generate TTS audio using new Gemini API with multi-speaker support for entire conversation
 const generateTTSAudio = async (text, voice = "en-IN-Wavenet-A") => {
   try {
     if (!process.env.GEMINI_API_KEY) {
       throw new Error("GEMINI_API_KEY is required for TTS generation");
     }
 
-    // Determine speaker based on voice parameter
-    const isFemale =
-      voice.includes("A") || voice.toLowerCase().includes("female");
-    const speakerName = isFemale ? "Jane" : "Joe";
-    const voiceName = isFemale ? "Puck" : "Kore"; // Gemini voice names
-
-    // Enhanced prompt for natural Indian English TTS with engaging delivery
-    const customPrompt = `Convert this conversation to natural-sounding Indian English speech with authentic accents and engaging delivery:
+    // For multi-speaker, use the conversation text directly
+    const customPrompt = `Convert this entire conversation to natural-sounding Indian English speech with authentic accents and engaging delivery. Use different voices for different speakers:
 
 CONVERSATION TO SPEAK:
 ${text}
 
 VOICE CHARACTERISTICS:
-- Female speaker (Jane/Puck): Warm, enthusiastic, conversational Indian English accent
-- Male speaker (Joe/Kore): Confident, knowledgeable, friendly Indian English accent
+- Speaker A (Female): Warm, enthusiastic, conversational Indian English accent
+- Speaker B (Male): Confident, knowledgeable, friendly Indian English accent
 
 DELIVERY STYLE:
-- Natural conversation flow with appropriate pauses
-- Enthusiastic and engaging tone
+- Natural conversation flow with appropriate pauses between speakers
+- Enthusiastic and engaging tone throughout
 - Authentic Indian English pronunciation and intonation
 - Educational yet conversational approach
 - Include natural "hmm", "you know", "actually" fillers where appropriate
 - Vary speaking pace for emphasis on important points
-- Sound like a friendly teacher explaining concepts
+- Sound like two friends having an interesting discussion
 
-Make it sound like two friends having an interesting discussion about an educational topic, not a formal presentation. Use contractions, colloquial expressions, and make it feel spontaneous and engaging.
-
-IMPORTANT: Maintain the exact speaker labels and conversation structure, but make the delivery natural and captivating.`;
+IMPORTANT: Maintain clear distinction between speakers and natural conversation flow.`;
 
     const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -104,10 +66,21 @@ IMPORTANT: Maintain the exact speaker labels and conversation structure, but mak
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voiceName,
-            },
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              {
+                speaker: "A",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Female voice
+                },
+              },
+              {
+                speaker: "B",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Male voice
+                },
+              },
+            ],
           },
         },
       },
@@ -122,7 +95,7 @@ IMPORTANT: Maintain the exact speaker labels and conversation structure, but mak
 
     const audioBuffer = Buffer.from(data, "base64");
     logger.info(
-      `✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`
+      `✓ Generated multi-speaker TTS audio using Gemini API (${audioBuffer.length} bytes)`
     );
 
     return audioBuffer;
@@ -161,71 +134,39 @@ IMPORTANT: Maintain the exact speaker labels and conversation structure, but mak
   }
 };
 
-// Main audio generation function
+// Main audio generation function - Single call for entire conversation
 const generateAudioWithBatchingStrategy = async (script) => {
   try {
     logger.info("🎤 Starting multi-speaker TTS audio generation...");
 
-    // Parse conversation into segments
-    const segments = parseConversation(script);
-    logger.info(`📊 Found ${segments.length} conversation segments`);
+    // Generate audio for the entire conversation in one call
+    logger.info("🔄 Generating audio for entire conversation with multi-speaker voices");
 
-    const audioSegments = [];
-
-    // Generate audio for each segment
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      logger.info(
-        `🔄 Generating audio for segment ${i + 1}/${segments.length} (${
-          segment.speaker
-        })`
+    try {
+      const audioBuffer = await generateTTSAudio(script, "multi-speaker");
+      const conversationFile = path.resolve(
+        `audio/conversation_${Date.now()}.wav`
       );
 
-      try {
-        const audioBuffer = await generateTTSAudio(segment.text, segment.voice);
-        const segmentFile = path.resolve(
-          `audio/segment_${i + 1}_${segment.speaker}_${Date.now()}.wav`
-        );
+      await saveWaveFile(conversationFile, audioBuffer);
 
-        await saveWaveFile(segmentFile, audioBuffer);
-        audioSegments.push({
-          file: segmentFile,
-          speaker: segment.speaker,
-          text: segment.text,
-          duration: Math.ceil(segment.text.length / 10), // Estimate duration
-        });
+      logger.info(`✓ Generated complete conversation: ${conversationFile}`);
 
-        logger.info(`✓ Generated: ${segmentFile}`);
-
-        // Small delay between API calls to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch (error) {
-        logger.error(
-          `Failed to generate audio for segment ${i + 1}:`,
-          error.message
-        );
-        // Continue with next segment
-      }
+      return {
+        conversationFile: conversationFile,
+        segments: [{
+          file: conversationFile,
+          speaker: "multi-speaker",
+          text: script,
+          duration: Math.ceil(script.length / 15), // Estimate duration for whole conversation
+        }],
+        totalSegments: 1,
+        apiCallsUsed: 1,
+      };
+    } catch (error) {
+      logger.error("Failed to generate conversation audio:", error.message);
+      throw error;
     }
-
-    if (audioSegments.length === 0) {
-      throw new Error("Failed to generate any audio segments");
-    }
-
-    // For now, return the first segment as the main conversation file
-    // In a full implementation, you'd merge all segments
-    const conversationFile = audioSegments[0].file;
-
-    logger.info(
-      `✅ Multi-speaker TTS audio generated: ${audioSegments.length} segments`
-    );
-
-    return {
-      conversationFile: conversationFile,
-      segments: audioSegments,
-      totalSegments: segments.length,
-      apiCallsUsed: audioSegments.length,
-    };
   } catch (error) {
     logger.error("❌ Audio generation failed:", error.message);
     throw error;
@@ -234,6 +175,5 @@ const generateAudioWithBatchingStrategy = async (script) => {
 
 module.exports = {
   generateAudioWithBatchingStrategy,
-  parseConversation,
   generateTTSAudio,
 };

@@ -797,7 +797,11 @@ const runAutomatedWorkflow = async (req, res) => {
     // If task data exists, update sheet with error status
     if (taskData) {
       try {
+        // Don't update sheet status to "Error" - keep original status for retry
+        // Commenting out the error status update
+        /*
         await updateSheetStatus(taskData.rowId, "Error", "", "");
+        */
       } catch (sheetError) {
         logger.error("Failed to update sheet with error status:", sheetError);
       }

@@ -32,37 +32,46 @@ const getNextTask = async () => {
     // Find column indexes
     const snoIndex = headers.findIndex(
       (h) =>
-        h && (h.toLowerCase().includes("sno") ||
-        h.toLowerCase().includes("s.no") ||
-        h.toLowerCase().includes("serial"))
+        h &&
+        (h.toLowerCase().includes("sno") ||
+          h.toLowerCase().includes("s.no") ||
+          h.toLowerCase().includes("serial"))
     );
     const ideaIndex = headers.findIndex(
       (h) =>
-        h && (h.toLowerCase().includes("idea") || h.toLowerCase().includes("title"))
+        h &&
+        (h.toLowerCase().includes("idea") ||
+          h.toLowerCase().includes("title") ||
+          h.toLowerCase().includes("topic"))
     );
-    const descriptionIndex = headers.findIndex((h) =>
-      h && h.toLowerCase().includes("description")
+    const descriptionIndex = headers.findIndex(
+      (h) => h && h.toLowerCase().includes("description")
     );
-    const statusIndex = headers.findIndex((h) =>
-      h && h.toLowerCase().includes("status")
+    const statusIndex = headers.findIndex(
+      (h) => h && h.toLowerCase().includes("status")
     );
     const ytLinkIndex = headers.findIndex(
       (h) =>
-        h && (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
+        h &&
+        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
     );
     const instaLinkIndex = headers.findIndex(
       (h) =>
-        h && (h.toLowerCase().includes("insta") ||
-        h.toLowerCase().includes("instagram"))
+        h &&
+        (h.toLowerCase().includes("insta") ||
+          h.toLowerCase().includes("instagram"))
     );
     const timestampIndex = headers.findIndex(
       (h) =>
-        h && (h.toLowerCase().includes("timestamp") ||
-        h.toLowerCase().includes("date"))
+        h &&
+        (h.toLowerCase().includes("timestamp") ||
+          h.toLowerCase().includes("date"))
     );
 
     console.log("📊 COLUMN INDEXES FOUND:");
-    console.log(`SNO=${snoIndex}, Idea=${ideaIndex}, Description=${descriptionIndex}, Status=${statusIndex}`);
+    console.log(
+      `SNO=${snoIndex}, Idea=${ideaIndex}, Description=${descriptionIndex}, Status=${statusIndex}`
+    );
 
     // Loop through all data rows (skip header)
     console.log("🔍 CHECKING EACH ROW FOR 'NOT POSTED' STATUS:");
@@ -78,14 +87,18 @@ const getNextTask = async () => {
       // Get status value safely
       const statusValue = row[statusIndex];
       const status = statusValue ? statusValue.toLowerCase().trim() : "";
-      console.log(`Row ${i + 1} Status: "${statusValue}" -> normalized: "${status}"`);
+      console.log(
+        `Row ${i + 1} Status: "${statusValue}" -> normalized: "${status}"`
+      );
 
       // Check if this row should be processed
-      const shouldProcess = status === "not posted" ||
-                           status === "not_posted" ||
-                           status === "" ||
-                           status === "pending" ||
-                           !statusValue;
+      const shouldProcess =
+        status === "not posted" ||
+        status === "not_posted" ||
+        status === "" ||
+        status === "pending" ||
+        status === "error" || // Allow retrying failed tasks
+        !statusValue;
 
       console.log(`Row ${i + 1} Should Process: ${shouldProcess}`);
 
@@ -95,7 +108,7 @@ const getNextTask = async () => {
         const taskData = {
           rowId: i + 1, // Google Sheets is 1-indexed
           sno: row[snoIndex] || "",
-          idea: row[ideaIndex] || "",
+          idea: row[ideaIndex] || "", // This will now correctly get the title
           description: row[descriptionIndex] || "",
           status: row[statusIndex] || "Not Posted",
           ytLink: row[ytLinkIndex] || "",
