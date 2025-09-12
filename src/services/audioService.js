@@ -54,17 +54,18 @@ const generateTTSAudio = async (prompt, voice = "en-IN-Wavenet-A") => {
               {
                 speaker: "Joe",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Kore" },
+                  prebuiltVoiceConfig: { voiceName: "Kore" }, // Male voice
                 },
               },
               {
                 speaker: "Jane",
                 voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Puck" },
+                  prebuiltVoiceConfig: { voiceName: "Puck" }, // Female voice
                 },
               },
             ],
           },
+          speakingRate: 1.2, // Slightly faster speaking rate for 60-second target
         },
       },
     });
@@ -148,7 +149,7 @@ ${script}`;
             file: conversationFile,
             speaker: "multi-speaker",
             text: script,
-            duration: Math.ceil(script.length / 15), // Estimate duration for whole conversation
+            duration: Math.ceil(script.length / 18), // Estimate duration for whole conversation with faster speaking rate
           },
         ],
         totalSegments: 1,
