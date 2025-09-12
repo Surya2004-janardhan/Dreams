@@ -11,36 +11,29 @@ const generateScript = async (topic, description = "") => {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  const prompt = `Create an engaging educational conversation between a curious female questioner (Speaker A) and a knowledgeable male expert (Speaker B) about: ${topic}
+  const prompt = `Create a natural, engaging conversation in pure Indian English between Jane (curious female questioner) and Joe (knowledgeable male expert) about: ${topic}
 
 ${description ? `Context: ${description}` : ""}
 
-Requirements:
-- Indian English conversation style
-- Female (Speaker A) asks concise, thoughtful questions (keeps responses shorter)
-- Male (Speaker B) provides detailed, in-depth explanations with examples
-- Each answer should be comprehensive but conversational, not surface-level
-- Include interesting facts, real-world applications, and engaging details
-- Make it sound natural and spontaneous, not scripted
-- Total duration when spoken: 60-90 seconds
-- Format: Q&A style but flowing naturally
+Style Requirements:
+- Pure Indian English with natural expressions like "yaar", "actually", "you know", "see", "basically", "right?", "no yaar", "tell me na"
+- Sound like real people talking casually, not formal or robotic
+- Jane asks short, natural questions with Indian English fillers
+- Joe explains in detail but conversationally, using Indian English phrases
+- Keep it flowing naturally like a real discussion, not structured Q&A
+- Total speaking time: EXACTLY 60 seconds when spoken at normal pace
+- Make explanations comprehensive but concise to fit 60 seconds
+- Include 2-3 exchanges maximum to stay within time limit
 
-Make the expert's explanations detailed enough to provide deep understanding, including:
-- Why this topic matters
-- How it works in detail
-- Real-world examples and applications
-- Interesting facts or insights
-- Practical implications
+Format naturally like this:
+Jane: Hey, can you tell me about [topic]? I've been wondering...
+Joe: Yaar, [topic] is actually quite interesting. See, basically...
+Jane: Oh really? But how does it work exactly?
+Joe: No yaar, let me explain properly. You know...
 
-Format exactly like this:
-Speaker A: [concise question]
-Speaker B: [detailed, engaging explanation with examples]
-Speaker A: [follow-up question]
-Speaker B: [comprehensive answer with more depth]
-Speaker A: [final clarifying question]
-Speaker B: [concluding detailed explanation]
+Topic: ${topic}
 
-Topic: ${topic}`;
+IMPORTANT: Keep total content short enough to be spoken in exactly 60 seconds. Focus on key points with natural Indian English expressions.`;
 
   try {
     const response = await axios.post(
@@ -51,7 +44,7 @@ Topic: ${topic}`;
           {
             role: "system",
             content:
-              "You are an expert educational content creator who specializes in creating natural, engaging conversations between a curious female questioner and a knowledgeable male expert. The female asks concise questions while the male provides detailed, comprehensive explanations in Indian English style.",
+              "You are an expert educational content creator who specializes in creating natural, engaging conversations in pure Indian English between Jane (curious female questioner) and Joe (knowledgeable male expert). Use authentic Indian English expressions like 'yaar', 'actually', 'you know', 'see', 'basically', 'right?', 'no yaar', 'tell me na'. Make it sound like real people talking casually, not formal or robotic. Keep total speaking time to exactly 60 seconds.",
           },
           {
             role: "user",

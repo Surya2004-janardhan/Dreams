@@ -189,8 +189,22 @@ const composeVideo = async (
         }
       });
 
-      if (filterComplex.length === 1) {
-        // No images to overlay, just use base video
+      // If no images were processed, rename base to final_video
+      if (images.length === 0 && !fs.existsSync(subtitlesPath)) {
+        filterComplex[0] = filterComplex[0].replace("[base]", "[final_video]");
+      }
+
+      // Add subtitles to the filter complex if available
+      if (fs.existsSync(subtitlesPath)) {
+        // Convert subtitles path to use forward slashes and escape for FFmpeg
+        const escapedSubtitlesPath = subtitlesPath
+          .replace(/\\/g, "/")
+          .replace(/:/g, "\\:");
+        filterComplex.push(
+          `${currentVideoRef}subtitles='${escapedSubtitlesPath}':force_style='FontName=Poppins-Bold,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'[final_video]`
+        );
+      } else if (images.length === 0) {
+        // If no subtitles and no images, ensure base is renamed to final_video
         filterComplex[0] = filterComplex[0].replace("[base]", "[final_video]");
       }
 
@@ -208,13 +222,6 @@ const composeVideo = async (
           "-pix_fmt yuv420p",
           "-r 30",
         ]);
-
-      // Add subtitles if available
-      if (fs.existsSync(subtitlesPath)) {
-        command.outputOptions([
-          `-vf subtitles=${subtitlesPath}:force_style='FontName=Poppins-Bold,FontSize=24,PrimaryColour=&Hffffff,BackColour=&H80000000,BorderStyle=1,Outline=2,Shadow=1,MarginV=200,Alignment=2'`,
-        ]);
-      }
 
       command
         .output(outputPath)
