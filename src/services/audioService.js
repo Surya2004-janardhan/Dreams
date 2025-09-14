@@ -6,7 +6,7 @@ const wav = require("wav");
 
 // Initialize Google GenAI client
 const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
 });
 
 // Define audio directory
@@ -32,6 +32,7 @@ const saveWaveFile = async (
       bitDepth: sampleWidth * 8,
     });
 
+    writer.on("finish", resolve);
     writer.on("error", reject);
 
     writer.write(pcmData);
@@ -44,11 +45,7 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
   try {
     logger.info(`🎤 Generating TTS audio for voice: ${voiceName}`);
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-preview-tts",
-    });
-
-    const result = await genAI.models.generateContent({
+    const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: text }] }],
       config: {
@@ -63,7 +60,22 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
       },
     });
 
-    const audioData = result.candidates[0].content.parts[0].inlineData.data;
+    const audioData =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    if (!audioData) {
+      logger.error("❌ API Response Debug:", {
+        hasResponse: !!response,
+        hasCandidates: !!response.candidates,
+        candidatesLength: response.candidates?.length,
+        firstCandidate: response.candidates?.[0],
+        hasContent: !!response.candidates?.[0]?.content,
+        content: response.candidates?.[0]?.content,
+        hasParts: !!response.candidates?.[0]?.content?.parts,
+        parts: response.candidates?.[0]?.content?.parts,
+      });
+      throw new Error("No audio data received from API");
+    }
 
     const buffer = Buffer.from(audioData, "base64");
     const fileName = `tts_${Date.now()}_${voiceName}.wav`;
@@ -91,32 +103,18 @@ const generateAudioWithBatchingStrategy = async (script) => {
       throw new Error("No dialogues found in script");
     }
 
-    // Use multi-speaker voice config for the entire conversation
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-preview-tts",
-    });
-
     // Prepare the conversation text with speaker labels
     const conversationText = dialogues
       .map((dialogue) => `${dialogue.speaker}: ${dialogue.text}`)
       .join("\n");
 
-    // Custom prompt for natural Indian English speech
-    const systemPrompt = `You are generating audio for a natural conversation between Rani (female speaker) and Raj (male speaker) in authentic Indian English. 
-
-Key requirements:
-- Rani should sound curious, enthusiastic, and use natural Indian English expressions
-- Raj should sound knowledgeable, friendly, and conversational in Indian English
-- Use natural speech patterns with appropriate enthusiasm and informativeness
-- Maintain distinct voices for each speaker
-- Keep the conversation flowing naturally
-
-Conversation script:
+    // Create prompt in the exact format as reference
+    const prompt = `TTS the following conversation between Rani and Raj in natural Indian English:
 ${conversationText}`;
 
-    const result = await genAI.models.generateContent({
+    const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: systemPrompt }] }],
+      contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseModalities: ["AUDIO"],
         speechConfig: {
@@ -140,13 +138,29 @@ ${conversationText}`;
       },
     });
 
-    const audioData = result.candidates[0].content.parts[0].inlineData.data;
+    const audioData =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+    if (!audioData) {
+      logger.error("❌ API Response Debug:", {
+        hasResponse: !!response,
+        hasCandidates: !!response.candidates,
+        candidatesLength: response.candidates?.length,
+        firstCandidate: response.candidates?.[0],
+        hasContent: !!response.candidates?.[0]?.content,
+        content: response.candidates?.[0]?.content,
+        hasParts: !!response.candidates?.[0]?.content?.parts,
+        parts: response.candidates?.[0]?.content?.parts,
+      });
+      throw new Error("No audio data received from API");
+    }
 
     const buffer = Buffer.from(audioData, "base64");
     const conversationFile = path.join(
       audioDir,
       `conversation_${Date.now()}.wav`
     );
+
     await saveWaveFile(conversationFile, buffer);
 
     // Since we're doing a single API call, create a single segment
