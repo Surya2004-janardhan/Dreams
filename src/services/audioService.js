@@ -2,11 +2,10 @@ const { GoogleGenAI } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
-const wav = require("wav");
 
 // Initialize Google GenAI client
 const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
 });
 
 // Define audio directory
@@ -26,17 +25,88 @@ const saveWaveFile = async (
   sampleWidth = 2
 ) => {
   return new Promise((resolve, reject) => {
-    const writer = new wav.FileWriter(filename, {
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
+    try {
+      // If pcmData is already a complete WAV file (from Google GenAI), just write it
+      if (Buffer.isBuffer(pcmData) && pcmData.length > 44) {
+        // Check if it looks like a WAV file by examining the header
+        const riffHeader = pcmData.slice(0, 4).toString("ascii");
+        if (riffHeader === "RIFF") {
+          // It's already a valid WAV file, just write it
+          console.log(`🎵 Detected WAV data, saving as: ${filename}`);
+          fs.writeFile(filename, pcmData, (err) => {
+            if (err) {
+              console.error(`❌ Failed to write WAV file: ${err.message}`);
+              reject(err);
+            } else {
+              console.log(
+                `✅ WAV file written successfully: ${filename} (${pcmData.length} bytes)`
+              );
+              resolve(filename); // Return the filename
+            }
+          });
+          return;
+        }
+      }
 
-    writer.on("finish", resolve);
-    writer.on("error", reject);
+      // For Google GenAI TTS response, the data might be raw PCM or MP3
+      // Let's try to detect the format and handle accordingly
+      if (Buffer.isBuffer(pcmData)) {
+        // Check if it's MP3 (starts with ID3 or MPEG frame sync)
+        const firstBytes = pcmData.slice(0, 4);
+        console.log(
+          `🔍 First 4 bytes of audio data: ${firstBytes
+            .map((b) => b.toString(16).padStart(2, "0"))
+            .join(" ")
+            .toUpperCase()}`
+        );
 
-    writer.write(pcmData);
-    writer.end();
+        const isMP3 =
+          firstBytes[0] === 0x49 &&
+          firstBytes[1] === 0x44 &&
+          firstBytes[2] === 0x33; // ID3
+        const isMPEG =
+          (firstBytes[0] & 0xff) === 0xff && (firstBytes[1] & 0xe0) === 0xe0; // MPEG frame sync
+
+        console.log(`🎵 MP3 detection: isMP3=${isMP3}, isMPEG=${isMPEG}`);
+
+        if (isMP3 || isMPEG) {
+          // It's MP3/MPEG data, save as .mp3
+          const mp3Filename = filename.replace(".wav", ".mp3");
+          console.log(`🎵 Detected MP3/MPEG data, saving as: ${mp3Filename}`);
+          fs.writeFile(mp3Filename, pcmData, (err) => {
+            if (err) {
+              console.error(`❌ Failed to write MP3 file: ${err.message}`);
+              reject(err);
+            } else {
+              console.log(
+                `✅ MP3 file written: ${mp3Filename} (${pcmData.length} bytes)`
+              );
+              resolve(mp3Filename);
+            }
+          });
+          return;
+        }
+
+        // For raw PCM data, save as .raw file since it's not a proper WAV
+        const rawFilename = filename.replace(".wav", ".raw");
+        console.log(`💾 Saving raw PCM data as: ${rawFilename}`);
+        fs.writeFile(rawFilename, pcmData, (err) => {
+          if (err) {
+            console.error(`❌ Failed to write raw file: ${err.message}`);
+            reject(err);
+          } else {
+            console.log(
+              `✅ Raw file written: ${rawFilename} (${pcmData.length} bytes)`
+            );
+            resolve(rawFilename);
+          }
+        });
+      } else {
+        reject(new Error("Invalid audio data format"));
+      }
+    } catch (error) {
+      reject(error);
+    }
   });
 };
 
@@ -79,9 +149,9 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
 
     const buffer = Buffer.from(audioData, "base64");
     const fileName = `tts_${Date.now()}_${voiceName}.wav`;
-    const filePath = path.join(audioDir, fileName);
+    const filePath = path.resolve(path.join(audioDir, fileName));
 
-    await saveWaveFile(filePath, buffer);
+    await saveWaveFile(filePath, buffer, 1, 24000, 2);
 
     logger.info(`✓ TTS audio generated: ${filePath}`);
     return filePath;
@@ -91,10 +161,10 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
   }
 };
 
-// Main audio generation function - Multi-speaker support
+// Main audio generation function - Multi-speaker support (single attempt)
 const generateAudioWithBatchingStrategy = async (script) => {
   try {
-    logger.info("🎭 Generating multi-speaker conversation audio");
+    logger.info(`🎭 Generating multi-speaker conversation audio`);
 
     const dialogues = parseScriptDialogues(script);
     const audioSegments = [];
@@ -111,6 +181,10 @@ const generateAudioWithBatchingStrategy = async (script) => {
     // Create prompt in the exact format as reference
     const prompt = `TTS the following conversation between Rani and Raj in natural Indian English:
 ${conversationText}`;
+
+    logger.info(
+      `📝 Sending TTS request for ${conversationText.length} characters`
+    );
 
     const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -155,26 +229,60 @@ ${conversationText}`;
       throw new Error("No audio data received from API");
     }
 
+    // Validate audio data
+    if (typeof audioData !== "string" || audioData.length === 0) {
+      throw new Error("Invalid audio data format");
+    }
+
+    logger.info(`📊 Received audio data: ${audioData.length} characters`);
+
     const buffer = Buffer.from(audioData, "base64");
-    const conversationFile = path.join(
-      audioDir,
-      `conversation_${Date.now()}.wav`
+
+    // Validate buffer
+    if (!buffer || buffer.length === 0) {
+      throw new Error("Failed to create audio buffer");
+    }
+
+    logger.info(`🔊 Audio buffer size: ${buffer.length} bytes`);
+
+    const conversationFile = path.resolve(
+      path.join(audioDir, `conversation_${Date.now()}.wav`)
     );
 
-    await saveWaveFile(conversationFile, buffer);
+    const actualFile = await saveWaveFile(
+      conversationFile,
+      buffer,
+      1,
+      24000,
+      2
+    );
+
+    // Validate that the file was actually created and has content
+    if (!fs.existsSync(actualFile)) {
+      throw new Error(`Audio file was not created: ${actualFile}`);
+    }
+
+    const stats = fs.statSync(actualFile);
+    if (stats.size === 0) {
+      throw new Error(`Audio file is empty: ${actualFile}`);
+    }
+
+    logger.info(
+      `✅ Audio file created successfully: ${actualFile} (${stats.size} bytes)`
+    );
 
     // Since we're doing a single API call, create a single segment
     const estimatedDuration = 70; // Based on script design for 70 seconds
     audioSegments.push({
-      file: conversationFile,
+      file: actualFile,
       duration: estimatedDuration,
       speaker: "Multi-speaker conversation",
     });
 
-    logger.info(`✓ Generated complete conversation: ${conversationFile}`);
+    logger.info(`✓ Generated complete conversation: ${actualFile}`);
 
     return {
-      conversationFile: conversationFile,
+      conversationFile: actualFile,
       segments: audioSegments,
       totalSegments: 1, // Single API call
       apiCallsUsed: 1,

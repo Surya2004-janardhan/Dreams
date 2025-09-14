@@ -171,6 +171,138 @@ const createImageChunksFromSubtitles = (
 };
 
 /**
+ * Extract technical keywords from text
+ */
+const extractTechnicalKeywords = (text) => {
+  // Common technical keywords and patterns
+  const technicalTerms = [
+    // Programming/Tech
+    "algorithm",
+    "API",
+    "architecture",
+    "automation",
+    "backend",
+    "blockchain",
+    "cloud",
+    "code",
+    "database",
+    "debugging",
+    "deployment",
+    "framework",
+    "frontend",
+    "function",
+    "infrastructure",
+    "integration",
+    "library",
+    "machine learning",
+    "microservices",
+    "middleware",
+    "optimization",
+    "pipeline",
+    "platform",
+    "protocol",
+    "query",
+    "repository",
+    "scalability",
+    "script",
+    "security",
+    "server",
+    "software",
+    "system",
+    "technology",
+    "testing",
+    "workflow",
+
+    // Data/AI
+    "analytics",
+    "artificial intelligence",
+    "big data",
+    "classification",
+    "clustering",
+    "data mining",
+    "dataset",
+    "deep learning",
+    "feature",
+    "model",
+    "neural network",
+    "prediction",
+    "processing",
+    "regression",
+    "training",
+
+    // Web/Internet
+    "browser",
+    "cache",
+    "cookie",
+    "domain",
+    "encryption",
+    "firewall",
+    "hosting",
+    "HTTP",
+    "HTTPS",
+    "internet",
+    "IP address",
+    "load balancer",
+    "network",
+    "router",
+    "SSL",
+    "TCP",
+    "UDP",
+    "VPN",
+    "webhook",
+
+    // Business/Process
+    "agile",
+    "automation",
+    "CI/CD",
+    "DevOps",
+    "efficiency",
+    "kanban",
+    "methodology",
+    "optimization",
+    "process",
+    "productivity",
+    "scrum",
+    "workflow",
+  ];
+
+  const foundKeywords = [];
+  const lowerText = text.toLowerCase();
+
+  for (const term of technicalTerms) {
+    if (lowerText.includes(term.toLowerCase())) {
+      foundKeywords.push(term);
+    }
+  }
+
+  // If no technical terms found, extract nouns as potential keywords
+  if (foundKeywords.length === 0) {
+    const words = text.split(/\s+/);
+    const potentialKeywords = words
+      .filter(
+        (word) =>
+          word.length > 4 &&
+          ![
+            "about",
+            "would",
+            "there",
+            "their",
+            "which",
+            "where",
+            "these",
+            "those",
+            "though",
+            "through",
+          ].includes(word.toLowerCase())
+      )
+      .slice(0, 5);
+    return potentialKeywords;
+  }
+
+  return foundKeywords.slice(0, 8); // Limit to top 8 keywords
+};
+
+/**
  * Generate contextual educational images using subtitle timing
  */
 const generateImages = async (subtitlesPath) => {
@@ -205,22 +337,45 @@ const generateImages = async (subtitlesPath) => {
           continue;
         }
 
+        // Extract technical keywords from the text
+        const technicalKeywords = extractTechnicalKeywords(chunk.text);
+
         // Create educational image prompt based on subtitle text
-        const imagePrompt = `Educational illustration for video content:
+        const imagePrompt = `Create a highly detailed, technical educational illustration for this specific conversation segment:
 
-Context from conversation: "${chunk.text}"
+CONVERSATION CONTEXT: "${chunk.text}"
 
-Create a clean, professional educational image that visually represents the concepts being discussed in this part of the conversation. The image should:
+TECHNICAL KEYWORDS IDENTIFIED: ${technicalKeywords.join(", ")}
 
-- Be suitable for 16:9 video overlay
-- Use bright, engaging colors for learning
-- Have clear visual hierarchy
-- Focus on visual explanation rather than text
-- Be modern and appealing for social media
-- Represent the key educational concepts from the conversation
-- Have high contrast for good video visibility
+VISUALIZE THESE TECHNICAL CONCEPTS:
+${technicalKeywords
+  .map((keyword) => `- Show "${keyword}" in action or as a key component`)
+  .join("\n")}
 
-Style: Educational, professional, engaging, modern design`;
+DETAILED REQUIREMENTS:
+- Create visual representations of the technical concepts: ${technicalKeywords
+          .slice(0, 3)
+          .join(", ")}
+- Illustrate workflows, systems, or mechanisms involving: ${technicalKeywords
+          .slice(0, 2)
+          .join(" and ")}
+- Show technical processes, algorithms, or architectures
+- Represent scientific principles or engineering concepts visually
+- Include relevant technical symbols, diagrams, or schematics
+
+STYLE SPECIFICATIONS:
+- Ultra-detailed technical diagram/illustration
+- Professional engineering/scientific documentation style
+- Clear labels for technical components: ${technicalKeywords
+          .slice(0, 3)
+          .join(", ")}
+- Industry-standard visual metaphors and symbols
+- High contrast, precise technical accuracy
+
+FORMAT: Digital technical illustration, 16:9 aspect ratio, educational focus
+QUALITY: Professional technical documentation, highly detailed, scientifically accurate
+
+The image should serve as a visual explanation of the core technical concepts from this conversation segment.`;
 
         logger.info(
           `🎨 Generating image ${
@@ -234,6 +389,7 @@ Style: Educational, professional, engaging, modern design`;
             chunk.text.length > 100 ? "..." : ""
           }"`
         );
+        logger.info(`🔍 Technical keywords: ${technicalKeywords.join(", ")}`);
 
         // Generate image using Gemini
         const imagePath = await generateImageWithGemini(

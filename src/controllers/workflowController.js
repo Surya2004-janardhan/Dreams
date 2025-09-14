@@ -476,16 +476,58 @@ const runAutomatedWorkflow = async (req, res) => {
       (!resumeFromStep ||
         ["script/generate", "audio/generate"].includes(resumeFromStep))
     ) {
-      logger.info("→ Step 3: Generating TTS audio with male/female voices");
-      currentWorkflow.currentStep = "audio/generate";
+      logger.info("→ Step 3: Checking for existing audio files");
 
-      const audioFiles = await generateAudioWithBatchingStrategy(
-        currentWorkflow.results.script
-      );
-      currentWorkflow.results.audioFiles = audioFiles;
+      // Check for existing audio files first
+      let existingAudioFiles = [];
+      const audioDir = "audio";
+      if (fs.existsSync(audioDir)) {
+        const audioFilesList = fs.readdirSync(audioDir);
+        const conversationFiles = audioFilesList.filter(
+          (file) =>
+            file.startsWith("conversation_") &&
+            (file.endsWith(".wav") || file.endsWith(".mp3"))
+        );
 
-      completedSteps.push("audio/generate");
-      currentWorkflow.completedSteps = completedSteps;
+        if (conversationFiles.length > 0) {
+          const latestAudio = conversationFiles.sort().pop();
+          const audioPath = path.resolve(path.join(audioDir, latestAudio));
+
+          existingAudioFiles = [
+            {
+              conversationFile: audioPath,
+              segments: [
+                {
+                  file: audioPath,
+                  duration: 70, // Estimated duration
+                  speaker: "Existing conversation",
+                },
+              ],
+              totalSegments: 1,
+              apiCallsUsed: 0,
+            },
+          ];
+          logger.info(`✅ Found existing audio file: ${audioPath}`);
+        }
+      }
+
+      if (existingAudioFiles.length > 0) {
+        logger.info("⏩ Audio generation skipped (using existing file)");
+        currentWorkflow.results.audioFiles = existingAudioFiles[0];
+        completedSteps.push("audio/generate");
+        currentWorkflow.completedSteps = completedSteps;
+      } else {
+        logger.info("→ Generating new TTS audio with male/female voices");
+        currentWorkflow.currentStep = "audio/generate";
+
+        const audioFiles = await generateAudioWithBatchingStrategy(
+          currentWorkflow.results.script
+        );
+        currentWorkflow.results.audioFiles = audioFiles;
+
+        completedSteps.push("audio/generate");
+        currentWorkflow.completedSteps = completedSteps;
+      }
 
       // Save checkpoint
       await saveCheckpoint(
@@ -514,10 +556,10 @@ const runAutomatedWorkflow = async (req, res) => {
       let audioFilePath = null;
 
       if (
-        currentWorkflow.results.audio &&
-        currentWorkflow.results.audio.conversationFile
+        currentWorkflow.results.audioFiles &&
+        currentWorkflow.results.audioFiles.conversationFile
       ) {
-        audioFilePath = currentWorkflow.results.audio.conversationFile;
+        audioFilePath = currentWorkflow.results.audioFiles.conversationFile;
         logger.info(`🎵 Using workflow audio file: ${audioFilePath}`);
       } else {
         // Fallback: Find the latest audio file in the audio folder
@@ -561,25 +603,69 @@ const runAutomatedWorkflow = async (req, res) => {
         }
       }
 
-      const subtitlesResult = await createSubtitlesFromAudio(
-        audioFilePath,
-        subtitlesPath
-      );
+      try {
+        const subtitlesResult = await createSubtitlesFromAudio(
+          audioFilePath,
+          subtitlesPath
+        );
 
-      currentWorkflow.results.subtitles = subtitlesResult.subtitlesPath;
+        currentWorkflow.results.subtitles = subtitlesResult.subtitlesPath;
 
-      completedSteps.push("subtitles/generate");
-      currentWorkflow.completedSteps = completedSteps;
+        completedSteps.push("subtitles/generate");
+        currentWorkflow.completedSteps = completedSteps;
 
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "video/base",
-        currentWorkflow.results,
-        taskData
-      );
+        // Save checkpoint
+        await saveCheckpoint(
+          taskId,
+          "video/base",
+          currentWorkflow.results,
+          taskData
+        );
 
-      logger.info("✓ SRT subtitles created with perfect timing");
+        logger.info("✓ SRT subtitles created with perfect timing");
+      } catch (subtitleError) {
+        logger.error("❌ Subtitle generation failed:", subtitleError.message);
+
+        // Check if it's an API overload error
+        if (
+          subtitleError.message.includes("503") ||
+          subtitleError.message.includes("UNAVAILABLE") ||
+          subtitleError.message.includes("overloaded")
+        ) {
+          logger.warn(
+            "⚠️ API overloaded for subtitles - continuing workflow without subtitles"
+          );
+
+          // Create a basic subtitle file or skip subtitles
+          try {
+            const basicSubtitles = `1\n00:00:00,000 --> 00:00:70,000\n[Rani and Raj conversation]\n\n2\n00:00:70,000 --> 00:01:00,000\n[Educational content]`;
+            fs.writeFileSync(subtitlesPath, basicSubtitles);
+            currentWorkflow.results.subtitles = subtitlesPath;
+            logger.info("✓ Created basic subtitle placeholder");
+          } catch (fallbackError) {
+            logger.warn(
+              "⚠️ Could not create subtitle placeholder:",
+              fallbackError.message
+            );
+            currentWorkflow.results.subtitles = null;
+          }
+
+          // Mark as completed to continue workflow
+          completedSteps.push("subtitles/generate");
+          currentWorkflow.completedSteps = completedSteps;
+
+          // Save checkpoint
+          await saveCheckpoint(
+            taskId,
+            "video/base",
+            currentWorkflow.results,
+            taskData
+          );
+        } else {
+          // For other errors, still fail the workflow
+          throw subtitleError;
+        }
+      }
     } else if (completedSteps.includes("subtitles/generate")) {
       logger.info("⏩ Subtitles generation skipped (already completed)");
     }
@@ -902,7 +988,11 @@ const runWorkflow = async (req, res) => {
     if (fs.existsSync(audioDir)) {
       const audioFilesList = fs.readdirSync(audioDir);
       const conversationFiles = audioFilesList.filter(
-        (file) => file.startsWith("conversation_") && file.endsWith(".wav")
+        (file) =>
+          file.startsWith("conversation_") &&
+          (file.endsWith(".wav") ||
+            file.endsWith(".mp3") ||
+            file.endsWith(".raw"))
       );
 
       if (conversationFiles.length > 0) {
