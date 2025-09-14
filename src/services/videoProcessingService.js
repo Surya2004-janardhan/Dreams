@@ -133,7 +133,7 @@ const composeVideo = async (
   try {
     logger.info("🎬 Starting final video composition...");
 
-    const outputPath = path.resolve(`videos/final_video_${Date.now()}.mp4`);
+    const outputPath = path.resolve(`videos/final_smallsubs.mp4`);
 
     logger.info(`📹 Base video: ${baseVideoPath}`);
     logger.info(`🎵 Audio: ${audioPath}`);
@@ -175,11 +175,11 @@ const composeVideo = async (
         "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
       );
 
-      // Scale each image to 1000:500 with white padding
+      // Scale each image to 1000:500 with black padding
       validImages.forEach((image, index) => {
         const inputIndex = index + (audioPath ? 2 : 1); // Images start from input 2 if audio, input 1 if no audio
         filterParts.push(
-          `[${inputIndex}:v]scale=1000:500:force_original_aspect_ratio=decrease,pad=1000:500:(ow-iw)/2:(oh-ih)/2:white[img${index}]`
+          `[${inputIndex}:v]scale=1000:500:force_original_aspect_ratio=decrease,pad=1000:500:(ow-iw)/2:(oh-ih)/2:black[img${index}]`
         );
       });
 
@@ -201,7 +201,17 @@ const composeVideo = async (
       });
 
       // If no subtitles, just use the video with overlays as final
-      filterParts.push(`[video_with_overlays]copy[final_video]`);
+      if (!fs.existsSync(subtitlesPath)) {
+        filterParts.push(`[video_with_overlays]copy[final_video]`);
+      } else {
+        const simpleSubtitlesPath = subtitlesPath
+          .replace(/\\/g, "\\\\")
+          .replace(/:/g, "\\:")
+          .replace(/'/g, "\\'");
+        filterParts.push(
+          `[video_with_overlays]subtitles='${simpleSubtitlesPath}':force_style='FontName=Verdana,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,BackColour=&H80000000&,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=20'[final_video]`
+        );
+      }
 
       // Set up output options
       const outputOptions = [
@@ -232,15 +242,6 @@ const composeVideo = async (
         // Use audio from base video if no separate audio provided
         outputOptions.push("-map", "0:a");
         outputOptions.push("-c:a", "copy");
-      }
-
-      // Add subtitles as a separate video filter if they exist
-      if (fs.existsSync(subtitlesPath)) {
-        const simpleSubtitlesPath = subtitlesPath
-          .replace(/\\/g, "\\\\")
-          .replace(/:/g, "\\:")
-          .replace(/'/g, "\\'");
-        outputOptions.push("-vf", `subtitles='${simpleSubtitlesPath}'`);
       }
 
       outputOptions.push("-shortest");
