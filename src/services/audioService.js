@@ -4,6 +4,19 @@ const path = require("path");
 const logger = require("../config/logger");
 const wav = require("wav");
 
+// Initialize Google GenAI client
+const genAI = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+// Define audio directory
+const audioDir = "audio";
+
+// Ensure audio directory exists
+if (!fs.existsSync(audioDir)) {
+  fs.mkdirSync(audioDir, { recursive: true });
+}
+
 // Save WAV file helper function
 const saveWaveFile = async (
   filename,
@@ -19,7 +32,6 @@ const saveWaveFile = async (
       bitDepth: sampleWidth * 8,
     });
 
-    writer.on("finish", resolve);
     writer.on("error", reject);
 
     writer.write(pcmData);
@@ -28,187 +40,130 @@ const saveWaveFile = async (
 };
 
 // Generate TTS audio using Gemini API with retry logic
-const generateTTSAudio = async (script, speaker = "Raj", maxRetries = 3) => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      if (!process.env.GEMINI_API_KEY) {
-        throw new Error("GEMINI_API_KEY is required for TTS generation");
-      }
+const generateTTSAudio = async (text, voiceName = "Kore") => {
+  try {
+    logger.info(`🎤 Generating TTS audio for voice: ${voiceName}`);
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-preview-tts",
+    });
 
-      logger.info(
-        `🎤 Generating TTS audio with Gemini (${speaker} voice) - Attempt ${attempt}/${maxRetries}...`
-      );
-
-      const prompt = `Convert this dialogue segment to natural Indian English speech with expressive and informative delivery. Speaker: ${speaker}
-Text: ${script}`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: [{ parts: [{ text: prompt }] }],
-        config: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName:
-                  speaker === "Raj" ? "en-IN-Standard-C" : "en-IN-Standard-A", // Male and female Indian voices
-              },
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: text }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: voiceName,
             },
           },
         },
-      });
+      },
+    });
 
-      const data =
-        response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (!data) {
-        throw new Error("No audio data received from Gemini TTS");
-      }
+    const audioData = result.candidates[0].content.parts[0].inlineData.data;
 
-      const audioBuffer = Buffer.from(data, "base64");
-      logger.info(
-        `✓ Generated TTS audio using Gemini API (${audioBuffer.length} bytes)`
-      );
+    const buffer = Buffer.from(audioData, "base64");
+    const fileName = `tts_${Date.now()}_${voiceName}.wav`;
+    const filePath = path.join(audioDir, fileName);
 
-      return audioBuffer;
-    } catch (error) {
-      logger.warn(`TTS attempt ${attempt} failed:`, error.message);
+    await saveWaveFile(filePath, buffer);
 
-      if (attempt === maxRetries) {
-        logger.error(`❌ All ${maxRetries} TTS attempts failed`);
-        break;
-      }
-
-      // Wait before retrying (exponential backoff)
-      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-      logger.info(`⏳ Waiting ${waitTime}ms before retry...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
+    logger.info(`✓ TTS audio generated: ${filePath}`);
+    return filePath;
+  } catch (error) {
+    logger.error("❌ TTS generation failed:", error.message);
+    throw error;
   }
-
-  // All attempts failed, use fallback
-  logger.warn("⚠️ Using placeholder audio due to TTS API failure");
-
-  // Fallback: Create a simple WAV header for placeholder
-  const sampleRate = 22050;
-  const duration = Math.max(1, Math.ceil(script.length / 10)); // Estimate duration
-  const samples = sampleRate * duration;
-  const buffer = Buffer.alloc(44 + samples * 2);
-
-  // WAV header
-  buffer.write("RIFF", 0);
-  buffer.writeUInt32LE(36 + samples * 2, 4);
-  buffer.write("WAVE", 8);
-  buffer.write("fmt ", 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(1, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * 2, 28);
-  buffer.writeUInt16LE(2, 32);
-  buffer.writeUInt16LE(16, 34);
-  buffer.write("data", 36);
-  buffer.writeUInt32LE(samples * 2, 40);
-
-  // Generate simple tone for placeholder
-  for (let i = 0; i < samples; i++) {
-    const sample = Math.sin((i * 440 * 2 * Math.PI) / sampleRate) * 16383;
-    buffer.writeInt16LE(sample, 44 + i * 2);
-  }
-
-  return buffer;
 };
 
 // Main audio generation function - Multi-speaker support
 const generateAudioWithBatchingStrategy = async (script) => {
   try {
-    logger.info("🎤 Starting multi-speaker TTS audio generation...");
+    logger.info("🎭 Generating multi-speaker conversation audio");
 
-    // Parse script to separate Raj and Rani dialogues
     const dialogues = parseScriptDialogues(script);
+    const audioSegments = [];
 
     if (dialogues.length === 0) {
-      logger.warn("⚠️ No dialogues found, using single voice");
-      // Fallback to single voice
-      const audioBuffer = await generateTTSAudio(script, "Raj"); // Default to Raj voice for single speaker
-      const conversationFile = path.resolve(
-        `audio/conversation_${Date.now()}.wav`
-      );
-      await saveWaveFile(conversationFile, audioBuffer);
+      throw new Error("No dialogues found in script");
+    }
 
-      return {
-        conversationFile: conversationFile,
-        segments: [
-          {
-            file: conversationFile,
-            speaker: "single-speaker",
-            text: script,
-            duration: Math.ceil(script.length / 16),
+    // Use multi-speaker voice config for the entire conversation
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-preview-tts",
+    });
+
+    // Prepare the conversation text with speaker labels
+    const conversationText = dialogues
+      .map((dialogue) => `${dialogue.speaker}: ${dialogue.text}`)
+      .join("\n");
+
+    // Custom prompt for natural Indian English speech
+    const systemPrompt = `You are generating audio for a natural conversation between Rani (female speaker) and Raj (male speaker) in authentic Indian English. 
+
+Key requirements:
+- Rani should sound curious, enthusiastic, and use natural Indian English expressions
+- Raj should sound knowledgeable, friendly, and conversational in Indian English
+- Use natural speech patterns with appropriate enthusiasm and informativeness
+- Maintain distinct voices for each speaker
+- Keep the conversation flowing naturally
+
+Conversation script:
+${conversationText}`;
+
+    const result = await genAI.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: systemPrompt }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              {
+                speaker: "Rani",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Kore" },
+                },
+              },
+              {
+                speaker: "Raj",
+                voiceConfig: {
+                  prebuiltVoiceConfig: { voiceName: "Puck" },
+                },
+              },
+            ],
           },
-        ],
-        totalSegments: 1,
-        apiCallsUsed: 1,
-      };
-    }
+        },
+      },
+    });
 
-    // Generate audio for each dialogue segment
-    const audioSegments = [];
-    let totalDuration = 0;
+    const audioData = result.candidates[0].content.parts[0].inlineData.data;
 
-    for (const dialogue of dialogues) {
-      try {
-        const voice = dialogue.speaker; // Use speaker name directly for Gemini TTS
-        const audioBuffer = await generateTTSAudio(dialogue.text, voice);
-
-        const segmentFile = path.resolve(
-          `audio/segment_${dialogue.speaker}_${Date.now()}_${Math.random()
-            .toString(36)
-            .substr(2, 9)}.wav`
-        );
-        await saveWaveFile(segmentFile, audioBuffer);
-
-        audioSegments.push({
-          file: segmentFile,
-          speaker: dialogue.speaker,
-          text: dialogue.text,
-          duration: Math.ceil(dialogue.text.length / 16),
-          voice: voice,
-        });
-
-        totalDuration += Math.ceil(dialogue.text.length / 16);
-
-        // Small delay between segments to avoid rate limits
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      } catch (error) {
-        logger.error(
-          `Failed to generate audio for ${dialogue.speaker}:`,
-          error.message
-        );
-        // Continue with other segments
-      }
-    }
-
-    // Combine all audio segments
-    const conversationFile = path.resolve(
-      `audio/conversation_${Date.now()}.wav`
+    const buffer = Buffer.from(audioData, "base64");
+    const conversationFile = path.join(
+      audioDir,
+      `conversation_${Date.now()}.wav`
     );
+    await saveWaveFile(conversationFile, buffer);
 
-    if (audioSegments.length === 1) {
-      // Only one segment, just copy it
-      fs.copyFileSync(audioSegments[0].file, conversationFile);
-    } else {
-      // Combine multiple segments
-      await combineAudioSegments(audioSegments, conversationFile);
-    }
+    // Since we're doing a single API call, create a single segment
+    const estimatedDuration = 70; // Based on script design for 70 seconds
+    audioSegments.push({
+      file: conversationFile,
+      duration: estimatedDuration,
+      speaker: "Multi-speaker conversation",
+    });
 
     logger.info(`✓ Generated complete conversation: ${conversationFile}`);
 
     return {
       conversationFile: conversationFile,
       segments: audioSegments,
-      totalSegments: audioSegments.length,
-      apiCallsUsed: audioSegments.length,
+      totalSegments: 1, // Single API call
+      apiCallsUsed: 1,
     };
   } catch (error) {
     logger.error("❌ Audio generation failed:", error.message);
