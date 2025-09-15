@@ -327,75 +327,61 @@ const getVideoMetadata = async (videoPath) => {
 };
 
 /**
- * Create optimized versions for different platforms
+ * Create optimized version for both platforms (single video)
  */
 const createPlatformOptimized = async (videoPath, platform = "both") => {
   try {
-    const results = {};
+    // Create a single optimized video that works for both YouTube and Instagram
+    const optimizedOutputPath = videoPath.replace(".mp4", "_optimized.mp4");
 
-    if (platform === "youtube" || platform === "both") {
-      // YouTube Shorts optimization (9:16 aspect ratio)
-      const youtubeOutputPath = videoPath.replace(".mp4", "_youtube.mp4");
+    logger.info(
+      `🎬 Creating single optimized video for both platforms: ${optimizedOutputPath}`
+    );
 
-      await new Promise((resolve, reject) => {
-        ffmpeg(videoPath)
-          .outputOptions([
-            "-c:v libx264",
-            "-preset slower",
-            "-crf 21",
-            "-maxrate 5000k",
-            "-bufsize 10000k",
-            "-c:a aac",
-            "-b:a 192k",
-            "-movflags +faststart",
-            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2", // 9:16 aspect ratio
-            "-t 60", // YouTube Shorts limit
-          ])
-          .output(youtubeOutputPath)
-          .on("end", () => {
+    await new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .outputOptions([
+          "-c:v libx264",
+          "-preset fast",
+          "-crf 23", // Balanced quality
+          "-maxrate 4000k", // Good for both platforms
+          "-bufsize 8000k",
+          "-c:a aac",
+          "-b:a 160k", // Good audio quality
+          "-movflags +faststart",
+          "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2", // 9:16 aspect ratio
+          "-t 59", // Under both limits (YouTube 60s, Instagram 59s)
+          "-r 30", // 30fps for compatibility
+        ])
+        .output(optimizedOutputPath)
+        .on("start", (commandLine) => {
+          logger.info("🔄 Creating optimized video...");
+        })
+        .on("progress", (progress) => {
+          if (progress.percent) {
             logger.info(
-              `✅ YouTube Shorts (9:16) version created: ${youtubeOutputPath}`
+              `⏳ Optimization progress: ${Math.round(progress.percent)}%`
             );
-            results.youtube = youtubeOutputPath;
-            resolve();
-          })
-          .on("error", reject)
-          .run();
-      });
-    }
+          }
+        })
+        .on("end", () => {
+          logger.info(
+            `✅ Single optimized video created: ${optimizedOutputPath}`
+          );
+          resolve(optimizedOutputPath);
+        })
+        .on("error", (error) => {
+          logger.error("❌ Video optimization failed:", error.message);
+          reject(error);
+        })
+        .run();
+    });
 
-    if (platform === "instagram" || platform === "both") {
-      // Instagram Reels optimization (9:16 aspect ratio)
-      const instagramOutputPath = videoPath.replace(".mp4", "_instagram.mp4");
-
-      await new Promise((resolve, reject) => {
-        ffmpeg(videoPath)
-          .outputOptions([
-            "-c:v libx264",
-            "-preset fast",
-            "-crf 25",
-            "-maxrate 3500k",
-            "-bufsize 7000k",
-            "-c:a aac",
-            "-b:a 128k",
-            "-movflags +faststart",
-            "-vf scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2", // 9:16 aspect ratio
-            "-t 59", // Instagram Reels limit
-          ])
-          .output(instagramOutputPath)
-          .on("end", () => {
-            logger.info(
-              `✅ Instagram Reels (9:16) version created: ${instagramOutputPath}`
-            );
-            results.instagram = instagramOutputPath;
-            resolve();
-          })
-          .on("error", reject)
-          .run();
-      });
-    }
-
-    return results;
+    return {
+      youtube: optimizedOutputPath,
+      instagram: optimizedOutputPath,
+      singleVideo: true,
+    };
   } catch (error) {
     logger.error("❌ Platform optimization failed:", error);
     throw error;

@@ -223,6 +223,7 @@ const generateSubtitlesFromAudio = async (audioFilePath) => {
 
 CRITICAL REQUIREMENTS:
 - Audio duration detected: ${audioDuration.toFixed(2)} seconds
+- Make sure each subtitle is exactly between 3-4 words 
 - This is an educational conversation between Raj (male expert) and Rani (female questioner)
 - Analyze the ENTIRE audio file and distribute timestamps proportionally across ${audioDuration.toFixed(
                     2

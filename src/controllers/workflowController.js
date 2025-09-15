@@ -761,20 +761,20 @@ const runAutomatedWorkflow = async (req, res) => {
       logger.info("⏩ Video composition skipped (already completed)");
     }
 
-    // Step 8: Create platform-optimized versions
+    // Step 8: Create platform-optimized version (single video for both platforms)
     if (
       !completedSteps.includes("video/optimize") &&
       (!resumeFromStep ||
         ["video/compose", "video/optimize"].includes(resumeFromStep))
     ) {
-      logger.info("→ Step 8: Creating platform-optimized versions");
+      logger.info("→ Step 8: Creating optimized video for both platforms");
       currentWorkflow.currentStep = "video/optimize";
 
-      const optimizedVersions = await createPlatformOptimized(
+      const optimizedVersion = await createPlatformOptimized(
         currentWorkflow.results.finalVideo.videoPath,
         "both"
       );
-      currentWorkflow.results.optimizedVersions = optimizedVersions;
+      currentWorkflow.results.optimizedVersions = optimizedVersion;
 
       completedSteps.push("video/optimize");
       currentWorkflow.completedSteps = completedSteps;
@@ -787,7 +787,7 @@ const runAutomatedWorkflow = async (req, res) => {
         taskData
       );
 
-      logger.info("✓ Platform-optimized versions created");
+      logger.info("✓ Single optimized video created for both platforms");
     } else if (completedSteps.includes("video/optimize")) {
       logger.info("⏩ Video optimization skipped (already completed)");
     }
@@ -810,18 +810,40 @@ const runAutomatedWorkflow = async (req, res) => {
 
       currentWorkflow.results.uploadResults = uploadResults;
 
-      completedSteps.push("social/upload");
-      currentWorkflow.completedSteps = completedSteps;
+      // Check if both uploads succeeded
+      const youtubeSuccess = !!uploadResults?.youtubeUrl;
+      const instagramSuccess = !!uploadResults?.instagramUrl;
 
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "sheets/update",
-        currentWorkflow.results,
-        taskData
-      );
+      if (youtubeSuccess && instagramSuccess) {
+        logger.info("✅ Both YouTube and Instagram uploads succeeded");
+        completedSteps.push("social/upload");
+        currentWorkflow.completedSteps = completedSteps;
 
-      logger.info("✓ Social media uploads completed");
+        // Save checkpoint
+        await saveCheckpoint(
+          taskId,
+          "sheets/update",
+          currentWorkflow.results,
+          taskData
+        );
+
+        logger.info("✓ Social media uploads completed successfully");
+      } else {
+        logger.warn(
+          "⚠️ One or both uploads failed - preserving files for retry"
+        );
+        if (!youtubeSuccess) {
+          logger.warn("❌ YouTube upload failed");
+        }
+        if (!instagramSuccess) {
+          logger.warn("❌ Instagram upload failed");
+        }
+
+        // Don't mark as completed, don't save checkpoint, don't proceed to cleanup
+        throw new Error(
+          "Social media upload incomplete - one or both platforms failed"
+        );
+      }
     } else if (completedSteps.includes("social/upload")) {
       logger.info("⏩ Social media upload skipped (already completed)");
     }
@@ -861,22 +883,27 @@ const runAutomatedWorkflow = async (req, res) => {
     );
     logger.info("✓ Success notification sent");
 
-    // Step 12: Cleanup media folders and checkpoints
-    logger.info("→ Step 12: Cleaning up media folders and checkpoints");
-    currentWorkflow.currentStep = "cleanup";
-    await cleanupAllMediaFolders();
+    // Step 12: Cleanup media folders and checkpoints (only if both uploads succeeded)
+    if (completedSteps.includes("social/upload")) {
+      logger.info("→ Step 12: Cleaning up media folders and checkpoints");
+      currentWorkflow.currentStep = "cleanup";
 
-    // Remove checkpoint file after successful completion
-    const checkpointPath = path.join(
-      "temp/checkpoints",
-      `checkpoint_${taskId}.json`
-    );
-    if (fs.existsSync(checkpointPath)) {
-      fs.unlinkSync(checkpointPath);
-      logger.info("✓ Checkpoint file removed");
+      await cleanupAllMediaFolders();
+
+      // Remove checkpoint file after successful completion
+      const checkpointPath = path.join(
+        "temp/checkpoints",
+        `checkpoint_${taskId}.json`
+      );
+      if (fs.existsSync(checkpointPath)) {
+        fs.unlinkSync(checkpointPath);
+        logger.info("✓ Checkpoint file removed");
+      }
+
+      logger.info("✓ Media folders cleaned");
+    } else {
+      logger.info("⏩ Cleanup skipped - uploads not completed successfully");
     }
-
-    logger.info("✓ Media folders cleaned");
 
     // Final status update
     currentWorkflow.status = "completed";

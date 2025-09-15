@@ -5,7 +5,7 @@ const logger = require("../config/logger");
 
 // Initialize Google GenAI client
 const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 // Define audio directory
@@ -87,20 +87,62 @@ const saveWaveFile = async (
           return;
         }
 
-        // For raw PCM data, save as .raw file since it's not a proper WAV
-        const rawFilename = filename.replace(".wav", ".raw");
-        console.log(`💾 Saving raw PCM data as: ${rawFilename}`);
-        fs.writeFile(rawFilename, pcmData, (err) => {
-          if (err) {
-            console.error(`❌ Failed to write raw file: ${err.message}`);
-            reject(err);
-          } else {
-            console.log(
-              `✅ Raw file written: ${rawFilename} (${pcmData.length} bytes)`
-            );
-            resolve(rawFilename);
-          }
-        });
+        // For raw PCM data, convert to proper WAV format
+        console.log(`🎵 Converting raw PCM to WAV: ${filename}`);
+
+        const ffmpeg = require("fluent-ffmpeg");
+        const ffmpegPath = require("ffmpeg-static");
+        ffmpeg.setFfmpegPath(ffmpegPath);
+
+        // First save as temporary raw file
+        const tempRawFile = filename.replace(".wav", "_temp.raw");
+        fs.writeFileSync(tempRawFile, pcmData);
+
+        // Convert raw PCM to WAV using ffmpeg
+        ffmpeg(tempRawFile)
+          .inputOptions([
+            "-f",
+            "s16le",
+            "-ar",
+            rate.toString(),
+            "-ac",
+            channels.toString(),
+          ])
+          .output(filename)
+          .on("start", (commandLine) => {
+            console.log(`🔧 FFmpeg command: ${commandLine}`);
+          })
+          .on("progress", (progress) => {
+            console.log(`📊 Conversion progress: ${progress.percent}% done`);
+          })
+          .on("end", () => {
+            console.log(`✅ WAV file created from PCM: ${filename}`);
+            // Clean up temp file
+            try {
+              fs.unlinkSync(tempRawFile);
+            } catch (cleanupErr) {
+              console.warn(
+                `⚠️ Could not delete temp file: ${cleanupErr.message}`
+              );
+            }
+            resolve(filename);
+          })
+          .on("error", (ffmpegErr) => {
+            console.error(`❌ FFmpeg conversion failed: ${ffmpegErr.message}`);
+            // If ffmpeg fails, try to save as MP3 instead
+            console.log(`📁 Falling back to MP3 format`);
+            const mp3Filename = filename.replace(".wav", ".mp3");
+            fs.writeFile(mp3Filename, pcmData, (mp3Err) => {
+              if (mp3Err) {
+                console.error(`❌ MP3 fallback also failed: ${mp3Err.message}`);
+                reject(ffmpegErr);
+              } else {
+                console.log(`✅ Saved as MP3 fallback: ${mp3Filename}`);
+                resolve(mp3Filename);
+              }
+            });
+          })
+          .run();
       } else {
         reject(new Error("Invalid audio data format"));
       }
