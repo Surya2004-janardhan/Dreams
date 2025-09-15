@@ -156,6 +156,14 @@ const saveWaveFile = async (
 const generateTTSAudio = async (text, voiceName = "Kore") => {
   try {
     logger.info(`🎤 Generating TTS audio for voice: ${voiceName}`);
+    logger.info(`📝 TTS text: "${text}"`);
+    logger.info(
+      `📊 Text analysis: ${text.length} total chars, ${
+        text.replace(/\s/g, "").length
+      } letters, ${
+        text.split(/\s+/).filter((word) => word.length > 0).length
+      } words`
+    );
 
     const response = await genAI.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -183,6 +191,7 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
         hasCandidates: !!response.candidates,
         candidatesLength: response.candidates?.length,
         firstCandidate: response.candidates?.[0],
+        finishReason: response.candidates?.[0]?.finishReason,
         hasContent: !!response.candidates?.[0]?.content,
         content: response.candidates?.[0]?.content,
         hasParts: !!response.candidates?.[0]?.content?.parts,
@@ -200,7 +209,8 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
     logger.info(`✓ TTS audio generated: ${filePath}`);
     return filePath;
   } catch (error) {
-    logger.error("❌ TTS generation failed:", error.message);
+    logger.error("❌ TTS generation failed:", error.message || error);
+    logger.error("Full error details:", JSON.stringify(error, null, 2));
     throw error;
   }
 };
@@ -228,6 +238,12 @@ ${conversationText}`;
 
     logger.info(
       `📝 Sending TTS request for ${conversationText.length} characters`
+    );
+    logger.info(`📝 Conversation text: "${conversationText}"`);
+    logger.info(
+      `📊 Text analysis: ${conversationText.length} total chars, ${
+        conversationText.replace(/\s/g, "").length
+      } letters, ${conversationText.split(/\s+/).length} words`
     );
 
     const response = await genAI.models.generateContent({
@@ -267,6 +283,7 @@ ${conversationText}`;
         hasCandidates: !!response.candidates,
         candidatesLength: response.candidates?.length,
         firstCandidate: response.candidates?.[0],
+        finishReason: response.candidates?.[0]?.finishReason,
         hasContent: !!response.candidates?.[0]?.content,
         content: response.candidates?.[0]?.content,
         hasParts: !!response.candidates?.[0]?.content?.parts,
@@ -334,7 +351,8 @@ ${conversationText}`;
       apiCallsUsed: 1,
     };
   } catch (error) {
-    logger.error("❌ Audio generation failed:", error.message);
+    logger.error("❌ Audio generation failed:", error.message || error);
+    logger.error("Full error details:", JSON.stringify(error, null, 2));
     throw error;
   }
 };

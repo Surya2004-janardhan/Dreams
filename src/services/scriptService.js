@@ -21,7 +21,7 @@ Style Requirements:
 - Rani asks short, natural questions with Indian English fillers
 - Raj explains in detail but conversationally, using Indian English phrases
 - Keep it flowing naturally like a real discussion, not structured Q&A
-- Make explanations comprehensive but concise to fit 70 seconds with 110-120 words strcitly
+- Make explanations comprehensive but concise to fit 70 seconds with 120-130 words strictly
 - Include 2-3 exchanges maximum to stay within time limit
 
 Format naturally like this:
@@ -32,7 +32,14 @@ Raj: No yaar, let me explain properly. You know...
 
 Topic: ${topic}
 
-IMPORTANT: Keep total content short enough to be spoken in exactly 70 seconds. Focus on key points with natural Indian English expressions.`;
+CRITICAL REQUIREMENTS:
+- Total word count MUST be between 120-130 words exactly
+- Count every word including "yaar", "actually", etc.
+- Do not exceed 130 words or go below 120 words
+- Focus on key technical points while staying conversational
+- Ensure the conversation feels natural and educational
+
+IMPORTANT: Keep total content short enough to be spoken in exactly 120-130 words strictly 70 seconds. Focus on key points with natural Indian English expressions.`;
 
   try {
     const response = await axios.post(
@@ -62,7 +69,22 @@ IMPORTANT: Keep total content short enough to be spoken in exactly 70 seconds. F
     );
 
     logger.info("✓ Multi-speaker Q&A script generated via Groq API");
-    return response.data.choices[0].message.content;
+    let script = response.data.choices[0].message.content;
+
+    // Count words and ensure it's within range
+    const wordCount = script
+      .split(/\s+/)
+      .filter((word) => word.length > 0).length;
+    logger.info(`📊 Generated script word count: ${wordCount}`);
+
+    if (wordCount < 120 || wordCount > 130) {
+      logger.warn(
+        `⚠️ Script word count ${wordCount} is outside 120-130 range, regenerating...`
+      );
+      // Could add regeneration logic here if needed
+    }
+
+    return script;
   } catch (error) {
     logger.error(
       "Script generation error:",

@@ -8,7 +8,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 // Initialize Google GenAI client with main API key
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
 });
 
 /**
@@ -89,7 +89,7 @@ const validateSRTFormat = (srtContent) => {
  */
 const generateSubtitlesFromAudio = async (audioFilePath) => {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GEMINI_API_KEY_FOR_IMAGES) {
       throw new Error(
         "GEMINI_API_KEY environment variable is required for subtitle generation"
       );
@@ -97,7 +97,7 @@ const generateSubtitlesFromAudio = async (audioFilePath) => {
 
     const ai = new GoogleGenAI({
       apiKey:
-        process.env.GEMINI_API_KEY_FOR_AUDIO || process.env.GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
     });
 
     // Convert path to use forward slashes for cross-platform compatibility
@@ -302,7 +302,7 @@ IMPORTANT:
             );
             console.log(
               `🔄 Using API key: ${
-                process.env.GEMINI_API_KEY_FOR_AUDIO ? "AUDIO_KEY" : "MAIN_KEY"
+                process.env.GEMINI_API_KEY_FOR_IMAGES ? "AUDIO_KEY" : "MAIN_KEY"
               }`
             );
             await new Promise((resolve) => setTimeout(resolve, backoffDelay));

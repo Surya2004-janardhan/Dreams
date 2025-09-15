@@ -11,7 +11,7 @@ const generateImageWithGemini = async (prompt, index) => {
     logger.info(`🎨 Generating image ${index} with Gemini...`);
 
     const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
+      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
     });
 
     const response = await ai.models.generateContent({
