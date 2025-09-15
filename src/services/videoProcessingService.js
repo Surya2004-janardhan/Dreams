@@ -237,7 +237,6 @@ const composeVideo = async (
         outputOptions.push("-map", "1:a");
         outputOptions.push("-c:a", "aac");
         outputOptions.push("-b:a", "192k");
-        outputOptions.push("-af", "volume=10.0");
       } else {
         // Use audio from base video if no separate audio provided
         outputOptions.push("-map", "0:a");

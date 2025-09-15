@@ -168,6 +168,8 @@ const generateTTSAudio = async (text, voiceName = "Kore") => {
               voiceName: voiceName,
             },
           },
+          // Add slower speech rate for more natural pacing
+          speakingRate: 0.85, // 15% slower than default
         },
       },
     });
@@ -250,6 +252,8 @@ ${conversationText}`;
               },
             ],
           },
+          // Add slower speech rate for more natural pacing
+          speakingRate: 0.85, // 15% slower than default
         },
       },
     });
@@ -314,7 +318,7 @@ ${conversationText}`;
     );
 
     // Since we're doing a single API call, create a single segment
-    const estimatedDuration = 70; // Based on script design for 70 seconds
+    const estimatedDuration = 70 * (1 / 0.85); // Adjust for 15% slower speech rate (70 / 0.85 ≈ 82.35 seconds)
     audioSegments.push({
       file: actualFile,
       duration: estimatedDuration,

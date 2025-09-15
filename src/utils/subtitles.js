@@ -223,7 +223,9 @@ const generateSubtitlesFromAudio = async (audioFilePath) => {
 
 CRITICAL REQUIREMENTS:
 - Audio duration detected: ${audioDuration.toFixed(2)} seconds
-- Make sure each subtitle is exactly between 3-4 words 
+- IMPORTANT: This audio was generated with optimized pacing (15% slower speaking rate) for natural delivery
+- The audio timing is already optimized - create subtitles that naturally match this pacing
+- Make sure each subtitle is exactly between 3-4 words for optimal readability
 - This is an educational conversation between Raj (male expert) and Rani (female questioner)
 - Analyze the ENTIRE audio file and distribute timestamps proportionally across ${audioDuration.toFixed(
                     2
@@ -240,17 +242,19 @@ CRITICAL REQUIREMENTS:
                     2
                   )} second duration
 
+TIMING: The audio is already paced naturally - create subtitle segments that flow naturally with the conversation rhythm.
+
 FORMAT EXAMPLE:
 1
-00:00:00,000 --> 00:00:03,500
+00:00:00,000 --> 00:00:04,200
 Rani: Hey Raj, can you tell me about this topic...
 
 2
-00:00:03,500 --> 00:00:08,200
+00:00:04,200 --> 00:00:09,800
 Raj: Yaar, that's actually quite interesting. See, basically...
 
 3
-00:00:08,200 --> 00:00:12,800
+00:00:09,800 --> 00:00:15,400
 Rani: Oh really? But how does it work exactly...
 
 IMPORTANT:
