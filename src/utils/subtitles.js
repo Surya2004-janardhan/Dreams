@@ -223,7 +223,6 @@ const generateSubtitlesFromAudio = async (audioFilePath) => {
 
 CRITICAL REQUIREMENTS:
 - Audio duration detected: ${audioDuration.toFixed(2)} seconds
-- IMPORTANT: This audio was generated with optimized pacing (15% slower speaking rate) for natural delivery
 - The audio timing is already optimized - create subtitles that naturally match this pacing
 - Make sure each subtitle is exactly between 3-4 words for optimal readability
 - This is an educational conversation between Raj (male expert) and Rani (female questioner)
@@ -236,7 +235,6 @@ CRITICAL REQUIREMENTS:
                     .toFixed(3)
                     .replace(".", ",")
                     .padEnd(6, "0")}
-- Speaker identification: "Raj:" or "Rani:" at the start of each line
 - Capture authentic Indian English expressions and natural speech patterns
 - Ensure timestamps NEVER overlap and cover the entire ${audioDuration.toFixed(
                     2
@@ -247,15 +245,15 @@ TIMING: The audio is already paced naturally - create subtitle segments that flo
 FORMAT EXAMPLE:
 1
 00:00:00,000 --> 00:00:04,200
-Rani: Hey Raj, can you tell me about this topic...
+Hey Raj, can you tell me about this topic...
 
 2
 00:00:04,200 --> 00:00:09,800
-Raj: Yaar, that's actually quite interesting. See, basically...
+Yaar, that's actually quite interesting. See, basically...
 
 3
 00:00:09,800 --> 00:00:15,400
-Rani: Oh really? But how does it work exactly...
+Oh really? But how does it work exactly...
 
 IMPORTANT:
 - Distribute timestamps evenly across the entire ${audioDuration.toFixed(

@@ -366,33 +366,33 @@ const parseScriptDialogues = (script) => {
 };
 
 // Combine multiple audio segments
-const combineAudioSegments = async (segments, outputFile) => {
-  return new Promise((resolve, reject) => {
-    let ffmpegCommand = require("fluent-ffmpeg")();
+// const combineAudioSegments = async (segments, outputFile) => {
+//   return new Promise((resolve, reject) => {
+//     let ffmpegCommand = require("fluent-ffmpeg")();
 
-    segments.forEach((segment) => {
-      ffmpegCommand = ffmpegCommand.input(segment.file);
-    });
+//     segments.forEach((segment) => {
+//       ffmpegCommand = ffmpegCommand.input(segment.file);
+//     });
 
-    const inputs = segments.map((_, index) => `[${index}:0]`).join("");
-    const filterComplex = `${inputs}concat=n=${segments.length}:v=0:a=1[out]`;
+//     const inputs = segments.map((_, index) => `[${index}:0]`).join("");
+//     const filterComplex = `${inputs}concat=n=${segments.length}:v=0:a=1[out]`;
 
-    ffmpegCommand
-      .complexFilter(filterComplex)
-      .outputOptions(["-map", "[out]"])
-      .audioCodec("pcm_s16le")
-      .output(outputFile)
-      .on("end", () => {
-        logger.info(`✓ Audio segments combined: ${outputFile}`);
-        resolve(outputFile);
-      })
-      .on("error", (error) => {
-        logger.error("Audio combination error:", error);
-        reject(error);
-      })
-      .run();
-  });
-};
+//     ffmpegCommand
+//       .complexFilter(filterComplex)
+//       .outputOptions(["-map", "[out]"])
+//       .audioCodec("pcm_s16le")
+//       .output(outputFile)
+//       .on("end", () => {
+//         logger.info(`✓ Audio segments combined: ${outputFile}`);
+//         resolve(outputFile);
+//       })
+//       .on("error", (error) => {
+//         logger.error("Audio combination error:", error);
+//         reject(error);
+//       })
+//       .run();
+//   });
+// };
 
 module.exports = {
   generateAudioWithBatchingStrategy,

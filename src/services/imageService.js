@@ -11,7 +11,7 @@ const generateImageWithGemini = async (prompt, index) => {
     logger.info(`🎨 Generating image ${index} with Gemini...`);
 
     const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
+      apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
     });
 
     const response = await ai.models.generateContent({
@@ -26,9 +26,7 @@ const generateImageWithGemini = async (prompt, index) => {
         const imageData = part.inlineData.data;
         const buffer = Buffer.from(imageData, "base64");
 
-        const imagePath = path.resolve(
-          `images/gemini_image_${index}_${Date.now()}.png`
-        );
+        const imagePath = path.resolve(`images/image${index}.png`);
         fs.writeFileSync(imagePath, buffer);
 
         logger.info(`✅ Image ${index} saved: ${imagePath}`);
@@ -38,13 +36,15 @@ const generateImageWithGemini = async (prompt, index) => {
 
     throw new Error("No image data received from Gemini");
   } catch (error) {
-    logger.error(`❌ Failed to generate image ${index}:`, error.message);
+    logger.error(
+      `❌ Failed to generate image ${index}:`,
+      error.message || error
+    );
+    logger.error(`Full error details:`, JSON.stringify(error, null, 2));
 
     // Create a simple fallback image
     try {
-      const imagePath = path.resolve(
-        `images/fallback_image_${index}_${Date.now()}.png`
-      );
+      const imagePath = path.resolve(`images/fallback_image_${index}.png`);
       // Create a minimal 1x1 pixel PNG as fallback
       const minimalPNG = Buffer.from([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,

@@ -21,8 +21,7 @@ Style Requirements:
 - Rani asks short, natural questions with Indian English fillers
 - Raj explains in detail but conversationally, using Indian English phrases
 - Keep it flowing naturally like a real discussion, not structured Q&A
-- Total speaking time: EXACTLY 70 seconds when spoken at normal pace
-- Make explanations comprehensive but concise to fit 70 seconds
+- Make explanations comprehensive but concise to fit 70 seconds with 110-120 words strcitly
 - Include 2-3 exchanges maximum to stay within time limit
 
 Format naturally like this:
