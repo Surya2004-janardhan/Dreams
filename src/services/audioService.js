@@ -352,7 +352,10 @@ ${conversationText}`;
     };
   } catch (error) {
     logger.error("❌ Audio generation failed:", error.message || error);
-    logger.error("Full error details:", JSON.stringify(error, null, 2));
+    logger.error(
+      "Full error details:",
+      JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+    );
     throw error;
   }
 };

@@ -77,11 +77,63 @@ IMPORTANT: Keep total content short enough to be spoken in exactly 120-130 words
       .filter((word) => word.length > 0).length;
     logger.info(`📊 Generated script word count: ${wordCount}`);
 
-    if (wordCount < 120 || wordCount > 130) {
+    // Retry up to 3 times if word count is not in range
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while ((wordCount < 120 || wordCount > 130) && retryCount < maxRetries) {
+      retryCount++;
       logger.warn(
-        `⚠️ Script word count ${wordCount} is outside 120-130 range, regenerating...`
+        `⚠️ Script word count ${wordCount} is outside 120-130 range, regenerating... (attempt ${retryCount}/${maxRetries})`
       );
-      // Could add regeneration logic here if needed
+
+      const retryResponse = await axios.post(
+        GROQ_API_URL,
+        {
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert educational content creator who specializes in creating natural, engaging conversations in pure Indian English between Rani (curious female questioner) and Raj (knowledgeable male expert). Use authentic Indian English expressions like 'yaar', 'actually', 'you know', 'see', 'basically', 'right?', 'no yaar', 'tell me na'. Make it sound like real people talking casually, not formal or robotic. Keep total speaking time to exactly 70 seconds.",
+            },
+            {
+              role: "user",
+              content: `The previous script had ${wordCount} words, which is not between 120-130 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 120-130 words.
+
+Original topic: ${topic}
+Original description: ${description}
+
+CRITICAL: Count every single word and ensure total is 120-130 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.`,
+            },
+          ],
+          temperature: 0.8,
+          max_tokens: 2500,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+        }
+      );
+
+      script = retryResponse.data.choices[0].message.content;
+      const newWordCount = script
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length;
+      logger.info(`📊 Retry ${retryCount} word count: ${newWordCount}`);
+
+      if (newWordCount >= 120 && newWordCount <= 130) {
+        logger.info(`✅ Word count now within range: ${newWordCount} words`);
+        break;
+      }
+    }
+
+    if (retryCount >= maxRetries) {
+      logger.warn(
+        `⚠️ Could not achieve target word count after ${maxRetries} retries. Final count: ${wordCount}`
+      );
     }
 
     return script;
