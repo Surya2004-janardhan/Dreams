@@ -1,46 +1,90 @@
-const { GoogleGenAI } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
 
 /**
- * Generate image using Gemini API
+ * Generate image using DeepAI API
  */
 const generateImageWithGemini = async (prompt, index) => {
   try {
-    logger.info(`🎨 Generating image ${index} with Gemini...`);
+    logger.info(`🎨 Generating image ${index} with Freepik...`);
 
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
+    const response = await fetch("https://api.freepik.com/v1/ai/mystic", {
+      method: "POST",
+      headers: {
+        "x-freepik-api-key": process.env.FREEPIK_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: prompt,
+        resolution: "1k",
+        aspect_ratio: "square_1_1",
+        model: "realism",
+        filter_nsfw: true,
+      }),
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-image-preview",
-      contents: prompt,
-    });
+    const data = await response.json();
 
-    for (const part of response.candidates[0].content.parts) {
-      if (part.text) {
-        logger.info(`Gemini response text: ${part.text}`);
-      } else if (part.inlineData) {
-        const imageData = part.inlineData.data;
-        const buffer = Buffer.from(imageData, "base64");
+    if (data && data.task_id) {
+      const taskId = data.task_id;
+
+      // Poll for the result
+      let result = null;
+      const maxPolls = 30; // 30 seconds
+      for (let i = 0; i < maxPolls; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        const getResponse = await fetch(
+          `https://api.freepik.com/v1/ai/mystic/${taskId}`,
+          {
+            method: "GET",
+            headers: {
+              "x-freepik-api-key": process.env.FREEPIK_API_KEY,
+            },
+          }
+        );
+
+        result = await getResponse.json();
+
+        if (
+          result &&
+          result.status === "COMPLETED" &&
+          result.images &&
+          result.images.length > 0
+        ) {
+          break;
+        }
+      }
+
+      if (result && result.images && result.images.length > 0) {
+        const imageUrl = result.images[0].url;
+        const imageResponse = await fetch(imageUrl);
+        const buffer = await imageResponse.buffer();
 
         const imagePath = path.resolve(`images/image${index}.png`);
         fs.writeFileSync(imagePath, buffer);
 
         logger.info(`✅ Image ${index} saved: ${imagePath}`);
         return imagePath;
+      } else {
+        throw new Error(`Failed to generate image: ${JSON.stringify(result)}`);
       }
+    } else {
+      throw new Error(`Failed to create task: ${JSON.stringify(data)}`);
     }
-
-    throw new Error("No image data received from Gemini");
   } catch (error) {
     logger.error(
       `❌ Failed to generate image ${index}:`,
       error.message || error
     );
     logger.error(`Full error details:`, JSON.stringify(error, null, 2));
+
+    console.error(
+      `❌ Failed to generate image ${index}:`,
+      error.message || error
+    );
+    console.error(`Full error details:`, JSON.stringify(error, null, 2));
 
     // Create a simple fallback image
     try {
@@ -447,4 +491,5 @@ module.exports = {
   generateImages,
   parseSRTFile,
   createImageChunksFromSubtitles,
+  generateImageWithGemini,
 };
