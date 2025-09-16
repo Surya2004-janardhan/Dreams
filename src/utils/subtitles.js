@@ -1,4 +1,4 @@
-const { GoogleGenAI } = require("@google/genai");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
 const ffmpegPath = require("ffmpeg-static");
@@ -6,10 +6,8 @@ const ffmpeg = require("fluent-ffmpeg");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Initialize Google GenAI client with main API key
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
-});
+// AssemblyAI API configuration
+const API_TOKEN = process.env.ASSEMBLYAI_API_KEY;
 
 /**
  * Get audio duration using ffmpeg
@@ -85,258 +83,31 @@ const validateSRTFormat = (srtContent) => {
 };
 
 /**
- * Generate subtitles from audio file using Gemini AI
+ * Generate subtitles from audio file using AssemblyAI
  */
 const generateSubtitlesFromAudio = async (audioFilePath) => {
   try {
-    if (!process.env.GEMINI_API_KEY_FOR_IMAGES) {
-      throw new Error(
-        "GEMINI_API_KEY environment variable is required for subtitle generation"
-      );
-    }
-
-    const ai = new GoogleGenAI({
-      apiKey:
-        process.env.GEMINI_API_KEY_FOR_IMAGES || process.env.GEMINI_API_KEY,
-    });
-
-    // Convert path to use forward slashes for cross-platform compatibility
-    const normalizedPath = audioFilePath.replace(/\\/g, "/");
-    console.log(`📤 Processing audio file: ${normalizedPath}`);
+    console.log(`📤 Processing audio file: ${audioFilePath}`);
 
     // Ensure the file exists
     if (!fs.existsSync(audioFilePath)) {
       throw new Error(`Audio file not found: ${audioFilePath}`);
     }
 
-    // Get file stats to verify it's readable
-    const stats = fs.statSync(audioFilePath);
-    console.log(`📊 Audio file size: ${stats.size} bytes`);
-
-    // Validate audio file before processing
-    try {
-      const audioBuffer = fs.readFileSync(audioFilePath);
-      if (audioBuffer.length < 100) {
-        throw new Error("Audio file is too small or corrupted");
-      }
-      console.log("✅ Audio file validation passed");
-    } catch (validationError) {
-      throw new Error(
-        `Audio file validation failed: ${validationError.message}`
-      );
+    // Upload the file
+    const uploadUrl = await upload_file(API_TOKEN, audioFilePath);
+    if (!uploadUrl) {
+      throw new Error("Upload failed");
     }
 
-    // Try alternative upload method with better error handling
-    let myfile;
-    let uploadAttempts = 0;
-    const maxAttempts = 3;
+    // Transcribe the audio
+    const transcript = await transcribeAudio(API_TOKEN, uploadUrl);
 
-    while (uploadAttempts < maxAttempts) {
-      try {
-        uploadAttempts++;
-        console.log(`📤 Upload attempt ${uploadAttempts}/${maxAttempts}`);
+    // Export subtitles in SRT format
+    const subtitles = await exportSubtitles(API_TOKEN, transcript.id, "srt");
 
-        myfile = await ai.files.upload({
-          file: normalizedPath,
-          config: {
-            mimeType:
-              path.extname(audioFilePath).toLowerCase() === ".wav"
-                ? "audio/wav"
-                : path.extname(audioFilePath).toLowerCase() === ".mp3"
-                ? "audio/mpeg"
-                : "audio/raw",
-          },
-        });
-
-        console.log(`✅ Audio file uploaded successfully: ${myfile.uri}`);
-        break; // Success, exit the loop
-      } catch (uploadError) {
-        console.error(
-          `❌ Upload attempt ${uploadAttempts} failed:`,
-          uploadError.message
-        );
-
-        if (uploadAttempts >= maxAttempts) {
-          throw new Error(
-            `File upload failed after ${maxAttempts} attempts: ${uploadError.message}`
-          );
-        }
-
-        // Wait before retrying
-        console.log("⏳ Waiting before retry...");
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    }
-
-    // Wait for file processing with longer delay
-    console.log("⏳ Waiting for file processing...");
-    await new Promise((resolve) => setTimeout(resolve, 8000)); // Increased to 8 seconds
-
-    // Verify file is ready
-    try {
-      const fileInfo = await ai.files.get(myfile.name);
-      if (fileInfo.state !== "ACTIVE") {
-        throw new Error(`File is not ready. State: ${fileInfo.state}`);
-      }
-      console.log("✅ File is ready for processing");
-    } catch (verifyError) {
-      console.warn("⚠️ Could not verify file state:", verifyError.message);
-    }
-
-    // Get audio duration for accurate timing
-    let audioDuration = 70; // Default fallback
-    try {
-      audioDuration = await getAudioDuration(audioFilePath);
-      console.log(
-        `📊 Audio duration detected: ${audioDuration.toFixed(2)} seconds`
-      );
-    } catch (durationError) {
-      console.warn(
-        "⚠️ Could not detect audio duration, using default:",
-        durationError.message
-      );
-    }
-
-    // Generate transcription with retry logic for API overload
-    let transcription = null;
-    const maxRetries = 5;
-    const retryDelay = 10000; // 10 seconds
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🎯 Transcription attempt ${attempt}/${maxRetries}`);
-
-        const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash", // Try a more stable model
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  fileData: {
-                    fileUri: myfile.uri,
-                    mimeType: myfile.mimeType,
-                  },
-                },
-                {
-                  text: `Transcribe this audio conversation between Raj and Rani with PRECISE timestamps that match the actual audio duration and pacing. Format as SRT subtitles with exact timing for each spoken segment.
-
-CRITICAL REQUIREMENTS:
-- Audio duration detected: ${audioDuration.toFixed(2)} seconds
-- The audio timing is already optimized - create subtitles that naturally match this pacing
-- Make sure each subtitle is exactly between 3-4 words for optimal readability
-- This is an educational conversation between Raj (male expert) and Rani (female questioner)
-- Analyze the ENTIRE audio file and distribute timestamps proportionally across ${audioDuration.toFixed(
-                    2
-                  )} seconds
-- Start from 00:00:00,000 and end at ${Math.floor(audioDuration / 60)
-                    .toString()
-                    .padStart(2, "0")}:${(audioDuration % 60)
-                    .toFixed(3)
-                    .replace(".", ",")
-                    .padEnd(6, "0")}
-- Capture authentic Indian English expressions and natural speech patterns
-- Ensure timestamps NEVER overlap and cover the entire ${audioDuration.toFixed(
-                    2
-                  )} second duration
-
-TIMING: The audio is already paced naturally - create subtitle segments that flow naturally with the conversation rhythm.
-
-FORMAT EXAMPLE:
-1
-00:00:00,000 --> 00:00:04,200
-Hey Raj, can you tell me about this topic...
-
-2
-00:00:04,200 --> 00:00:09,800
-Yaar, that's actually quite interesting. See, basically...
-
-3
-00:00:09,800 --> 00:00:15,400
-Oh really? But how does it work exactly...
-
-IMPORTANT:
-- Distribute timestamps evenly across the entire ${audioDuration.toFixed(
-                    2
-                  )} second audio
-- Make sure the last timestamp reaches the end of the audio
-- Focus on technical terms and key educational concepts`,
-                },
-              ],
-            },
-          ],
-        });
-
-        transcription = response.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (transcription) {
-          console.log(`✅ Audio transcription completed on attempt ${attempt}`);
-          break; // Success, exit retry loop
-        } else {
-          // Log the full response for debugging
-          console.error(
-            `❌ Attempt ${attempt} - No transcription received. Full response:`,
-            JSON.stringify(response, null, 2)
-          );
-          throw new Error("No transcription received from Gemini");
-        }
-      } catch (transcriptionError) {
-        console.error(
-          `❌ Transcription attempt ${attempt} failed:`,
-          transcriptionError.message
-        );
-
-        // Check if it's a 503/unavailable error that we should retry
-        if (
-          transcriptionError.message.includes("503") ||
-          transcriptionError.message.includes("UNAVAILABLE") ||
-          transcriptionError.message.includes("overloaded")
-        ) {
-          if (attempt < maxRetries) {
-            // Exponential backoff for overloaded API (start at 10s, double each time)
-            const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
-            console.log(
-              `⏳ API overloaded (attempt ${attempt}/${maxRetries}), waiting ${
-                backoffDelay / 1000
-              }s before retry...`
-            );
-            console.log(
-              `🔄 Using API key: ${
-                process.env.GEMINI_API_KEY_FOR_IMAGES ? "AUDIO_KEY" : "MAIN_KEY"
-              }`
-            );
-            await new Promise((resolve) => setTimeout(resolve, backoffDelay));
-            continue; // Retry
-          } else {
-            console.log(
-              `❌ All ${maxRetries} attempts failed due to API overload`
-            );
-            console.log(
-              `💡 Suggestion: Try again later or use a different API key`
-            );
-          }
-        }
-
-        // For other errors or if we've exhausted retries, throw the error
-        throw transcriptionError;
-      }
-    }
-
-    if (!transcription) {
-      throw new Error("Failed to generate transcription after all retries");
-    }
-
-    // Validate SRT format
-    const srtValidation = validateSRTFormat(transcription);
-    if (!srtValidation.isValid) {
-      console.warn(
-        "⚠️ Generated subtitles may have format issues:",
-        srtValidation.errors
-      );
-      console.log("📄 Raw transcription:", transcription.substring(0, 500));
-    }
-
-    return transcription;
+    console.log("✅ Subtitles generated successfully");
+    return subtitles;
   } catch (error) {
     console.error("❌ Subtitle generation failed:", error.message);
     throw new Error(`Failed to generate subtitles: ${error.message}`);
@@ -394,10 +165,98 @@ const createSubtitlesFromAudio = async (audioFilePath, outputPath = null) => {
   }
 };
 
+// Function to upload a local file to the AssemblyAI API
+const upload_file = async (api_token, filePath) => {
+  const data = fs.readFileSync(filePath);
+  const url = "https://api.assemblyai.com/v2/upload";
+
+  try {
+    const response = await axios.post(url, data, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        Authorization: api_token,
+      },
+    });
+
+    if (response.status === 200) {
+      return response.data["upload_url"];
+    } else {
+      console.error(`Error: ${response.status} - ${response.statusText}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error: ${error}`);
+    return null;
+  }
+};
+
+// Async function that sends a request to the AssemblyAI transcription API and retrieves the transcript
+const transcribeAudio = async (api_token, audio_url) => {
+  const headers = {
+    authorization: api_token,
+    "content-type": "application/json",
+  };
+
+  // Send a POST request to the transcription API with the audio URL in the request body
+  const response = await axios.post(
+    "https://api.assemblyai.com/v2/transcript",
+    {
+      audio_url,
+      speaker_labels: true,
+    },
+    { headers }
+  );
+
+  // Retrieve the ID of the transcript from the response data
+  const transcriptId = response.data.id;
+
+  // Construct the polling endpoint URL using the transcript ID
+  const pollingEndpoint = `https://api.assemblyai.com/v2/transcript/${transcriptId}`;
+
+  // Poll the transcription API until the transcript is ready
+  while (true) {
+    // Send a GET request to the polling endpoint to retrieve the status of the transcript
+    const pollingResponse = await axios.get(pollingEndpoint, { headers });
+
+    // Retrieve the transcription result from the response data
+    const transcriptionResult = pollingResponse.data;
+
+    // If the transcription is complete, return the transcript object
+    if (transcriptionResult.status === "completed") {
+      return transcriptionResult;
+    }
+    // If the transcription has failed, throw an error with the error message
+    else if (transcriptionResult.status === "error") {
+      throw new Error(`Transcription failed: ${transcriptionResult.error}`);
+    }
+    // If the transcription is still in progress, wait for a few seconds before polling again
+    else {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+  }
+};
+
+// Async function to export subtitles in the specified format
+const exportSubtitles = async (api_token, transcriptId, format) => {
+  const exportUrl = `https://api.assemblyai.com/v2/transcript/${transcriptId}/${format}`;
+
+  const exportResponse = await axios.get(exportUrl, {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      Authorization: api_token,
+    },
+  });
+
+  return exportResponse.data;
+};
+
 module.exports = {
   generateSubtitlesFromAudio,
   saveSubtitlesToFile,
   createSubtitlesFromAudio,
   getAudioDuration,
   validateSRTFormat,
+  upload_file,
+  transcribeAudio,
+  exportSubtitles,
 };

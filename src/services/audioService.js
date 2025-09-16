@@ -5,7 +5,7 @@ const logger = require("../config/logger");
 
 // Initialize Google GenAI client
 const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
 });
 
 // Define audio directory
