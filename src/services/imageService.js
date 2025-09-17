@@ -1,78 +1,45 @@
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 /**
  * Generate image using DeepAI API
  */
 const generateImageWithGemini = async (prompt, index) => {
   try {
-    logger.info(`🎨 Generating image ${index} with Freepik...`);
+    logger.info(`🎨 Generating image ${index} with Gemini...`);
 
-    const response = await fetch("https://api.freepik.com/v1/ai/mystic", {
-      method: "POST",
-      headers: {
-        "x-freepik-api-key": process.env.FREEPIK_API_KEY,
-        "Content-Type": "application/json",
+    const genAI = new GoogleGenerativeAI({
+      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
+    });
+    // ;
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        responseModalities: ["Text", "Image"],
       },
-      body: JSON.stringify({
-        prompt: prompt,
-        resolution: "1k",
-        aspect_ratio: "square_1_1",
-        model: "realism",
-        filter_nsfw: true,
-      }),
     });
 
-    const data = await response.json();
+    const response = await model.generateContent(prompt);
 
-    if (data && data.task_id) {
-      const taskId = data.task_id;
-
-      // Poll for the result
-      let result = null;
-      const maxPolls = 30; // 30 seconds
-      for (let i = 0; i < maxPolls; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        const getResponse = await fetch(
-          `https://api.freepik.com/v1/ai/mystic/${taskId}`,
-          {
-            method: "GET",
-            headers: {
-              "x-freepik-api-key": process.env.FREEPIK_API_KEY,
-            },
-          }
-        );
-
-        result = await getResponse.json();
-
-        if (
-          result &&
-          result.status === "COMPLETED" &&
-          result.images &&
-          result.images.length > 0
-        ) {
-          break;
-        }
-      }
-
-      if (result && result.images && result.images.length > 0) {
-        const imageUrl = result.images[0].url;
-        const imageResponse = await fetch(imageUrl);
-        const buffer = await imageResponse.buffer();
+    for (const part of response.response.candidates[0].content.parts) {
+      if (part.text) {
+        console.log(part.text);
+      } else if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
 
         const imagePath = path.resolve(`images/image${index}.png`);
         fs.writeFileSync(imagePath, buffer);
 
         logger.info(`✅ Image ${index} saved: ${imagePath}`);
         return imagePath;
-      } else {
-        throw new Error(`Failed to generate image: ${JSON.stringify(result)}`);
       }
-    } else {
-      throw new Error(`Failed to create task: ${JSON.stringify(data)}`);
     }
+
+    throw new Error("No image data received");
   } catch (error) {
     logger.error(
       `❌ Failed to generate image ${index}:`,
@@ -465,7 +432,7 @@ The image should serve as a visual explanation of the core technical concepts fr
         logger.info(`✅ Image ${chunk.index} generated successfully`);
 
         // Small delay between generations to avoid rate limits
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 63000));
       } catch (imageError) {
         logger.error(
           `❌ Failed to generate image ${chunk.index}:`,
