@@ -87,6 +87,10 @@ const validateSRTFormat = (srtContent) => {
  */
 const generateSubtitlesFromAudio = async (audioFilePath) => {
   try {
+    if (!API_TOKEN) {
+      throw new Error("ASSEMBLYAI_API_KEY environment variable is required");
+    }
+
     console.log(`📤 Processing audio file: ${audioFilePath}`);
 
     // Ensure the file exists

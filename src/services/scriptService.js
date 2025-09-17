@@ -11,60 +11,52 @@ const generateScript = async (topic, description = "") => {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  //   const prompt = `Create a natural, engaging conversation in pure Indian English between Rani (curious female questioner) and Raj (knowledgeable male expert) about: ${topic}
 
-  // ${description ? `Context: ${description}` : ""}
+//   const prompt = `Write a natural conversation in pure Indian English between Rani (curious girl) and Raj (knowledgeable guy) about: ${topic}
 
-  // Style Requirements:
-  // - Pure Indian English with natural expressions like "yaar", "actually", "you know", "see", "basically", "right?", "no yaar", "tell me na"
-  // - Sound like real people talking casually, not formal or robotic
-  // - Rani asks short, natural questions with Indian English fillers
-  // - Raj explains in detail but conversationally, using Indian English phrases
-  // - Keep it flowing naturally like a real discussion, not structured Q&A
-  // - Make explanations comprehensive but concise to fit 70 seconds with 120-130 words strictly
-  // - Include 2-3 exchanges maximum to stay within time limit
+// ${description ? `Context: ${description}` : ""}
 
-  // Format naturally like this:
-  // Rani: Hey, can you tell me about [topic]? I've been wondering...
-  // Raj: Yaar, [topic] is actually quite interesting. See, basically...
-  // Rani: Oh really? But how does it work exactly?
-  // Raj: No yaar, let me explain properly. You know...
+// Tone & Style:
+// - Use casual Indian English with fillers like "yaar", "actually", "you know", "see", "basically", "right?", "no yaar", "tell me na"
+// - Conversation should sound natural, like two friends talking
+// - Rani asks short, curious questions with Indian English fillers
+// - Raj gives clear, detailed explanations but in a friendly conversational way
+// - Avoid robotic or formal tone; keep it flowing like real dialogue
+// - Maximum 2–3 exchanges to fit time
+// - Total must be 110–120 words (count every single word, including fillers)
 
-  // Topic: ${topic}
+// Format Example:
+// Rani: Hey, can you tell me about [topic]? I've been wondering...
+// Raj: Yaar, [topic] is actually quite interesting. See, basically...
+// Rani: Oh really? But how does it work exactly?
+// Raj: No yaar, let me explain properly. You know...
 
-  // CRITICAL REQUIREMENTS:
-  // - Total word count MUST be between 120-130 words exactly
-  // - Count every word including "yaar", "actually", etc.
-  // - Do not exceed 130 words or go below 120 words
-  // - Focus on key technical points while staying conversational
-  // - Ensure the conversation feels natural and educational
-
-  // IMPORTANT: Keep total content short enough to be spoken in exactly 120-130 words strictly 70 seconds. Focus on key points with natural Indian English expressions.`;
-
-  const prompt = `Write a natural conversation in pure Indian English between Rani (curious girl) and Raj (knowledgeable guy) about: ${topic}
+// CRITICAL RULES:
+// - Strictly 110–120 words only
+// - Must be short enough for ~70 seconds speech
+// - Cover the key technical points with clarity, not surface-level
+// - Keep it natural, engaging, and educational in tone`;
+const prompt = `Write a natural dialogue in Indian English between Rani (curious) and Raj (knowledgeable) on: ${topic}
 
 ${description ? `Context: ${description}` : ""}
 
-Tone & Style:
-- Use casual Indian English with fillers like "yaar", "actually", "you know", "see", "basically", "right?", "no yaar", "tell me na"
-- Conversation should sound natural, like two friends talking
-- Rani asks short, curious questions with Indian English fillers
-- Raj gives clear, detailed explanations but in a friendly conversational way
-- Avoid robotic or formal tone; keep it flowing like real dialogue
-- Maximum 2–3 exchanges to fit time
-- Total must be 110–120 words (count every single word, including fillers)
+Style:
+- Casual Indian English with fillers ("yaar", "actually", "see", "you know", "right?", "no yaar", "tell me na")
+- Rani asks short, curious questions
+- Raj explains clearly, friendly, not robotic
+- Keep it flowing like two friends chatting
+
+Rules:
+- 2–3 exchanges only
+- Length: strictly 110–120 words total
+- Must cover key technical points, not just surface talk
+- Should feel engaging, natural, and easy for ~70s speech
 
 Format Example:
-Rani: Hey, can you tell me about [topic]? I've been wondering...
-Raj: Yaar, [topic] is actually quite interesting. See, basically...
-Rani: Oh really? But how does it work exactly?
-Raj: No yaar, let me explain properly. You know...
+Rani: Yaar, can you tell me about [topic]?
+Raj: Actually, see... [explanation]`;
 
-CRITICAL RULES:
-- Strictly 110–120 words only
-- Must be short enough for ~70 seconds speech
-- Cover the key technical points with clarity, not surface-level
-- Keep it natural, engaging, and educational in tone`;
+
 
   try {
     const response = await axios.post(
@@ -82,7 +74,7 @@ CRITICAL RULES:
             content: prompt,
           },
         ],
-        temperature: 0.8,
+        temperature: 1.0,
         max_tokens: 2500,
       },
       {
