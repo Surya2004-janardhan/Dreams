@@ -57,6 +57,7 @@ const cleanupAllMediaFolders = async () => {
       temp: { success: true, filesDeleted: 0 },
       subtitles: { success: true, filesDeleted: 0 },
       videos: { success: true, filesDeleted: 0 },
+      scripts: { success: true, filesDeleted: 0 },
     };
 
     // Clean audio folder (remove all generated audio files)
@@ -70,6 +71,9 @@ const cleanupAllMediaFolders = async () => {
 
     // Clean subtitles folder (remove all subtitle files)
     cleanupResults.subtitles = await cleanDirectory("subtitles", []);
+
+    // Clean scripts folder (remove all generated script files)
+    cleanupResults.scripts = await cleanDirectory("scripts", []);
 
     // Clean videos folder but preserve base videos
     cleanupResults.videos = await cleanDirectory("videos", [
@@ -138,7 +142,7 @@ const cleanupOldFiles = async (dirPath, maxAgeInDays = 7) => {
  * Get folder sizes for monitoring
  */
 const getFolderSizes = async () => {
-  const folders = ["audio", "images", "videos", "temp", "subtitles"];
+  const folders = ["audio", "images", "videos", "temp", "subtitles", "scripts"];
   const sizes = {};
 
   for (const folder of folders) {
@@ -188,7 +192,14 @@ const ensureDirectoryExists = (dirPath) => {
  * Initialize all required directories
  */
 const initializeDirectories = () => {
-  const requiredDirs = ["audio", "images", "videos", "temp", "subtitles"];
+  const requiredDirs = [
+    "audio",
+    "images",
+    "videos",
+    "temp",
+    "subtitles",
+    "scripts",
+  ];
 
   requiredDirs.forEach((dir) => {
     ensureDirectoryExists(dir);

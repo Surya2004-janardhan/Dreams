@@ -113,7 +113,13 @@ const generateSubtitlesFromAudio = async (audioFilePath) => {
     console.log("✅ Subtitles generated successfully");
     return subtitles;
   } catch (error) {
-    console.error("❌ Subtitle generation failed:", error.message);
+    console.error("❌ Subtitle generation failed:", {
+      error: error.message,
+      stack: error.stack,
+      audioFile: audioFilePath,
+      apiResponse: error.response?.data,
+      timestamp: new Date().toISOString(),
+    });
     throw new Error(`Failed to generate subtitles: ${error.message}`);
   }
 };
@@ -148,12 +154,11 @@ const createSubtitlesFromAudio = async (audioFilePath, outputPath = null) => {
 
     // Determine output path if not provided
     if (!outputPath) {
-      const audioDir = path.dirname(audioFilePath);
       const audioName = path.basename(
         audioFilePath,
         path.extname(audioFilePath)
       );
-      outputPath = path.join(audioDir, `${audioName}.srt`);
+      outputPath = path.join("subtitles", `${audioName}.srt`);
     }
 
     // Save to file
@@ -164,7 +169,13 @@ const createSubtitlesFromAudio = async (audioFilePath, outputPath = null) => {
       content: subtitlesContent,
     };
   } catch (error) {
-    console.error("❌ Subtitle creation failed:", error.message);
+    console.error("❌ Subtitle creation failed:", {
+      error: error.message,
+      stack: error.stack,
+      audioFile: audioFilePath,
+      outputPath: outputPath,
+      timestamp: new Date().toISOString(),
+    });
     throw error;
   }
 };

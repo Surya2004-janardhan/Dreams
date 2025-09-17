@@ -35,7 +35,7 @@ const cleanupOnError = async () => {
   try {
     logger.info("🧹 Starting emergency cleanup due to error...");
 
-    const folders = ["audio", "images", "subtitles", "temp"];
+    const folders = ["audio", "images", "subtitles", "temp", "scripts"];
 
     for (const folder of folders) {
       if (fs.existsSync(folder)) {
@@ -108,51 +108,55 @@ const runCompleteWorkflow = async (taskData) => {
     logger.info(`🚀 Starting complete workflow for: ${taskData.idea}`);
 
     // Step 1: Generate script
-    logger.info("→ Step 1: Generating script");
+    logger.info("📝 Step 1: Generating script");
+    currentWorkflow.currentStep = "script/generate";
     const rawScript = await generateScript(taskData.idea, taskData.description);
     const script = cleanLLMData.extractConversation(rawScript);
     currentWorkflow.results.script = script;
-    logger.info("✓ Script generated");
+
+    // Save script to scripts folder
+    const scriptFileName = `script_${taskId}.txt`;
+    const scriptFilePath = path.join("scripts", scriptFileName);
+    fs.writeFileSync(scriptFilePath, script);
+    currentWorkflow.results.scriptFilePath = scriptFilePath;
+    logger.info(`✓ Script generated and saved`);
 
     // Step 2: Generate audio
-    logger.info("→ Step 2: Generating audio");
+    logger.info("🎵 Step 2: Generating audio");
     currentWorkflow.currentStep = "audio/generate";
     const audioFiles = await generateAudioWithBatchingStrategy(script);
     currentWorkflow.results.audioFiles = audioFiles;
     logger.info("✓ Audio generated");
 
     // Step 3: Generate subtitles
-    logger.info("→ Step 3: Generating subtitles");
+    logger.info("📝 Step 3: Generating subtitles");
     currentWorkflow.currentStep = "subtitles/generate";
-    const subtitlesPath = await createSubtitlesFromAudio(
+    const subtitlesResult = await createSubtitlesFromAudio(
       audioFiles.conversationFile
     );
+    const subtitlesPath = subtitlesResult.subtitlesPath;
     currentWorkflow.results.subtitles = subtitlesPath;
     logger.info("✓ Subtitles generated");
 
-    // Step 4: Get base video
-    logger.info("→ Step 4: Getting base video");
-    currentWorkflow.currentStep = "video/base";
-    const baseVideoPath = await getBaseVideo();
-    currentWorkflow.results.baseVideoPath = baseVideoPath;
-    logger.info("✓ Base video ready");
+    // Step 4: Generate image prompts
+    logger.info("🤖 Step 4: Generating image prompts");
+    currentWorkflow.currentStep = "images/prompts";
 
     // Step 5: Generate images
-    logger.info("→ Step 5: Generating images");
+    logger.info("🖼️ Step 5: Generating images");
     currentWorkflow.currentStep = "images/generate";
-    const images = await generateImages(subtitlesPath, script);
+    const images = await generateImages(subtitlesPath);
     currentWorkflow.results.images = images;
     logger.info(`✓ ${images.length} images generated`);
 
-    if (images.length === 0) {
-      throw new Error(
-        "No images were generated - cannot proceed with video composition"
-      );
-    }
+    // Step 6: Merge video
+    logger.info("🎬 Step 6: Merging video");
+    currentWorkflow.currentStep = "video/merge";
 
-    // Step 6: Compose final video
-    logger.info("→ Step 6: Composing final video");
-    currentWorkflow.currentStep = "video/compose";
+    // Get base video for merging
+    const baseVideoPath = await getBaseVideo();
+    currentWorkflow.results.baseVideoPath = baseVideoPath;
+
     const finalVideo = await composeVideo(
       baseVideoPath,
       audioFiles.conversationFile,
@@ -161,34 +165,84 @@ const runCompleteWorkflow = async (taskData) => {
       taskData.idea
     );
     currentWorkflow.results.finalVideo = finalVideo;
-    logger.info("✓ Final video composed");
+    logger.info("✓ Video merged successfully");
 
     // Step 7: Upload to platforms
-    logger.info("→ Step 7: Uploading to social media");
-    currentWorkflow.currentStep = "social/upload";
-    await uploadToBothPlatforms(finalVideo, taskData.idea, script);
-    logger.info("✓ Uploaded to social media");
+    logger.info("📤 Step 7: Uploading to platforms");
+    currentWorkflow.currentStep = "upload/platforms";
+    const uploadResult = await uploadToBothPlatforms(
+      finalVideo,
+      taskData.idea,
+      script
+    );
+    currentWorkflow.results.uploadResult = uploadResult;
 
-    // Step 8: Update Google Sheets
-    logger.info("→ Step 8: Updating Google Sheets");
+    // Check if upload was successful - if both fail, stop the workflow
+    if (!uploadResult.success) {
+      logger.error("❌ Upload to platforms failed:", uploadResult);
+      currentWorkflow.status = "failed";
+      currentWorkflow.error = "Upload to platforms failed";
+
+      // Emergency cleanup on upload failure
+      await cleanupOnError();
+
+      // Send error notification for upload failure
+      await sendErrorNotification(
+        taskData,
+        new Error("Upload to platforms failed"),
+        currentWorkflow.currentStep
+      );
+      throw new Error("Upload to platforms failed");
+    }
+
+    logger.info("✓ Uploaded to platforms");
+
+    // Step 8: Mark as posted and update sheets
+    logger.info("📊 Step 8: Updating status and sheets");
     currentWorkflow.currentStep = "sheets/update";
-    await updateSheetStatus(taskData.rowId, "Posted", finalVideo);
-    logger.info("✓ Google Sheets updated");
 
-    // Success notification
-    await sendSuccessNotification(taskData, finalVideo);
+    // Determine status based on upload success
+    const status = uploadResult.success ? "Posted" : "Upload Failed";
+    const youtubeUrl = uploadResult.youtubeUrl || "";
+    const instagramUrl = uploadResult.instagramUrl || "";
+
+    await updateSheetStatus(taskData.rowId, status, youtubeUrl, instagramUrl);
+    logger.info(`✓ Marked as "${status}" in sheets with links`);
+
+    // Step 9: Cleanup
+    logger.info("🧹 Step 9: Cleaning up temporary files");
+    await cleanupAllMediaFolders();
+    logger.info("✓ Cleanup completed");
+
+    // Step 10: Success notification (only if uploads succeeded)
+    if (uploadResult.success) {
+      logger.info("📧 Step 10: Sending success notification");
+      await sendSuccessNotification(taskData, finalVideo);
+      logger.info("✅ Success notification email sent");
+    } else {
+      logger.warn("⚠️ Skipping success notification due to upload failures");
+    }
+
     currentWorkflow.status = "completed";
     logger.info("🎉 Workflow completed successfully!");
   } catch (error) {
-    logger.error("❌ Workflow failed:", error);
+    logger.error("❌ Workflow failed:", {
+      error: error.message,
+      stack: error.stack,
+      currentStep: currentWorkflow.currentStep,
+      taskId: currentWorkflow.taskId,
+      taskIdea: taskData?.idea,
+      taskDescription: taskData?.description,
+      timestamp: new Date().toISOString(),
+    });
     currentWorkflow.status = "failed";
     currentWorkflow.error = error.message;
 
     // Emergency cleanup on error
     await cleanupOnError();
 
-    // Send error notification
-    await sendErrorNotification(taskData, error);
+    // Send error notification with current step information
+    await sendErrorNotification(taskData, error, currentWorkflow.currentStep);
     throw error;
   }
 };
@@ -197,6 +251,8 @@ const runCompleteWorkflow = async (taskData) => {
  * Main automated workflow - pulls from Google Sheets and processes with checkpoints
  */
 const runAutomatedWorkflow = async (req, res) => {
+  let taskData = null;
+
   try {
     logger.info("🚀 Starting automated content creation workflow...");
 
@@ -205,7 +261,7 @@ const runAutomatedWorkflow = async (req, res) => {
 
     // Get next task from Google Sheets
     logger.info("📋 Getting next task from Google Sheets");
-    const taskData = await getNextTask();
+    taskData = await getNextTask();
     logger.info(`📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`);
 
     // Send immediate response
@@ -220,14 +276,21 @@ const runAutomatedWorkflow = async (req, res) => {
     // Run the complete workflow
     await runCompleteWorkflow(taskData);
   } catch (error) {
-    logger.error("❌ Automated workflow failed:", error);
+    logger.error("❌ Automated workflow failed:", {
+      error: error.message,
+      stack: error.stack,
+      taskId: taskData?.taskId,
+      taskIdea: taskData?.idea,
+      taskDescription: taskData?.description,
+      timestamp: new Date().toISOString(),
+    });
 
     // Emergency cleanup on error
     await cleanupOnError();
 
     // Send error notification if we have task data
     if (taskData) {
-      await sendErrorNotification(taskData, error);
+      await sendErrorNotification(taskData, error, "automated-workflow");
     }
   }
 };
@@ -340,7 +403,7 @@ const runWorkflow = async (req, res) => {
         }`
       );
       currentWorkflow.currentStep = "images/generate";
-      images = await generateImages(script);
+      images = await generateImages(null, script);
     }
     currentWorkflow.results.images = images;
     logger.info(`✓ Images ready - ${images.length} images`);

@@ -4,11 +4,16 @@ const logger = require("../config/logger");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 
+// Groq API configuration
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
 /**
  */
 const generateImageWithGemini = async (prompt, index, apiKey) => {
   try {
     logger.info(`🎨 Generating image ${index} with Gemini...`);
+    logger.info(`🔑 Using API key ending with: ...${apiKey.slice(-10)}`);
+    logger.info(`📝 Prompt: ${prompt.substring(0, 100)}...`);
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
@@ -80,11 +85,15 @@ const generateImageWithGemini = async (prompt, index, apiKey) => {
 const parseSRTFile = (srtFilePath) => {
   try {
     const content = fs.readFileSync(srtFilePath, "utf8");
+    console.log("SRT Content:", content);
     const segments = [];
     const blocks = content.split("\n\n").filter((block) => block.trim());
+    console.log("Blocks found:", blocks.length);
 
-    blocks.forEach((block) => {
+    blocks.forEach((block, index) => {
+      console.log(`Block ${index}:`, block);
       const lines = block.split("\n").filter((line) => line.trim());
+      console.log(`Lines in block ${index}:`, lines.length, lines);
       if (lines.length >= 3) {
         // Skip the sequence number (first line)
         const timestampLine = lines[1];
@@ -94,6 +103,7 @@ const parseSRTFile = (srtFilePath) => {
         const timestampMatch = timestampLine.match(
           /(\d{2}):(\d{2}):(\d{2}),(\d{3}) --> (\d{2}):(\d{2}):(\d{2}),(\d{3})/
         );
+        console.log(`Timestamp match for block ${index}:`, timestampMatch);
         if (timestampMatch) {
           // Fix: Properly reconstruct the timestamp strings
           const startTimeStr = `${timestampMatch[1]}:${timestampMatch[2]}:${timestampMatch[3]},${timestampMatch[4]}`;
@@ -118,7 +128,7 @@ const parseSRTFile = (srtFilePath) => {
     return segments;
   } catch (error) {
     logger.error("❌ Failed to parse SRT file:", error.message);
-    return [];
+    throw new Error(`Failed to parse SRT file: ${error.message}`);
   }
 };
 
@@ -323,13 +333,12 @@ const extractTechnicalKeywords = (text) => {
 /**
  * Generate contextual educational images using subtitle timing and Groq prompts
  */
-const generateImages = async (subtitlesPath, fullScript = null) => {
+const generateImages = async (subtitlesPath, scriptContent = null) => {
   try {
     logger.info(
       "🖼️ Starting image generation using subtitle timing and Groq prompts..."
     );
     logger.info(`📝 Subtitles path: ${subtitlesPath}`);
-    logger.info(`📝 Script provided: ${!!fullScript}`);
 
     // Step 1: Parse SRT file or create default chunks
     let imageChunks;
@@ -367,22 +376,77 @@ const generateImages = async (subtitlesPath, fullScript = null) => {
       logger.info(`📊 Created ${imageChunks.length} default image chunks`);
     }
 
-    // Step 2: Generate image prompts using Groq if script is provided
+    // Step 2: Generate image prompts using Groq with subtitle content or script
     let imagePrompts;
-    if (fullScript) {
+    if (subtitlesPath) {
+      logger.info("🤖 Generating prompts using Groq with subtitle content...");
+
+      // Extract all subtitle text for prompt generation
+      let allSubtitleText = "";
+      try {
+        const subtitleSegments = parseSRTFile(subtitlesPath);
+        allSubtitleText = subtitleSegments.map((seg) => seg.text).join(" ");
+        logger.info(
+          `📝 Successfully parsed ${subtitleSegments.length} subtitle segments`
+        );
+      } catch (parseError) {
+        logger.warn(
+          "⚠️ SRT parsing failed, trying to read raw subtitle file content..."
+        );
+        // Fallback: try to read the raw subtitle file content
+        try {
+          allSubtitleText = fs.readFileSync(subtitlesPath, "utf8");
+          logger.info("📝 Using raw subtitle file content as fallback");
+        } catch (readError) {
+          logger.error("❌ Failed to read subtitle file:", readError.message);
+          throw new Error(`Cannot read subtitle content: ${readError.message}`);
+        }
+      }
+
       logger.info(
-        "📝 Generating prompts using Groq with full script content..."
+        `📝 Subtitle content length: ${allSubtitleText.length} characters`
       );
-      imagePrompts = await generateImagePromptsWithGroq(fullScript);
+
+      if (!allSubtitleText || allSubtitleText.trim().length === 0) {
+        throw new Error("No subtitle content found to generate prompts from");
+      }
+
+      imagePrompts = await generateImagePromptsWithGroq(allSubtitleText);
+
+      if (!imagePrompts || imagePrompts.length === 0) {
+        throw new Error(
+          "Failed to generate image prompts from subtitle content"
+        );
+      }
+
+      logger.info(
+        `✅ Generated ${imagePrompts.length} prompts from subtitles:`,
+        imagePrompts
+      );
+    } else if (scriptContent) {
+      logger.info("🤖 Generating prompts using Groq with script content...");
+      logger.info(
+        `📝 Script content length: ${scriptContent.length} characters`
+      );
+
+      if (!scriptContent || scriptContent.trim().length === 0) {
+        throw new Error("No script content provided to generate prompts from");
+      }
+
+      imagePrompts = await generateImagePromptsWithGroq(scriptContent);
+
+      if (!imagePrompts || imagePrompts.length === 0) {
+        throw new Error("Failed to generate image prompts from script content");
+      }
+
+      logger.info(
+        `✅ Generated ${imagePrompts.length} prompts from script:`,
+        imagePrompts
+      );
     } else {
-      logger.warn("⚠️ No script provided, using fallback prompts");
-      imagePrompts = [
-        "Create technical diagram of system architecture with white background in 9:8 aspect ratio",
-        "Illustrate algorithm flowchart for data processing workflow with white background in 9:8 aspect ratio",
-        "Show database schema relationships and connections diagram with white background in 9:8 aspect ratio",
-        "Display network topology and infrastructure visualization with white background in 9:8 aspect ratio",
-        "Present API integration and service communication flow with white background in 9:8 aspect ratio",
-      ];
+      throw new Error(
+        "No subtitle file or script content provided for image prompt generation"
+      );
     }
 
     const generatedImages = [];
@@ -393,7 +457,14 @@ const generateImages = async (subtitlesPath, fullScript = null) => {
       const chunk = imageChunks[i];
       try {
         // Use the corresponding Groq-generated prompt
-        const imagePrompt = imagePrompts[i] || imagePrompts[0]; // Fallback to first prompt if index out of range
+        if (i >= imagePrompts.length) {
+          throw new Error(
+            `No prompt available for chunk ${i + 1} - only ${
+              imagePrompts.length
+            } prompts generated`
+          );
+        }
+        const imagePrompt = imagePrompts[i];
 
         logger.info(
           `🎨 Generating image ${
@@ -479,15 +550,21 @@ const generateImages = async (subtitlesPath, fullScript = null) => {
 
     return generatedImages;
   } catch (error) {
-    logger.error("❌ Image generation failed:", error.message);
-    return [];
+    logger.error("❌ Image generation failed:", {
+      error: error.message,
+      stack: error.stack,
+      subtitlesPath: subtitlesPath,
+      contentLength: scriptContent ? scriptContent.length : 0,
+      timestamp: new Date().toISOString(),
+    });
+    throw new Error(`Image generation failed: ${error.message}`);
   }
 };
 
 /**
  * Generate 5 concise image prompts using Groq based on the full script
  */
-const generateImagePromptsWithGroq = async (fullScript) => {
+const generateImagePromptsWithGroq = async (content) => {
   try {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
@@ -496,25 +573,25 @@ const generateImagePromptsWithGroq = async (fullScript) => {
 
     logger.info("🤖 Generating image prompts using Groq...");
 
-    const prompt = `Analyze this educational conversation script and create 5 concise image prompts for technical diagrams:
+    const prompt = `Analyze this educational content and create 5 concise image prompts for technical diagrams:
 
-FULL SCRIPT:
-${fullScript}
+CONTENT:
+${content}
 
 REQUIREMENTS:
 - Create exactly 5 image prompts
 - Each prompt must be very concise (under 50 words)
-- Focus ONLY on technical terms and diagrammatic flow
+- Focus ONLY on technical terms and diagrammatic  mentioned in the content
 - Images must have white background
-- Images must be 9:8 aspect ratio
-- Show technical concepts, workflows, algorithms, or system architectures
+- STRCITLY **Images must be 9:8 aspect ratio**
+- Show technical TERMS or system architectures
 - Use clear, professional technical illustration style
-- Include specific technical terms from the conversation
+- Include specific technical terms from the content
 
 FORMAT: Return only a JSON array of 5 strings, no additional text.
 
 Example format:
-["Create a technical diagram showing API architecture with white background", "Illustrate database schema relationships in 9:8 ratio", "Show algorithm flowchart for data processing", "Display network topology diagram", "Present system workflow visualization"]`;
+["Create a technical diagram showing API architecture with white background", "Illustrate database schema relationships in 9:8 ratio","Present system  visualization"]`;
 
     const response = await axios.post(
       GROQ_API_URL,
@@ -542,38 +619,48 @@ Example format:
       }
     );
 
-    const content = response.data.choices[0].message.content.trim();
-    logger.info("📝 Groq generated prompts response:", content);
+    const responseContent = response.data.choices[0].message.content.trim();
+    logger.info("📝 Groq generated prompts response:", responseContent);
 
     // Parse the JSON response
     let prompts;
     try {
       // Remove any markdown formatting if present
-      const cleanContent = content.replace(/```json\s*|\s*```/g, "").trim();
+      const cleanContent = responseContent
+        .replace(/```json\s*|\s*```/g, "")
+        .trim();
       prompts = JSON.parse(cleanContent);
     } catch (parseError) {
-      logger.warn(
-        "⚠️ Failed to parse Groq response as JSON, using fallback prompts"
+      logger.error(
+        "❌ Failed to parse Groq response as JSON:",
+        parseError.message
       );
-      // Fallback prompts based on common technical topics
-      prompts = [
-        "Create technical diagram of system architecture with white background 9:8 ratio",
-        "Illustrate algorithm flowchart for data processing workflow",
-        "Show database schema relationships and connections diagram",
-        "Display network topology and infrastructure visualization",
-        "Present API integration and service communication flow",
-      ];
+      logger.error("Raw response content:", responseContent);
+      throw new Error(
+        `Failed to parse image prompts from Groq response: ${parseError.message}`
+      );
     }
 
     if (!Array.isArray(prompts) || prompts.length !== 5) {
-      logger.warn("⚠️ Invalid prompts format, using fallback");
-      prompts = [
-        "Create technical diagram of system architecture with white background 9:8 ratio",
-        "Illustrate algorithm flowchart for data processing workflow",
-        "Show database schema relationships and connections diagram",
-        "Display network topology and infrastructure visualization",
-        "Present API integration and service communication flow",
-      ];
+      logger.error(
+        "❌ Invalid prompts format - expected array of 5 strings, got:",
+        prompts
+      );
+      throw new Error(
+        `Invalid prompts format from Groq - expected 5 prompts, got ${
+          Array.isArray(prompts) ? prompts.length : "non-array"
+        }`
+      );
+    }
+
+    // Validate each prompt is a string
+    for (let i = 0; i < prompts.length; i++) {
+      if (typeof prompts[i] !== "string" || prompts[i].trim().length === 0) {
+        logger.error(`❌ Invalid prompt at index ${i}:`, prompts[i]);
+        throw new Error(
+          `Invalid prompt at index ${i} - must be non-empty string`
+        );
+      }
     }
 
     // Ensure all prompts include white background and 9:8 ratio
@@ -592,19 +679,16 @@ Example format:
     );
     return enhancedPrompts;
   } catch (error) {
-    logger.error("❌ Failed to generate prompts with Groq:", error.message);
-
-    // Fallback prompts
-    const fallbackPrompts = [
-      "Create technical diagram of system architecture with white background in 9:8 aspect ratio",
-      "Illustrate algorithm flowchart for data processing workflow with white background in 9:8 aspect ratio",
-      "Show database schema relationships and connections diagram with white background in 9:8 aspect ratio",
-      "Display network topology and infrastructure visualization with white background in 9:8 aspect ratio",
-      "Present API integration and service communication flow with white background in 9:8 aspect ratio",
-    ];
-
-    logger.info("🔄 Using fallback prompts due to Groq error");
-    return fallbackPrompts;
+    logger.error("❌ Failed to generate prompts with Groq:", {
+      error: error.message,
+      stack: error.stack,
+      apiResponse: error.response?.data,
+      contentLength: content?.length || 0,
+      timestamp: new Date().toISOString(),
+    });
+    throw new Error(
+      `Failed to generate image prompts with Groq: ${error.message}`
+    );
   }
 };
 
