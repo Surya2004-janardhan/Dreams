@@ -1,8 +1,8 @@
-const { getYouTubeClient } = require("../config/google");
 const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { google } = require("googleapis");
 
 /**
  * Generate hashtags and captions for social media
@@ -43,7 +43,7 @@ ${description}
 📚 Educational content in easy Q&A format
 🔔 Subscribe for more educational shorts!
 
-${allHashtags.join(" ")}`;
+${allHashtags.join(" ")}"`;
 
   const instagramCaption = `${title} ✨
 
@@ -75,34 +75,59 @@ ${allHashtags.join(" ")}`;
 const uploadToYouTube = async (videoPath, title, description) => {
   try {
     logger.info("📺 Starting YouTube upload...");
+    logger.info(`📹 Video path: ${videoPath}`);
+    logger.info(`📝 Title: ${title}`);
+
+    // Create OAuth2 client directly
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+
+    // Set refresh token for automatic token refresh
+    oauth2Client.setCredentials({
+      refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
+    });
+
+    // Create YouTube client
+    const youtube = google.youtube({
+      version: "v3",
+      auth: oauth2Client,
+    });
 
     const socialContent = generateSocialMediaContent(title, description);
-    const youtube = await getYouTubeClient();
 
-    const videoMetadata = {
-      snippet: {
-        title: socialContent.youtube.title,
-        description: socialContent.youtube.description,
-        tags: socialContent.youtube.tags,
-        categoryId: "27", // Education category
-        defaultLanguage: "en",
-        defaultAudioLanguage: "en-IN",
-      },
-      status: {
-        privacyStatus: "public",
-        selfDeclaredMadeForKids: false,
-      },
-    };
+    // Ensure #Shorts tag is included for proper short video recognition
+    const tags = [...socialContent.youtube.tags];
+    if (!tags.includes("Shorts")) {
+      tags.push("Shorts");
+    }
 
-    const media = {
-      mimeType: "video/mp4",
-      body: fs.createReadStream(videoPath),
-    };
+    // Add #Shorts to title if not present
+    let finalTitle = socialContent.youtube.title;
+    if (!finalTitle.includes("#Shorts")) {
+      finalTitle = `${finalTitle} #Shorts`;
+    }
+
+    logger.info(`🏷️ Final tags: ${tags.join(", ")}`);
+    logger.info(`📹 Final title: ${finalTitle}`);
 
     const response = await youtube.videos.insert({
-      part: ["snippet", "status"],
-      resource: videoMetadata,
-      media: media,
+      part: "snippet,status",
+      requestBody: {
+        snippet: {
+          title: finalTitle,
+          description: socialContent.youtube.description,
+          tags: tags,
+          categoryId: "27", // Education category
+        },
+        status: {
+          privacyStatus: "public",
+        },
+      },
+      media: {
+        body: fs.createReadStream(videoPath),
+      },
     });
 
     const videoId = response.data.id;
@@ -114,11 +139,14 @@ const uploadToYouTube = async (videoPath, title, description) => {
       success: true,
       url: videoUrl,
       videoId: videoId,
-      title: socialContent.youtube.title,
+      title: finalTitle,
       caption: socialContent.youtube.description,
     };
   } catch (error) {
-    logger.error("❌ YouTube upload failed:", error);
+    logger.error("❌ YouTube upload failed:", error.message);
+    if (error.response) {
+      logger.error("Response data:", error.response.data);
+    }
     return {
       success: false,
       error: error.message,
@@ -198,9 +226,22 @@ const uploadToBothPlatforms = async (videoPath, title, description) => {
       instagram: null,
     };
 
-    // Upload to YouTube
+    // Upload to YouTube (try OAuth2 first, then service account)
     try {
-      results.youtube = await uploadToYouTube(videoPath, title, description);
+      logger.info("🎯 Attempting YouTube OAuth2 upload first...");
+      results.youtube = await uploadToYouTubeOAuth2(
+        videoPath,
+        title,
+        description
+      );
+
+      // If OAuth2 fails, try service account as fallback
+      if (!results.youtube.success) {
+        logger.warn(
+          "⚠️ OAuth2 upload failed, trying service account fallback..."
+        );
+        results.youtube = await uploadToYouTube(videoPath, title, description);
+      }
     } catch (error) {
       logger.error("YouTube upload failed:", error);
       results.youtube = { success: false, error: error.message };
@@ -235,9 +276,100 @@ const uploadToBothPlatforms = async (videoPath, title, description) => {
   }
 };
 
+/**
+ * Upload video to YouTube using OAuth2 (reference implementation)
+ */
+const uploadToYouTubeOAuth2 = async (videoPath, title, description) => {
+  try {
+    logger.info("📺 Starting YouTube OAuth2 upload...");
+
+    // Check if required environment variables are set
+    if (
+      !process.env.GOOGLE_CLIENT_ID ||
+      !process.env.GOOGLE_CLIENT_SECRET ||
+      !process.env.GOOGLE_REDIRECT_URI ||
+      !process.env.YOUTUBE_REFRESH_TOKEN
+    ) {
+      throw new Error(
+        "Missing YouTube OAuth2 environment variables. Please set: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, YOUTUBE_REFRESH_TOKEN"
+      );
+    }
+
+    // Initialize OAuth2 client
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
+
+    // Set credentials with refresh token
+    oauth2Client.setCredentials({
+      refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
+    });
+
+    // Create YouTube API client
+    const youtube = google.youtube({
+      version: "v3",
+      auth: oauth2Client,
+    });
+
+    // Generate hashtags for the video
+    const hashtags =
+      "#Shorts #Education #Learning #Tech #AI #Automation #Tutorial #HowTo #Knowledge #Skills";
+
+    // Prepare video metadata
+    const videoMetadata = {
+      snippet: {
+        title: `${title} ${hashtags}`,
+        description: `${description}\n\n${hashtags}`,
+        categoryId: "27", // Education category
+        tags: hashtags.replace(/#/g, "").split(" "),
+      },
+      status: {
+        privacyStatus: "public",
+      },
+    };
+
+    logger.info(`📹 Uploading video: ${videoPath}`);
+    logger.info(`📝 Title: ${videoMetadata.snippet.title}`);
+
+    // Upload the video
+    const response = await youtube.videos.insert({
+      part: "snippet,status",
+      requestBody: videoMetadata,
+      media: {
+        body: fs.createReadStream(videoPath),
+      },
+    });
+
+    const videoId = response.data.id;
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    logger.info(`✅ YouTube OAuth2 upload successful: ${videoUrl}`);
+
+    return {
+      success: true,
+      url: videoUrl,
+      videoId: videoId,
+      title: videoMetadata.snippet.title,
+      description: videoMetadata.snippet.description,
+    };
+  } catch (error) {
+    logger.error("❌ YouTube OAuth2 upload failed:", error.message);
+    if (error.response) {
+      logger.error("API Response:", error.response.data);
+    }
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
   uploadToBothPlatforms,
   generateSocialMediaContent,
+  uploadToYouTubeOAuth2,
 };

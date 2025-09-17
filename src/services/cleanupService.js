@@ -82,6 +82,9 @@ const cleanupAllMediaFolders = async () => {
       "template",
     ]);
 
+    // Clean root directory but preserve final video copies
+    cleanupResults.root = await cleanupRootDirectory();
+
     const totalFilesDeleted = Object.values(cleanupResults).reduce(
       (total, result) => total + (result.filesDeleted || 0),
       0
@@ -208,6 +211,50 @@ const initializeDirectories = () => {
   logger.info("📁 All required directories initialized");
 };
 
+/**
+ * Clean up root directory while preserving final video copies
+ */
+const cleanupRootDirectory = async () => {
+  try {
+    logger.info("🧹 Cleaning root directory...");
+
+    if (!fs.existsSync(".")) {
+      return { success: true, filesDeleted: 0 };
+    }
+
+    const files = fs.readdirSync(".");
+    let deletedCount = 0;
+
+    for (const file of files) {
+      // Preserve final video copies
+      if (file.startsWith("final_video_") && file.endsWith(".mp4")) {
+        logger.info(`📁 Preserved root copy: ${file}`);
+        continue;
+      }
+
+      // Delete other video files in root (but not base videos)
+      if (
+        file.endsWith(".mp4") &&
+        !file.toLowerCase().includes("base") &&
+        !file.includes("final_video_")
+      ) {
+        try {
+          fs.unlinkSync(file);
+          deletedCount++;
+          logger.info(`🗑️ Deleted root file: ${file}`);
+        } catch (error) {
+          logger.error(`Failed to delete root file ${file}:`, error.message);
+        }
+      }
+    }
+
+    return { success: true, filesDeleted: deletedCount };
+  } catch (error) {
+    logger.error("Error cleaning root directory:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   cleanDirectory,
   cleanupAllMediaFolders,
@@ -215,4 +262,5 @@ module.exports = {
   getFolderSizes,
   ensureDirectoryExists,
   initializeDirectories,
+  cleanupRootDirectory,
 };

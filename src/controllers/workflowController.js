@@ -13,7 +13,13 @@ const {
   createSubtitlesFromAudio,
 } = require("../utils/subtitles");
 const { getNextTask, updateSheetStatus } = require("../services/sheetsService");
-const { uploadToBothPlatforms } = require("../services/socialMediaService");
+const {
+  uploadToYouTube,
+  uploadToInstagram,
+  uploadToBothPlatforms,
+  generateSocialMediaContent,
+  uploadToYouTubeOAuth2,
+} = require("../services/socialMediaService");
 const {
   sendSuccessNotification,
   sendErrorNotification,
@@ -21,6 +27,7 @@ const {
 const {
   cleanupAllMediaFolders,
   initializeDirectories,
+  cleanupRootDirectory,
 } = require("../services/cleanupService");
 const cleanLLMData = require("../utils/textCleaner");
 const logger = require("../config/logger");
@@ -73,6 +80,9 @@ const cleanupOnError = async () => {
         }
       }
     }
+
+    // Clean root directory but preserve final video copies
+    await cleanupRootDirectory();
 
     logger.info("✅ Emergency cleanup completed");
   } catch (error) {
@@ -164,14 +174,16 @@ const runCompleteWorkflow = async (taskData) => {
       subtitlesPath,
       taskData.idea
     );
-    currentWorkflow.results.finalVideo = finalVideo;
+    currentWorkflow.results.finalVideo = finalVideo.videoPath;
+    currentWorkflow.results.rootCopyPath = finalVideo.rootCopyPath;
     logger.info("✓ Video merged successfully");
+    logger.info(`📋 Root copy available at: ${finalVideo.rootCopyPath}`);
 
     // Step 7: Upload to platforms
     logger.info("📤 Step 7: Uploading to platforms");
     currentWorkflow.currentStep = "upload/platforms";
     const uploadResult = await uploadToBothPlatforms(
-      finalVideo,
+      finalVideo.videoPath,
       taskData.idea,
       script
     );
@@ -217,7 +229,7 @@ const runCompleteWorkflow = async (taskData) => {
     // Step 10: Success notification (only if uploads succeeded)
     if (uploadResult.success) {
       logger.info("📧 Step 10: Sending success notification");
-      await sendSuccessNotification(taskData, finalVideo);
+      await sendSuccessNotification(taskData, finalVideo.videoPath);
       logger.info("✅ Success notification email sent");
     } else {
       logger.warn("⚠️ Skipping success notification due to upload failures");
@@ -417,13 +429,15 @@ const runWorkflow = async (req, res) => {
       audioFiles,
       script
     );
-    currentWorkflow.results.finalVideo = finalVideo;
+    currentWorkflow.results.finalVideo = finalVideo.videoPath;
+    currentWorkflow.results.rootCopyPath = finalVideo.rootCopyPath;
     logger.info("✓ Video assembled");
+    logger.info(`📋 Root copy available at: ${finalVideo.rootCopyPath}`);
 
     // Complete workflow
     currentWorkflow.status = "completed";
     currentWorkflow.currentStep = "completed";
-    logger.info(`🎉 Workflow completed successfully: ${finalVideo}`);
+    logger.info(`🎉 Workflow completed successfully: ${finalVideo.videoPath}`);
 
     res.json({
       success: true,
@@ -433,7 +447,8 @@ const runWorkflow = async (req, res) => {
         audioGenerated: !!audioFiles.conversationFile,
         imagesCount: images.length,
         baseVideoFound: !!baseVideoPath,
-        finalVideo: finalVideo,
+        finalVideo: finalVideo.videoPath,
+        rootCopyPath: finalVideo.rootCopyPath,
       },
     });
   } catch (error) {
@@ -614,7 +629,20 @@ const assembleVideo = async (baseVideoPath, images, audioFiles, script) => {
       .output(outputPath)
       .on("end", () => {
         logger.info(`✓ Final video created: ${outputPath}`);
-        resolve(outputPath);
+
+        // Save a copy to root directory
+        const rootCopyPath = `final_video_${Date.now()}.mp4`;
+        try {
+          fs.copyFileSync(outputPath, rootCopyPath);
+          logger.info(`📋 Root copy saved: ${rootCopyPath}`);
+        } catch (copyError) {
+          logger.error(`❌ Failed to save root copy:`, copyError.message);
+        }
+
+        resolve({
+          videoPath: outputPath,
+          rootCopyPath: rootCopyPath,
+        });
       })
       .on("error", (error) => {
         logger.error("Video assembly error:", error);

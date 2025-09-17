@@ -57,6 +57,51 @@ const getYouTubeClient = async () => {
   return google.youtube({ version: "v3", auth: oauth2Client });
 };
 
+/**
+ * Get YouTube client with service account authentication (for server-side operations)
+ */
+const getYouTubeClientServiceAccount = async () => {
+  if (!process.env.GOOGLE_CREDENTIALS) {
+    throw new Error("GOOGLE_CREDENTIALS environment variable is not set");
+  }
+
+  let credentials;
+  try {
+    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  } catch (e) {
+    throw new Error("GOOGLE_CREDENTIALS is not valid JSON");
+  }
+
+  // Check if it's a service account (has private_key) or OAuth2 (has client_id)
+  if (credentials.private_key) {
+    // Service Account authentication
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/youtube.upload"],
+    });
+    return google.youtube({ version: "v3", auth });
+  } else if (credentials.client_id) {
+    // OAuth2 authentication
+    const oauth2Client = new google.auth.OAuth2(
+      credentials.client_id,
+      credentials.client_secret,
+      credentials.redirect_uris[0]
+    );
+
+    // Check if we have tokens
+    if (credentials.access_token) {
+      oauth2Client.setCredentials({
+        access_token: credentials.access_token,
+        refresh_token: credentials.refresh_token,
+      });
+    }
+
+    return google.youtube({ version: "v3", auth: oauth2Client });
+  } else {
+    throw new Error("Invalid Google credentials format");
+  }
+};
+
 // Google Drive API setup
 const getGoogleDriveClient = async () => {
   try {
@@ -91,4 +136,5 @@ module.exports = {
   getSheetsClient,
   getYouTubeClient,
   getGoogleDriveClient,
+  getYouTubeClientServiceAccount,
 };

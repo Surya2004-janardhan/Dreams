@@ -573,25 +573,22 @@ const generateImagePromptsWithGroq = async (content) => {
 
     logger.info("🤖 Generating image prompts using Groq...");
 
-    const prompt = `Analyze this educational content and create 5 concise image prompts for technical diagrams:
+    const prompt = `From the content below, generate 5 concise image prompts for technical diagrams.
 
 CONTENT:
 ${content}
 
-REQUIREMENTS:
-- Create exactly 5 image prompts
-- Each prompt must be very concise (under 50 words)
-- Focus ONLY on technical terms and diagrammatic  mentioned in the content
-- Images must have white background
-- STRCITLY **Images must be 9:8 aspect ratio**
-- Show technical TERMS or system architectures
-- Use clear, professional technical illustration style
-- Include specific technical terms from the content
+RULES:
+- Exactly 5 prompts
+- Each under 50 words
+- Only diagrammatic/technical terms from content
+- White background
+- Strictly 9:8 aspect ratio
+- Professional technical illustration style
+- Focus on system architectures, schemas, or concepts
 
-FORMAT: Return only a JSON array of 5 strings, no additional text.
-
-Example format:
-["Create a technical diagram showing API architecture with white background", "Illustrate database schema relationships in 9:8 ratio","Present system  visualization"]`;
+OUTPUT:
+Return only a JSON array of 5 strings.`;
 
     const response = await axios.post(
       GROQ_API_URL,

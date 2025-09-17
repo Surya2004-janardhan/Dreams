@@ -278,11 +278,22 @@ const composeVideo = async (
             );
           }
         })
-        .on("end", () => {
+        .on("end", async () => {
           logger.info(`✅ Final video composed successfully: ${outputPath}`);
+
+          // Save a copy to root directory
+          const rootCopyPath = path.resolve(`final_video_${Date.now()}.mp4`);
+          try {
+            fs.copyFileSync(outputPath, rootCopyPath);
+            logger.info(`📋 Root copy saved: ${rootCopyPath}`);
+          } catch (copyError) {
+            logger.error(`❌ Failed to save root copy:`, copyError.message);
+          }
+
           resolve({
             success: true,
             videoPath: outputPath,
+            rootCopyPath: rootCopyPath,
             duration: null,
             format: "mp4",
             resolution: "1080x1920",

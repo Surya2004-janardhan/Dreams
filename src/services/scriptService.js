@@ -47,7 +47,7 @@ Style:
 
 Rules:
 - 2–3 exchanges only
-- Length: strictly 110–120 words total
+- **Length: strictly 120–130 words total**
 - Must cover key technical points, not just surface talk
 - Should feel engaging, natural, and easy for ~70s speech
 
@@ -71,8 +71,8 @@ Raj: Actually, see... [explanation]`;
             content: prompt,
           },
         ],
-        temperature: 1.0,
-        max_tokens: 2500,
+        temperature: 0.8,
+        max_tokens: 2800,
       },
       {
         headers: {
