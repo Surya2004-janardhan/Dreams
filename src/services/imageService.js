@@ -10,11 +10,9 @@ const generateImageWithGemini = async (prompt, index) => {
   try {
     logger.info(`🎨 Generating image ${index} with Gemini...`);
 
-    const genAI = new GoogleGenerativeAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_IMAGES,
-    });
-    // ;
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_IMAGES);
 
+    // Set responseModalities to include "Image" so the model can generate
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash-exp",
       generationConfig: {
@@ -25,6 +23,7 @@ const generateImageWithGemini = async (prompt, index) => {
     const response = await model.generateContent(prompt);
 
     for (const part of response.response.candidates[0].content.parts) {
+      // Based on the part type, either show the text or save the image
       if (part.text) {
         console.log(part.text);
       } else if (part.inlineData) {
@@ -55,7 +54,7 @@ const generateImageWithGemini = async (prompt, index) => {
 
     // Create a simple fallback image
     try {
-      const imagePath = path.resolve(`images/fallback_image_${index}.png`);
+      const imagePath = path.resolve(`images/ERROR${index}.png`);
       // Create a minimal 1x1 pixel PNG as fallback
       const minimalPNG = Buffer.from([
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
