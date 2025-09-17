@@ -433,7 +433,7 @@ const uploadToFilebaseAndGetLink = async (videoPath, title) => {
     }
 
     const fileName = `${title.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.mp4`;
-    const fileStream = fs.createReadStream(videoPath);
+    const fileContent = fs.readFileSync(videoPath);
     const fileStats = fs.statSync(videoPath);
 
     logger.info(`📁 Uploading file: ${fileName}`);
@@ -441,25 +441,20 @@ const uploadToFilebaseAndGetLink = async (videoPath, title) => {
       `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`
     );
 
-    // Upload to Filebase using multipart upload for large files
-    const upload = new Upload({
-      client: s3Client,
-      params: {
-        Bucket: FILEBASE_BUCKET,
-        Key: fileName,
-        Body: fileStream,
-        ContentType: "video/mp4",
-        ACL: "public-read", // Make file publicly accessible
-      },
+    // Upload to Filebase S3 with proper public access
+    const uploadCommand = new PutObjectCommand({
+      Bucket: FILEBASE_BUCKET,
+      Key: fileName,
+      Body: fileContent,
+      ContentType: "video/mp4",
+      ACL: "public-read",
     });
 
-    const result = await upload.done();
+    const uploadResult = await s3Client.send(uploadCommand);
     logger.info(`✅ File uploaded to Filebase. Key: ${fileName}`);
 
-    // Generate public URL using Filebase gateway
-    const publicLink = `https://ipfs.filebase.io/ipfs/${result.Location.split(
-      "/"
-    ).pop()}`;
+    // Use Filebase's dedicated public gateway for better Instagram compatibility
+    const publicLink = `https://ipfs.filebase.io/ipfs/${fileName}`;
     logger.info(`🔗 Public link: ${publicLink}`);
 
     return {

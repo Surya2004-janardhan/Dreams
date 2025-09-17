@@ -35,43 +35,41 @@ async function uploadToFilebase(filePath, title) {
     const fileName = `${title}_${Date.now()}.mp4`;
     const fileContent = fs.readFileSync(filePath);
 
-    // Upload to Filebase S3
+    // Upload to Filebase S3 with proper public access
     const uploadCommand = new PutObjectCommand({
       Bucket: FILEBASE_BUCKET,
       Key: fileName,
       Body: fileContent,
       ContentType: "video/mp4",
-      ACL: "public-read", // Make the file publicly readable
-      Metadata: {
-        "x-amz-meta-public": "true",
-      },
+      ACL: "public-read",
     });
 
     const uploadResult = await s3Client.send(uploadCommand);
     console.log(`✅ File uploaded to Filebase. Key: ${fileName}`);
 
-    // Try alternative URL formats for better Instagram compatibility
-    const s3Url = `https://${FILEBASE_BUCKET}.s3.filebase.com/${fileName}`;
-    const ipfsUrl = `https://ipfs.filebase.io/ipfs/${fileName}`;
+    // Try Filebase's dedicated bucket domain
+    const bucketUrl = `https://${FILEBASE_BUCKET}.s3.filebase.com/${fileName}`;
+    console.log(`🔗 Bucket URL: ${bucketUrl}`);
 
-    console.log(`🔗 S3 URL: ${s3Url}`);
-    console.log(`🔗 IPFS URL: ${ipfsUrl}`);
-
-    // Test both URLs and use the one that works
+    // Test if the bucket URL is accessible
     try {
-      const testResponse = await axios.head(s3Url, { timeout: 5000 });
+      const testResponse = await axios.head(bucketUrl, { timeout: 10000 });
       if (testResponse.status === 200) {
-        console.log(`✅ S3 URL is accessible`);
+        console.log(`✅ Bucket URL is accessible`);
         return {
           success: true,
           fileName: fileName,
-          publicUrl: s3Url,
+          publicUrl: bucketUrl,
           bucket: FILEBASE_BUCKET,
         };
       }
     } catch (error) {
-      console.log(`⚠️ S3 URL not accessible, trying IPFS URL`);
+      console.log(`⚠️ Bucket URL not accessible: ${error.message}`);
     }
+
+    // Fallback to IPFS gateway
+    const ipfsUrl = `https://ipfs.filebase.io/ipfs/${fileName}`;
+    console.log(`🔗 Fallback IPFS URL: ${ipfsUrl}`);
 
     return {
       success: true,
