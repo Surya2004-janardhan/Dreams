@@ -11,7 +11,7 @@ const generateImagesEndpoint = async (req, res) => {
 
     logger.info("🖼️ Generating images from script");
 
-    const images = await generateImages(script);
+    const images = await generateImages(null, script);
 
     res.json({
       success: true,

@@ -185,48 +185,64 @@ const composeVideo = async (
 
       // Create overlay chain with timing
       let currentVideo = "[base]";
-      validImages.forEach((image, index) => {
-        const startTime = image.timing.startTime;
-        const endTime = image.timing.endTime;
-        const nextVideo =
-          index === validImages.length - 1
-            ? "[video_with_overlays]"
-            : `[v${index}]`;
+      if (validImages.length > 0) {
+        validImages.forEach((image, index) => {
+          const startTime = image.timing.startTime;
+          const endTime = image.timing.endTime;
+          const nextVideo =
+            index === validImages.length - 1
+              ? "[video_with_overlays]"
+              : `[v${index}]`;
 
-        filterParts.push(
-          `${currentVideo}[img${index}]overlay=40:200:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
-        );
+          filterParts.push(
+            `${currentVideo}[img${index}]overlay=40:200:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
+          );
 
-        currentVideo = nextVideo;
-      });
+          currentVideo = nextVideo;
+        });
+      }
 
-      // If no subtitles, just use the video with overlays as final
+      // Handle subtitles based on whether we have overlays or not
       if (!fs.existsSync(subtitlesPath)) {
-        filterParts.push(`[video_with_overlays]copy[final_video]`);
+        // No subtitles, use base video or video with overlays
+        if (validImages.length > 0) {
+          filterParts.push(`[video_with_overlays]copy[final_video]`);
+        } else {
+          filterParts.push(`[base]copy[final_video]`);
+        }
       } else {
         const simpleSubtitlesPath = subtitlesPath
           .replace(/\\/g, "\\\\")
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
+        // Apply subtitles to base video or video with overlays
+        const videoSource =
+          validImages.length > 0 ? "[video_with_overlays]" : "[base]";
         filterParts.push(
-          `[video_with_overlays]subtitles='${simpleSubtitlesPath}':force_style='FontName=Verdana,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,BackColour=&H80000000&,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=20'[final_video]`
+          `${videoSource}subtitles='${simpleSubtitlesPath}':force_style='FontName=Verdana,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,BackColour=&H80000000&,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=20'[final_video]`
         );
       }
 
-      // Set up output options
+      // Set up output options - optimized for both YouTube and Instagram
       const outputOptions = [
         "-c:v",
         "libx264",
         "-preset",
         "fast",
         "-crf",
-        "23",
+        "23", // Balanced quality
+        "-maxrate",
+        "4000k", // Good for both platforms
+        "-bufsize",
+        "8000k",
         "-movflags",
         "+faststart",
         "-pix_fmt",
         "yuv420p",
         "-r",
-        "30",
+        "30", // 30fps for compatibility
+        "-t",
+        "59", // Under both limits (YouTube 60s, Instagram 59s)
       ];
 
       // Map video stream
@@ -236,7 +252,7 @@ const composeVideo = async (
       if (audioPath) {
         outputOptions.push("-map", "1:a");
         outputOptions.push("-c:a", "aac");
-        outputOptions.push("-b:a", "192k");
+        outputOptions.push("-b:a", "160k"); // Good audio quality
       } else {
         // Use audio from base video if no separate audio provided
         outputOptions.push("-map", "0:a");

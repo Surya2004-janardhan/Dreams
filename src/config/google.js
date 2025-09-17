@@ -22,7 +22,28 @@ const getSheetsClient = async () => {
 
 // YouTube API setup
 const getYouTubeClient = async () => {
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  if (!process.env.GOOGLE_CREDENTIALS) {
+    throw new Error("GOOGLE_CREDENTIALS environment variable is not set");
+  }
+
+  let credentials;
+  try {
+    credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  } catch (e) {
+    throw new Error("GOOGLE_CREDENTIALS is not valid JSON");
+  }
+
+  if (
+    !credentials.client_id ||
+    !credentials.client_secret ||
+    !credentials.redirect_uris ||
+    !credentials.redirect_uris[0]
+  ) {
+    throw new Error(
+      "GOOGLE_CREDENTIALS is missing required fields (client_id, client_secret, redirect_uris)"
+    );
+  }
+
   const oauth2Client = new google.auth.OAuth2(
     credentials.client_id,
     credentials.client_secret,

@@ -2,6 +2,7 @@ const { getYouTubeClient } = require("../config/google");
 const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 /**
  * Generate hashtags and captions for social media
@@ -126,7 +127,7 @@ const uploadToYouTube = async (videoPath, title, description) => {
 };
 
 /**
- * Upload video to Instagram (placeholder - requires Instagram API setup)
+ * Upload video to Instagram (using Instagram Graph API for reels)
  */
 const uploadToInstagram = async (videoPath, title, description) => {
   try {
@@ -134,26 +135,50 @@ const uploadToInstagram = async (videoPath, title, description) => {
 
     const socialContent = generateSocialMediaContent(title, description);
 
-    // Instagram Graph API implementation would go here
-    // For now, returning a placeholder response
+    // Required environment variables
+    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+    const accountId = process.env.INSTAGRAM_ACCOUNT_ID;
 
-    // In a real implementation, you would:
-    // 1. Upload video to Instagram using Instagram Graph API
-    // 2. Create a container with the video and caption
-    // 3. Publish the container
+    if (!accessToken || !accountId) {
+      throw new Error(
+        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required"
+      );
+    }
 
-    logger.warn("⚠️ Instagram upload not implemented - returning placeholder");
+    // Step 1: Upload video to get media ID
+    const uploadUrl = `https://graph.facebook.com/v18.0/${accountId}/media`;
+    const uploadParams = {
+      media_type: "REELS",
+      video_url: `file://${videoPath}`, // Local file path
+      caption: socialContent.caption,
+      access_token: accessToken,
+    };
 
-    const placeholderUrl = `https://instagram.com/p/placeholder_${Date.now()}`;
+    const uploadResponse = await axios.post(uploadUrl, uploadParams);
+    const mediaId = uploadResponse.data.id;
+
+    // Step 2: Publish the media
+    const publishUrl = `https://graph.facebook.com/v18.0/${accountId}/media_publish`;
+    const publishParams = {
+      creation_id: mediaId,
+      access_token: accessToken,
+    };
+
+    const publishResponse = await axios.post(publishUrl, publishParams);
+    const postId = publishResponse.data.id;
+
+    const instagramUrl = `https://instagram.com/p/${postId}`;
+
+    logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
 
     return {
       success: true,
-      url: placeholderUrl,
-      caption: socialContent.instagram.caption,
-      note: "Instagram upload placeholder - implement Instagram Graph API",
+      url: instagramUrl,
+      postId: postId,
+      caption: socialContent.caption,
     };
   } catch (error) {
-    logger.error("❌ Instagram upload failed:", error);
+    logger.error("❌ Instagram upload failed:", error.message);
     return {
       success: false,
       error: error.message,

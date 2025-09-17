@@ -28,7 +28,59 @@ const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 
-// Store current workflow state
+/**
+ * Clean up all generated files on error
+ */
+const cleanupOnError = async () => {
+  try {
+    logger.info("🧹 Starting emergency cleanup due to error...");
+
+    const folders = ["audio", "images", "subtitles", "temp"];
+
+    for (const folder of folders) {
+      if (fs.existsSync(folder)) {
+        const files = fs.readdirSync(folder);
+        for (const file of files) {
+          try {
+            const filePath = path.join(folder, file);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+              fs.unlinkSync(filePath);
+              logger.info(`🗑️ Deleted: ${filePath}`);
+            }
+          } catch (error) {
+            logger.error(`Failed to delete ${file}:`, error.message);
+          }
+        }
+      }
+    }
+
+    // Clean videos folder but preserve base video
+    if (fs.existsSync("videos")) {
+      const files = fs.readdirSync("videos");
+      for (const file of files) {
+        if (!file.toLowerCase().includes("base")) {
+          try {
+            const filePath = path.join("videos", file);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+              fs.unlinkSync(filePath);
+              logger.info(`🗑️ Deleted: ${filePath}`);
+            }
+          } catch (error) {
+            logger.error(`Failed to delete ${file}:`, error.message);
+          }
+        }
+      }
+    }
+
+    logger.info("✅ Emergency cleanup completed");
+  } catch (error) {
+    logger.error("❌ Emergency cleanup failed:", error);
+  }
+};
+
+// Store current workflow state (no checkpoints)
 let currentWorkflow = {
   taskId: null,
   status: "idle",
@@ -39,932 +91,143 @@ let currentWorkflow = {
 };
 
 /**
- * Save workflow checkpoint to disk
+ * Run the complete workflow from start to finish
  */
-const saveCheckpoint = async (taskId, step, data, taskData) => {
-  try {
-    const checkpointDir = "temp/checkpoints";
-    if (!fs.existsSync(checkpointDir)) {
-      fs.mkdirSync(checkpointDir, { recursive: true });
-    }
-
-    const checkpoint = {
-      taskId,
-      timestamp: new Date().toISOString(),
-      step,
-      taskData,
-      data,
-      completedSteps: currentWorkflow.completedSteps || [],
-    };
-
-    const checkpointPath = path.join(
-      checkpointDir,
-      `checkpoint_${taskId}.json`
-    );
-    fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
-
-    logger.info(`💾 Checkpoint saved: ${step} (${checkpointPath})`);
-    return checkpointPath;
-  } catch (error) {
-    logger.error("❌ Failed to save checkpoint:", error);
-  }
-};
-
-/**
- * Load workflow checkpoint from disk
- */
-const loadCheckpoint = (taskId) => {
-  try {
-    const checkpointPath = path.join(
-      "temp/checkpoints",
-      `checkpoint_${taskId}.json`
-    );
-
-    if (fs.existsSync(checkpointPath)) {
-      const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, "utf8"));
-      logger.info(
-        `📂 Loaded checkpoint: ${checkpoint.step} from ${checkpoint.timestamp}`
-      );
-      return checkpoint;
-    }
-
-    return null;
-  } catch (error) {
-    logger.error("❌ Failed to load checkpoint:", error);
-    return null;
-  }
-};
-
-/**
- * Find existing files for resuming workflow
- */
-const findExistingAssets = (taskId) => {
-  const assets = {
-    script: null,
-    audio: null,
-    subtitles: null,
-    baseVideo: null,
-    images: [],
-    finalVideo: null,
-  };
-
-  try {
-    // Look for script files
-    const scriptPattern = [
-      `temp/script_${taskId}.txt`,
-      `temp/script_${taskId}.json`,
-    ];
-    for (const scriptPath of scriptPattern) {
-      if (fs.existsSync(scriptPath)) {
-        assets.script = {
-          path: scriptPath,
-          content: fs.readFileSync(scriptPath, "utf8"),
-        };
-        logger.info(`📜 Found existing script: ${scriptPath}`);
-        break;
-      }
-    }
-
-    // Look for audio files
-    const audioDir = "audio";
-    if (fs.existsSync(audioDir)) {
-      const audioFiles = fs.readdirSync(audioDir);
-      const taskAudio = audioFiles.find((file) => file.includes(`_${taskId}`));
-      if (taskAudio) {
-        assets.audio = {
-          conversationFile: path.resolve(path.join(audioDir, taskAudio)),
-          segments: [], // Could be loaded from checkpoint
-        };
-        logger.info(`🎵 Found existing audio: ${taskAudio}`);
-      }
-    }
-
-    // Look for subtitle files
-    const subtitlesDir = "subtitles";
-    if (fs.existsSync(subtitlesDir)) {
-      const subtitleFiles = fs.readdirSync(subtitlesDir);
-      const taskSubtitles = subtitleFiles.find(
-        (file) => file.includes(`_${taskId}`) || file.endsWith(".srt")
-      );
-      if (taskSubtitles) {
-        assets.subtitles = path.resolve(path.join(subtitlesDir, taskSubtitles));
-        logger.info(`📝 Found existing subtitles: ${taskSubtitles}`);
-      }
-    }
-
-    // Look for base video
-    const videosDir = "videos";
-    if (fs.existsSync(videosDir)) {
-      const videoFiles = fs.readdirSync(videosDir);
-      const baseVideos = videoFiles.filter(
-        (file) =>
-          file.toLowerCase().includes("base") ||
-          file.toLowerCase().includes("background") ||
-          file.toLowerCase().includes("template")
-      );
-      if (baseVideos.length > 0) {
-        assets.baseVideo = path.resolve(path.join(videosDir, baseVideos[0]));
-        logger.info(`📹 Found existing base video: ${baseVideos[0]}`);
-      }
-    }
-
-    // Look for generated images
-    const imagesDir = "images";
-    if (fs.existsSync(imagesDir)) {
-      const imageFiles = fs.readdirSync(imagesDir);
-      const taskImages = imageFiles.filter(
-        (file) =>
-          file.includes(`_${taskId}`) || file.startsWith("educational_image_")
-      );
-
-      taskImages.forEach((imageFile, index) => {
-        assets.images.push({
-          index: index + 1,
-          filename: path.resolve(path.join(imagesDir, imageFile)),
-          concept: `Existing image ${index + 1}`,
-          timing: {
-            startTime: index * 10, // Placeholder timing
-            endTime: (index + 1) * 10,
-            duration: 10,
-          },
-        });
-      });
-
-      if (assets.images.length > 0) {
-        logger.info(`🖼️ Found ${assets.images.length} existing images`);
-      }
-    }
-
-    // Look for final video
-    if (fs.existsSync(videosDir)) {
-      const videoFiles = fs.readdirSync(videosDir);
-      const finalVideos = videoFiles.filter(
-        (file) =>
-          file.includes(`final_video_${taskId}`) ||
-          file.includes("final_video_")
-      );
-      if (finalVideos.length > 0) {
-        assets.finalVideo = {
-          videoPath: path.resolve(path.join(videosDir, finalVideos[0])),
-          success: true,
-        };
-        logger.info(`🎬 Found existing final video: ${finalVideos[0]}`);
-      }
-    }
-
-    return assets;
-  } catch (error) {
-    logger.error("❌ Error finding existing assets:", error);
-    return assets;
-  }
-};
-
-/**
- * Resume workflow from checkpoint or existing assets
- */
-const resumeWorkflow = async (taskId, taskData) => {
-  logger.info(`🔄 Attempting to resume workflow for task ${taskId}...`);
-
-  // Try to load checkpoint first
-  const checkpoint = loadCheckpoint(taskId);
-  if (checkpoint) {
-    // Handle error checkpoints - determine proper resume point from completed steps
-    if (checkpoint.step && checkpoint.step.includes("_ERROR")) {
-      logger.info(
-        `📂 Found error checkpoint: ${checkpoint.step}, determining proper resume point...`
-      );
-      const completedSteps = checkpoint.completedSteps || [];
-
-      // Find the last successfully completed step and resume from the next one
-      const stepOrder = [
-        "script/generate",
-        "audio/generate",
-        "subtitles/generate",
-        "video/base",
-        "images/generate",
-        "video/compose",
-        "video/optimize",
-        "social/upload",
-        "sheets/update",
-      ];
-
-      let resumeFromStep = "script/generate";
-      for (const step of stepOrder) {
-        if (!completedSteps.includes(step)) {
-          resumeFromStep = step;
-          break;
-        }
-      }
-
-      logger.info(
-        `📂 Resuming from: ${resumeFromStep} (after error at ${checkpoint.step})`
-      );
-      currentWorkflow.results = checkpoint.data || {};
-      currentWorkflow.completedSteps = completedSteps;
-
-      return {
-        resumeFromStep,
-        results: checkpoint.data || {},
-        completedSteps,
-      };
-    } else {
-      logger.info(`📂 Resuming from checkpoint: ${checkpoint.step}`);
-      currentWorkflow.results = checkpoint.data;
-      currentWorkflow.completedSteps = checkpoint.completedSteps || [];
-      return {
-        resumeFromStep: checkpoint.step,
-        results: checkpoint.data,
-        completedSteps: checkpoint.completedSteps || [],
-      };
-    }
-  }
-
-  // If no checkpoint, look for existing assets
-  logger.info("🔍 Checking for existing assets to resume from...");
-  const existingAssets = findExistingAssets(taskId);
-
-  const resumeData = {
-    resumeFromStep: "sheets/fetch-task",
+const runCompleteWorkflow = async (taskData) => {
+  const taskId = Date.now().toString();
+  currentWorkflow = {
+    taskId,
+    status: "running",
+    currentStep: "script/generate",
+    error: null,
     results: {},
-    completedSteps: [],
+    taskData: taskData,
   };
 
-  // Determine resume point based on existing assets
-  // Note: baseVideo is always available and should not affect resume logic
+  try {
+    logger.info(`🚀 Starting complete workflow for: ${taskData.idea}`);
 
-  if (existingAssets.finalVideo) {
-    resumeData.resumeFromStep = "social/upload";
-    resumeData.results.finalVideo = existingAssets.finalVideo;
-    resumeData.completedSteps = [
-      "script/generate",
-      "audio/generate",
-      "subtitles/generate",
-      "images/generate",
-      "video/compose",
-    ];
-    logger.info("🎬 Found final video, resuming from social media upload");
-  } else if (
-    existingAssets.audio &&
-    existingAssets.subtitles &&
-    existingAssets.images.length > 0
-  ) {
-    resumeData.resumeFromStep = "video/compose";
-    resumeData.results.audioFiles = existingAssets.audio;
-    resumeData.results.subtitles = existingAssets.subtitles;
-    resumeData.results.images = existingAssets.images;
-    resumeData.completedSteps = [
-      "script/generate",
-      "audio/generate",
-      "subtitles/generate",
-      "images/generate",
-    ];
-    logger.info(
-      "🎞️ Found audio, subtitles, and images, resuming from video composition"
+    // Step 1: Generate script
+    logger.info("→ Step 1: Generating script");
+    const rawScript = await generateScript(taskData.idea, taskData.description);
+    const script = cleanLLMData.extractConversation(rawScript);
+    currentWorkflow.results.script = script;
+    logger.info("✓ Script generated");
+
+    // Step 2: Generate audio
+    logger.info("→ Step 2: Generating audio");
+    currentWorkflow.currentStep = "audio/generate";
+    const audioFiles = await generateAudioWithBatchingStrategy(script);
+    currentWorkflow.results.audioFiles = audioFiles;
+    logger.info("✓ Audio generated");
+
+    // Step 3: Generate subtitles
+    logger.info("→ Step 3: Generating subtitles");
+    currentWorkflow.currentStep = "subtitles/generate";
+    const subtitlesPath = await createSubtitlesFromAudio(
+      audioFiles.conversationFile
     );
-  } else if (
-    existingAssets.script &&
-    existingAssets.audio &&
-    existingAssets.subtitles
-  ) {
-    resumeData.resumeFromStep = "images/generate";
-    resumeData.results.script = existingAssets.script.content;
-    resumeData.results.audioFiles = existingAssets.audio;
-    resumeData.results.subtitles = existingAssets.subtitles;
-    resumeData.completedSteps = [
-      "script/generate",
-      "audio/generate",
-      "subtitles/generate",
-    ];
-    logger.info(
-      "🎵 Found script, audio, and subtitles, resuming from image generation"
+    currentWorkflow.results.subtitles = subtitlesPath;
+    logger.info("✓ Subtitles generated");
+
+    // Step 4: Get base video
+    logger.info("→ Step 4: Getting base video");
+    currentWorkflow.currentStep = "video/base";
+    const baseVideoPath = await getBaseVideo();
+    currentWorkflow.results.baseVideoPath = baseVideoPath;
+    logger.info("✓ Base video ready");
+
+    // Step 5: Generate images
+    logger.info("→ Step 5: Generating images");
+    currentWorkflow.currentStep = "images/generate";
+    const images = await generateImages(subtitlesPath, script);
+    currentWorkflow.results.images = images;
+    logger.info(`✓ ${images.length} images generated`);
+
+    if (images.length === 0) {
+      throw new Error(
+        "No images were generated - cannot proceed with video composition"
+      );
+    }
+
+    // Step 6: Compose final video
+    logger.info("→ Step 6: Composing final video");
+    currentWorkflow.currentStep = "video/compose";
+    const finalVideo = await composeVideo(
+      baseVideoPath,
+      audioFiles.conversationFile,
+      images,
+      subtitlesPath,
+      taskData.idea
     );
-  } else if (existingAssets.script && existingAssets.audio) {
-    resumeData.resumeFromStep = "subtitles/generate";
-    resumeData.results.script = existingAssets.script.content;
-    resumeData.results.audioFiles = existingAssets.audio;
-    resumeData.completedSteps = ["script/generate", "audio/generate"];
-    logger.info(
-      "📜 Found script and audio, resuming from subtitles generation"
-    );
-  } else if (existingAssets.script) {
-    resumeData.resumeFromStep = "audio/generate";
-    resumeData.results.script = existingAssets.script.content;
-    resumeData.completedSteps = ["script/generate"];
-    logger.info("📝 Found script, resuming from audio generation");
-  } else {
-    resumeData.resumeFromStep = "script/generate";
-    resumeData.completedSteps = [];
-    logger.info(
-      "🔄 No task-specific assets found, starting from script generation"
-    );
+    currentWorkflow.results.finalVideo = finalVideo;
+    logger.info("✓ Final video composed");
+
+    // Step 7: Upload to platforms
+    logger.info("→ Step 7: Uploading to social media");
+    currentWorkflow.currentStep = "social/upload";
+    await uploadToBothPlatforms(finalVideo, taskData.idea, script);
+    logger.info("✓ Uploaded to social media");
+
+    // Step 8: Update Google Sheets
+    logger.info("→ Step 8: Updating Google Sheets");
+    currentWorkflow.currentStep = "sheets/update";
+    await updateSheetStatus(taskData.rowId, "Posted", finalVideo);
+    logger.info("✓ Google Sheets updated");
+
+    // Success notification
+    await sendSuccessNotification(taskData, finalVideo);
+    currentWorkflow.status = "completed";
+    logger.info("🎉 Workflow completed successfully!");
+  } catch (error) {
+    logger.error("❌ Workflow failed:", error);
+    currentWorkflow.status = "failed";
+    currentWorkflow.error = error.message;
+
+    // Emergency cleanup on error
+    await cleanupOnError();
+
+    // Send error notification
+    await sendErrorNotification(taskData, error);
+    throw error;
   }
-
-  // Save any found assets to results
-  currentWorkflow.results = resumeData.results;
-  currentWorkflow.completedSteps = resumeData.completedSteps;
-
-  return resumeData;
 };
 
 /**
  * Main automated workflow - pulls from Google Sheets and processes with checkpoints
  */
 const runAutomatedWorkflow = async (req, res) => {
-  let taskData = null;
-  let resumeFromStep = null;
-  let completedSteps = [];
-
   try {
     logger.info("🚀 Starting automated content creation workflow...");
 
     // Initialize directories
     initializeDirectories();
 
-    const taskId = Date.now().toString();
-    currentWorkflow = {
-      taskId,
-      status: "running",
-      currentStep: "sheets/fetch-task",
-      error: null,
-      results: {},
-      taskData: null,
-      completedSteps: [],
-    };
+    // Get next task from Google Sheets
+    logger.info("📋 Getting next task from Google Sheets");
+    const taskData = await getNextTask();
+    logger.info(`📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`);
 
     // Send immediate response
     res.json({
       success: true,
       message: "Automated workflow started successfully",
-      taskId: taskId,
+      taskId: Date.now().toString(),
       status: "running",
       note: "Check workflow status at /workflow/status or wait for email notification",
     });
 
-    // Step 1: Get next task from Google Sheets
-    if (!resumeFromStep || resumeFromStep === "sheets/fetch-task") {
-      logger.info("→ Step 1: Getting next task from Google Sheets");
-      currentWorkflow.currentStep = "sheets/fetch-task";
-      taskData = await getNextTask();
-      currentWorkflow.taskData = taskData;
-
-      logger.info(
-        `📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`
-      );
-
-      // Check if we can resume from existing assets
-      const resumeInfo = await resumeWorkflow(taskId, taskData);
-      resumeFromStep = resumeInfo.resumeFromStep;
-      currentWorkflow.results = {
-        ...currentWorkflow.results,
-        ...resumeInfo.results,
-      };
-      completedSteps = resumeInfo.completedSteps;
-      currentWorkflow.completedSteps = completedSteps;
-
-      if (resumeFromStep !== "sheets/fetch-task") {
-        logger.info(`🔄 Resuming workflow from step: ${resumeFromStep}`);
-      }
-    }
-
-    // Reset resumeFromStep to allow normal step execution flow
-    resumeFromStep = null;
-
-    // Step 2: Generate Q&A conversation script
-    if (
-      !completedSteps.includes("script/generate") &&
-      (!resumeFromStep || resumeFromStep === "script/generate")
-    ) {
-      logger.info("→ Step 2: Generating multi-speaker Q&A script");
-      currentWorkflow.currentStep = "script/generate";
-
-      const rawScript = await generateScript(
-        taskData.idea,
-        taskData.description
-      );
-      const script = cleanLLMData.extractConversation(rawScript);
-
-      if (!script || script.length < 100) {
-        throw new Error("Generated script is too short or empty");
-      }
-
-      currentWorkflow.results.script = script;
-
-      // Save script to file for future resume
-      const scriptPath = path.resolve(`temp/script_${taskId}.txt`);
-      if (!fs.existsSync("temp")) fs.mkdirSync("temp", { recursive: true });
-      fs.writeFileSync(scriptPath, script);
-
-      completedSteps.push("script/generate");
-      currentWorkflow.completedSteps = completedSteps;
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "audio/generate",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info("✓ Q&A script generated with male/female speakers");
-    } else if (completedSteps.includes("script/generate")) {
-      logger.info("⏩ Script generation skipped (already completed)");
-    }
-
-    // Step 3: Generate TTS audio with different voices
-    if (
-      !completedSteps.includes("audio/generate") &&
-      (!resumeFromStep ||
-        ["script/generate", "audio/generate"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 3: Checking for existing audio files");
-
-      // Check for existing audio files first
-      let existingAudioFiles = [];
-      const audioDir = "audio";
-      if (fs.existsSync(audioDir)) {
-        const audioFilesList = fs.readdirSync(audioDir);
-        const conversationFiles = audioFilesList.filter(
-          (file) =>
-            file.startsWith("conversation_") &&
-            (file.endsWith(".wav") || file.endsWith(".mp3"))
-        );
-
-        if (conversationFiles.length > 0) {
-          const latestAudio = conversationFiles.sort().pop();
-          const audioPath = path.resolve(path.join(audioDir, latestAudio));
-
-          existingAudioFiles = [
-            {
-              conversationFile: audioPath,
-              segments: [
-                {
-                  file: audioPath,
-                  duration: 70, // Estimated duration
-                  speaker: "Existing conversation",
-                },
-              ],
-              totalSegments: 1,
-              apiCallsUsed: 0,
-            },
-          ];
-          logger.info(`✅ Found existing audio file: ${audioPath}`);
-        }
-      }
-
-      if (existingAudioFiles.length > 0) {
-        logger.info("⏩ Audio generation skipped (using existing file)");
-        currentWorkflow.results.audioFiles = existingAudioFiles[0];
-        completedSteps.push("audio/generate");
-        currentWorkflow.completedSteps = completedSteps;
-      } else {
-        logger.info("→ Generating new TTS audio with male/female voices");
-        currentWorkflow.currentStep = "audio/generate";
-
-        const audioFiles = await generateAudioWithBatchingStrategy(
-          currentWorkflow.results.script
-        );
-        currentWorkflow.results.audioFiles = audioFiles;
-
-        completedSteps.push("audio/generate");
-        currentWorkflow.completedSteps = completedSteps;
-      }
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "subtitles/generate",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info("✓ Multi-speaker TTS audio generated");
-    } else if (completedSteps.includes("audio/generate")) {
-      logger.info("⏩ Audio generation skipped (already completed)");
-    }
-
-    // Step 4: Create perfectly timed subtitles
-    if (
-      !completedSteps.includes("subtitles/generate") &&
-      (!resumeFromStep ||
-        ["audio/generate", "subtitles/generate"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 4: Creating perfectly timed subtitles");
-      currentWorkflow.currentStep = "subtitles/generate";
-
-      const subtitlesPath = path.resolve(`subtitles/subtitles_${taskId}.srt`);
-      // Get audio file path - try workflow results first, then fallback to audio folder
-      let audioFilePath = null;
-
-      if (
-        currentWorkflow.results.audioFiles &&
-        currentWorkflow.results.audioFiles.conversationFile
-      ) {
-        audioFilePath = currentWorkflow.results.audioFiles.conversationFile;
-        logger.info(`🎵 Using workflow audio file: ${audioFilePath}`);
-      } else {
-        // Fallback: Find the latest audio file in the audio folder
-        try {
-          if (!fs.existsSync("audio")) {
-            fs.mkdirSync("audio", { recursive: true });
-          }
-
-          const audioFiles = fs
-            .readdirSync("audio")
-            .filter((file) => file.endsWith(".wav") || file.endsWith(".mp3"))
-            .map((file) => ({
-              name: file,
-              path: path.join("audio", file),
-              stats: fs.statSync(path.join("audio", file)),
-            }))
-            .sort((a, b) => b.stats.mtime - a.stats.mtime); // Sort by modification time, newest first
-
-          logger.info(
-            `📁 Found ${audioFiles.length} audio files in audio folder`
-          );
-          if (audioFiles.length > 0) {
-            logger.info(
-              `🎵 Latest audio file: ${audioFiles[0].name} (${audioFiles[0].stats.mtime})`
-            );
-            audioFilePath = audioFiles[0].path;
-            logger.info(
-              `🎵 Using latest audio file from folder: ${audioFilePath}`
-            );
-
-            // Validate the file exists and is readable
-            if (!fs.existsSync(audioFilePath)) {
-              throw new Error(`Audio file not found: ${audioFilePath}`);
-            }
-          } else {
-            throw new Error("No audio files found in audio folder");
-          }
-        } catch (error) {
-          logger.error("❌ Failed to find audio file:", error.message);
-          throw new Error("No audio file available for subtitle generation");
-        }
-      }
-
-      try {
-        const subtitlesResult = await createSubtitlesFromAudio(
-          audioFilePath,
-          subtitlesPath
-        );
-
-        currentWorkflow.results.subtitles = subtitlesResult.subtitlesPath;
-
-        completedSteps.push("subtitles/generate");
-        currentWorkflow.completedSteps = completedSteps;
-
-        // Save checkpoint
-        await saveCheckpoint(
-          taskId,
-          "video/base",
-          currentWorkflow.results,
-          taskData
-        );
-
-        logger.info("✓ SRT subtitles created with perfect timing");
-      } catch (subtitleError) {
-        logger.error("❌ Subtitle generation failed:", subtitleError.message);
-
-        // Check if it's an API overload error
-        if (
-          subtitleError.message.includes("503") ||
-          subtitleError.message.includes("UNAVAILABLE") ||
-          subtitleError.message.includes("overloaded")
-        ) {
-          logger.warn(
-            "⚠️ API overloaded for subtitles - continuing workflow without subtitles"
-          );
-
-          // Create a basic subtitle file or skip subtitles
-          try {
-            const basicSubtitles = `1\n00:00:00,000 --> 00:00:70,000\n[Rani and Raj conversation]\n\n2\n00:00:70,000 --> 00:01:00,000\n[Educational content]`;
-            fs.writeFileSync(subtitlesPath, basicSubtitles);
-            currentWorkflow.results.subtitles = subtitlesPath;
-            logger.info("✓ Created basic subtitle placeholder");
-          } catch (fallbackError) {
-            logger.warn(
-              "⚠️ Could not create subtitle placeholder:",
-              fallbackError.message
-            );
-            currentWorkflow.results.subtitles = null;
-          }
-
-          // Mark as completed to continue workflow
-          completedSteps.push("subtitles/generate");
-          currentWorkflow.completedSteps = completedSteps;
-
-          // Save checkpoint
-          await saveCheckpoint(
-            taskId,
-            "video/base",
-            currentWorkflow.results,
-            taskData
-          );
-        } else {
-          // For other errors, still fail the workflow
-          throw subtitleError;
-        }
-      }
-    } else if (completedSteps.includes("subtitles/generate")) {
-      logger.info("⏩ Subtitles generation skipped (already completed)");
-    }
-
-    // Step 5: Get base video from Drive or local
-    if (
-      !completedSteps.includes("video/base") &&
-      (!resumeFromStep ||
-        ["subtitles/generate", "video/base"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 5: Getting base video");
-      currentWorkflow.currentStep = "video/base";
-
-      const baseVideoPath = await getBaseVideo();
-      currentWorkflow.results.baseVideoPath = baseVideoPath;
-
-      completedSteps.push("video/base");
-      currentWorkflow.completedSteps = completedSteps;
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "images/generate",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info("✓ Base video ready");
-    } else if (completedSteps.includes("video/base")) {
-      logger.info("⏩ Base video step skipped (already completed)");
-    }
-
-    // Step 6: Generate contextual images with timing
-    if (
-      !completedSteps.includes("images/generate") &&
-      (!resumeFromStep ||
-        ["video/base", "images/generate"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 6: Generating contextual educational images");
-      currentWorkflow.currentStep = "images/generate";
-
-      const images = await generateImages(currentWorkflow.results.subtitles);
-      currentWorkflow.results.images = images;
-
-      completedSteps.push("images/generate");
-      currentWorkflow.completedSteps = completedSteps;
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "video/compose",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info(`✓ ${images.length} contextual images generated with timing`);
-    } else if (completedSteps.includes("images/generate")) {
-      logger.info("⏩ Images generation skipped (already completed)");
-    }
-
-    // Step 7: Compose final video with all elements
-    if (
-      !completedSteps.includes("video/compose") &&
-      (!resumeFromStep ||
-        ["images/generate", "video/compose"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 7: Composing final video with subtitles and images");
-      currentWorkflow.currentStep = "video/compose";
-
-      const finalVideo = await composeVideo(
-        currentWorkflow.results.baseVideoPath,
-        currentWorkflow.results.audioFiles.conversationFile,
-        currentWorkflow.results.images,
-        currentWorkflow.results.subtitles,
-        taskData.idea
-      );
-
-      currentWorkflow.results.finalVideo = finalVideo;
-
-      completedSteps.push("video/compose");
-      currentWorkflow.completedSteps = completedSteps;
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "video/optimize",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info("✓ Final video composed with subtitles and images");
-    } else if (completedSteps.includes("video/compose")) {
-      logger.info("⏩ Video composition skipped (already completed)");
-    }
-
-    // Step 8: Create platform-optimized version (single video for both platforms)
-    if (
-      !completedSteps.includes("video/optimize") &&
-      (!resumeFromStep ||
-        ["video/compose", "video/optimize"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 8: Creating optimized video for both platforms");
-      currentWorkflow.currentStep = "video/optimize";
-
-      const optimizedVersion = await createPlatformOptimized(
-        currentWorkflow.results.finalVideo.videoPath,
-        "both"
-      );
-      currentWorkflow.results.optimizedVersions = optimizedVersion;
-
-      completedSteps.push("video/optimize");
-      currentWorkflow.completedSteps = completedSteps;
-
-      // Save checkpoint
-      await saveCheckpoint(
-        taskId,
-        "social/upload",
-        currentWorkflow.results,
-        taskData
-      );
-
-      logger.info("✓ Single optimized video created for both platforms");
-    } else if (completedSteps.includes("video/optimize")) {
-      logger.info("⏩ Video optimization skipped (already completed)");
-    }
-
-    // Step 9: Upload to YouTube and Instagram
-    if (
-      !completedSteps.includes("social/upload") &&
-      (!resumeFromStep ||
-        ["video/optimize", "social/upload"].includes(resumeFromStep))
-    ) {
-      logger.info("→ Step 9: Uploading to social media platforms");
-      currentWorkflow.currentStep = "social/upload";
-
-      const uploadResults = await uploadToBothPlatforms(
-        currentWorkflow.results.optimizedVersions?.youtube ||
-          currentWorkflow.results.finalVideo.videoPath,
-        taskData.idea,
-        taskData.description
-      );
-
-      currentWorkflow.results.uploadResults = uploadResults;
-
-      // Check if both uploads succeeded
-      const youtubeSuccess = !!uploadResults?.youtubeUrl;
-      const instagramSuccess = !!uploadResults?.instagramUrl;
-
-      if (youtubeSuccess && instagramSuccess) {
-        logger.info("✅ Both YouTube and Instagram uploads succeeded");
-        completedSteps.push("social/upload");
-        currentWorkflow.completedSteps = completedSteps;
-
-        // Save checkpoint
-        await saveCheckpoint(
-          taskId,
-          "sheets/update",
-          currentWorkflow.results,
-          taskData
-        );
-
-        logger.info("✓ Social media uploads completed successfully");
-      } else {
-        logger.warn(
-          "⚠️ One or both uploads failed - preserving files for retry"
-        );
-        if (!youtubeSuccess) {
-          logger.warn("❌ YouTube upload failed");
-        }
-        if (!instagramSuccess) {
-          logger.warn("❌ Instagram upload failed");
-        }
-
-        // Don't mark as completed, don't save checkpoint, don't proceed to cleanup
-        throw new Error(
-          "Social media upload incomplete - one or both platforms failed"
-        );
-      }
-    } else if (completedSteps.includes("social/upload")) {
-      logger.info("⏩ Social media upload skipped (already completed)");
-    }
-
-    // Step 10: Update Google Sheet with results
-    if (!completedSteps.includes("sheets/update")) {
-      logger.info("→ Step 10: Updating Google Sheet with results");
-      currentWorkflow.currentStep = "sheets/update";
-
-      // Safely get upload URLs with fallbacks
-      const youtubeUrl =
-        currentWorkflow.results.uploadResults?.youtubeUrl || "";
-      const instagramUrl =
-        currentWorkflow.results.uploadResults?.instagramUrl || "";
-
-      await updateSheetStatus(
-        taskData.rowId,
-        "Posted",
-        youtubeUrl,
-        instagramUrl
-      );
-
-      completedSteps.push("sheets/update");
-      currentWorkflow.completedSteps = completedSteps;
-
-      logger.info("✓ Google Sheet updated with live links");
-    } else {
-      logger.info("⏩ Sheet update skipped (already completed)");
-    }
-
-    // Step 11: Send success notification email
-    logger.info("→ Step 11: Sending success notification");
-    currentWorkflow.currentStep = "email/success";
-    await sendSuccessNotification(
-      taskData,
-      currentWorkflow.results.uploadResults || {}
-    );
-    logger.info("✓ Success notification sent");
-
-    // Step 12: Cleanup media folders and checkpoints (only if both uploads succeeded)
-    if (completedSteps.includes("social/upload")) {
-      logger.info("→ Step 12: Cleaning up media folders and checkpoints");
-      currentWorkflow.currentStep = "cleanup";
-
-      await cleanupAllMediaFolders();
-
-      // Remove checkpoint file after successful completion
-      const checkpointPath = path.join(
-        "temp/checkpoints",
-        `checkpoint_${taskId}.json`
-      );
-      if (fs.existsSync(checkpointPath)) {
-        fs.unlinkSync(checkpointPath);
-        logger.info("✓ Checkpoint file removed");
-      }
-
-      logger.info("✓ Media folders cleaned");
-    } else {
-      logger.info("⏩ Cleanup skipped - uploads not completed successfully");
-    }
-
-    // Final status update
-    currentWorkflow.status = "completed";
-    currentWorkflow.currentStep = "finished";
-
-    logger.info("🎉 Automated workflow completed successfully!");
-
-    // Safely log upload URLs
-    if (currentWorkflow.results.uploadResults?.youtubeUrl) {
-      logger.info(
-        `📺 YouTube: ${currentWorkflow.results.uploadResults.youtubeUrl}`
-      );
-    } else {
-      logger.info("📺 YouTube: Upload skipped or failed");
-    }
-
-    if (currentWorkflow.results.uploadResults?.instagramUrl) {
-      logger.info(
-        `📱 Instagram: ${currentWorkflow.results.uploadResults.instagramUrl}`
-      );
-    } else {
-      logger.info("📱 Instagram: Upload skipped or failed");
-    }
+    // Run the complete workflow
+    await runCompleteWorkflow(taskData);
   } catch (error) {
     logger.error("❌ Automated workflow failed:", error);
 
-    currentWorkflow.status = "error";
-    currentWorkflow.error = error.message;
+    // Emergency cleanup on error
+    await cleanupOnError();
 
-    // Save error checkpoint for potential debugging
-    if (taskData && currentWorkflow.taskId) {
-      await saveCheckpoint(
-        currentWorkflow.taskId,
-        currentWorkflow.currentStep + "_ERROR",
-        {
-          ...currentWorkflow.results,
-          error: error.message,
-          stack: error.stack,
-        },
-        taskData
-      );
-    }
-
-    // Send error notification
-    try {
-      await sendErrorNotification(taskData, error, currentWorkflow.currentStep);
-    } catch (emailError) {
-      logger.error("Failed to send error notification:", emailError);
-    }
-
-    // If task data exists, update sheet with error status
+    // Send error notification if we have task data
     if (taskData) {
-      try {
-        // Don't update sheet status to "Error" - keep original status for retry
-        // Commenting out the error status update
-        /*
-        await updateSheetStatus(taskData.rowId, "Error", "", "");
-        */
-      } catch (sheetError) {
-        logger.error("Failed to update sheet with error status:", sheetError);
-      }
+      await sendErrorNotification(taskData, error);
     }
   }
 };
@@ -1192,11 +455,6 @@ const getProgressInfo = (currentStep) => {
       total: 12,
       description: "Composing final video",
     },
-    "video/optimize": {
-      step: 8,
-      total: 12,
-      description: "Creating platform versions",
-    },
     "social/upload": {
       step: 9,
       total: 12,
@@ -1365,4 +623,5 @@ module.exports = {
   runAutomatedWorkflow,
   runWorkflow,
   getWorkflowStatus,
+  runCompleteWorkflow,
 };
