@@ -1,28 +1,38 @@
-const { GoogleGenAI, Modality } = require("@google/genai");
-const fs = require("node:fs");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const fs = require("fs");
+// const { apikeys } = require("googleapis/build/src/apis/apikeys");
 
-async function main() {
-  const ai = new GoogleGenAI({
-    apiKey: "",
+const genAI = new GoogleGenerativeAI("");
+
+async function generateImage() {
+  const contents =
+    "Hi, can you create a 3d rendered image of a pig " +
+    "with wings and a top hat flying over a happy " +
+    "futuristic scifi city with lots of greenery?";
+
+  // Set responseModalities to include "Image" so the model can generate
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash-exp",
+    generationConfig: {
+      responseModalities: ["Text", "Image"],
+    },
   });
 
-  const prompt =
-    "Create a picture of a nano banana dish in a fancy restaurant with a Gemini theme";
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-image-preview",
-    contents: prompt,
-  });
-  for (const part of response.candidates[0].content.parts) {
-    if (part.text) {
-      console.log(part.text);
-    } else if (part.inlineData) {
-      const imageData = part.inlineData.data;
-      const buffer = Buffer.from(imageData, "base64");
-      fs.writeFileSync("gemini-native-image.png", buffer);
-      console.log("Image saved as gemini-native-image.png");
+  try {
+    const response = await model.generateContent(contents);
+    for (const part of response.response.candidates[0].content.parts) {
+      // Based on the part type, either show the text or save the image
+      if (part.text) {
+        console.log(part.text);
+      } else if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
+        fs.writeFileSync("gemini-native-image.png", buffer);
+        console.log("Image saved as gemini-native-image.png");
+      }
     }
+  } catch (error) {
+    console.error("Error generating content:", error);
   }
 }
-
-main();
+generateImage();
