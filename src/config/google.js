@@ -132,9 +132,46 @@ const getGoogleDriveClient = async () => {
   }
 };
 
+// Google Drive API setup for uploads
+const getGoogleDriveUploadClient = async () => {
+  try {
+    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS || "{}");
+    if (!credentials || !credentials.client_email) {
+      // Fallback to service account file
+      const serviceAccountPath = path.join(
+        process.cwd(),
+        "seismic-rarity-468405-j1-a83f924d9fbc.json"
+      );
+      if (fs.existsSync(serviceAccountPath)) {
+        const auth = new google.auth.GoogleAuth({
+          keyFile: serviceAccountPath,
+          scopes: [
+            "https://www.googleapis.com/auth/drive.file",
+            "https://www.googleapis.com/auth/drive",
+          ],
+        });
+        return google.drive({ version: "v3", auth });
+      }
+    }
+
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: [
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive",
+      ],
+    });
+    return google.drive({ version: "v3", auth });
+  } catch (error) {
+    console.error("Failed to setup Google Drive upload client:", error);
+    throw new Error("Google Drive upload authentication failed");
+  }
+};
+
 module.exports = {
   getSheetsClient,
   getYouTubeClient,
   getGoogleDriveClient,
   getYouTubeClientServiceAccount,
+  getGoogleDriveUploadClient,
 };

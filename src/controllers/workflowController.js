@@ -189,54 +189,64 @@ const runCompleteWorkflow = async (taskData) => {
     );
     currentWorkflow.results.uploadResult = uploadResult;
 
-    // Check if upload was successful - if both fail, stop the workflow
+    // Check upload results - both platforms must succeed
     if (!uploadResult.success) {
       logger.error("❌ Upload to platforms failed:", uploadResult);
       currentWorkflow.status = "failed";
       currentWorkflow.error = "Upload to platforms failed";
 
-      // Emergency cleanup on upload failure
+      // Emergency cleanup on upload failure (this will clean Drive files too via Instagram function)
       await cleanupOnError();
 
       // Send error notification for upload failure
       await sendErrorNotification(
         taskData,
-        new Error("Upload to platforms failed"),
+        new Error(
+          `Upload failed: YouTube: ${
+            uploadResult.youtube.success
+              ? "Success"
+              : uploadResult.youtube.error
+          }, Instagram: ${
+            uploadResult.instagram.success
+              ? "Success"
+              : uploadResult.instagram.error
+          }`
+        ),
         currentWorkflow.currentStep
       );
       throw new Error("Upload to platforms failed");
     }
 
-    logger.info("✓ Uploaded to platforms");
+    // Both uploads succeeded - proceed with success workflow
+    logger.info("✅ Both YouTube and Instagram uploads successful!");
+    logger.info(`📺 YouTube: ${uploadResult.youtubeUrl}`);
+    logger.info(`📱 Instagram: ${uploadResult.instagramUrl}`);
 
     // Step 8: Mark as posted and update sheets
     logger.info("📊 Step 8: Updating status and sheets");
     currentWorkflow.currentStep = "sheets/update";
 
-    // Determine status based on upload success
-    const status = uploadResult.success ? "Posted" : "Upload Failed";
+    const timestamp = new Date().toISOString();
     const youtubeUrl = uploadResult.youtubeUrl || "";
     const instagramUrl = uploadResult.instagramUrl || "";
 
-    await updateSheetStatus(taskData.rowId, status, youtubeUrl, instagramUrl);
-    logger.info(`✓ Marked as "${status}" in sheets with links`);
+    await updateSheetStatus(taskData.rowId, "Posted", youtubeUrl, instagramUrl);
+    logger.info(
+      `✓ Marked as "Posted" in sheets with links and timestamp: ${new Date().toISOString()}`
+    );
 
     // Step 9: Cleanup
     logger.info("🧹 Step 9: Cleaning up temporary files");
     await cleanupAllMediaFolders();
     logger.info("✓ Cleanup completed");
 
-    // Step 10: Success notification (only if uploads succeeded)
-    if (uploadResult.success) {
-      logger.info("📧 Step 10: Sending success notification");
-      await sendSuccessNotification(taskData, finalVideo.videoPath);
-      logger.info("✅ Success notification email sent");
-    } else {
-      logger.warn("⚠️ Skipping success notification due to upload failures");
-    }
+    // Step 10: Success notification with both links
+    logger.info("📧 Step 10: Sending success notification");
+    await sendSuccessNotification(taskData, finalVideo.videoPath, uploadResult);
+    logger.info("✅ Success notification email sent");
 
     currentWorkflow.status = "completed";
-    logger.info("🎉 Workflow completed successfully!");
+    logger.info(`🎉 Workflow completed successfully: ${taskData.idea}`);
   } catch (error) {
     logger.error("❌ Workflow failed:", {
       error: error.message,

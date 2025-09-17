@@ -2,7 +2,27 @@ const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const { google } = require("googleapis");
+const {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} = require("@aws-sdk/client-s3");
+const { Upload } = require("@aws-sdk/lib-storage");
+
+// Filebase configuration
+const FILEBASE_ACCESS_KEY = process.env.FILEBASE_ACCESS_KEY;
+const FILEBASE_SECRET_KEY = process.env.FILEBASE_SECRET_KEY;
+const FILEBASE_BUCKET = process.env.FILEBASE_BUCKET || "ai-content-videos";
+
+// Initialize Filebase S3 client
+const s3Client = new S3Client({
+  region: "us-east-1",
+  endpoint: "https://s3.filebase.com",
+  credentials: {
+    accessKeyId: FILEBASE_ACCESS_KEY,
+    secretAccessKey: FILEBASE_SECRET_KEY,
+  },
+});
 
 /**
  * Generate hashtags and captions for social media
@@ -173,26 +193,67 @@ const uploadToInstagram = async (videoPath, title, description) => {
       );
     }
 
-    // Step 1: Upload video to get media ID
+    // Step 1: Upload to Filebase and get public link
+    const filebaseResult = await uploadToFilebaseAndGetLink(videoPath, title);
+    if (!filebaseResult.success) {
+      throw new Error(`Filebase upload failed: ${filebaseResult.error}`);
+    }
+
+    const filebaseFileName = filebaseResult.fileName;
+    const publicVideoUrl = filebaseResult.publicLink;
+
+    logger.info(`🔗 Using Filebase link for Instagram: ${publicVideoUrl}`);
+
+    // Step 2: Upload video to get media ID using public URL
     const uploadUrl = `https://graph.facebook.com/v18.0/${accountId}/media`;
     const uploadParams = {
       media_type: "REELS",
-      video_url: `file://${videoPath}`, // Local file path
+      video_url: publicVideoUrl, // Use public Filebase URL
       caption: socialContent.caption,
       access_token: accessToken,
     };
 
+    logger.info("📤 Uploading media to Instagram...");
     const uploadResponse = await axios.post(uploadUrl, uploadParams);
     const mediaId = uploadResponse.data.id;
 
-    // Step 2: Publish the media
+    logger.info(`✅ Media uploaded successfully. Media ID: ${mediaId}`);
+
+    // Wait for Instagram to process the media before publishing
+    logger.info("⏳ Waiting for Instagram to process media (40 seconds)...");
+    await new Promise((resolve) => setTimeout(resolve, 40000));
+
+    // Step 3: Publish the media with retry mechanism
     const publishUrl = `https://graph.facebook.com/v18.0/${accountId}/media_publish`;
     const publishParams = {
       creation_id: mediaId,
       access_token: accessToken,
     };
 
-    const publishResponse = await axios.post(publishUrl, publishParams);
+    let publishResponse;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        logger.info(
+          `🚀 Publishing media (attempt ${retryCount + 1}/${maxRetries})...`
+        );
+        publishResponse = await axios.post(publishUrl, publishParams);
+        break; // Success, exit retry loop
+      } catch (publishError) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          logger.warn(
+            `⚠️ Publish attempt ${retryCount} failed, retrying in 25 seconds...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 25000));
+        } else {
+          throw publishError; // Max retries reached, throw error
+        }
+      }
+    }
+
     const postId = publishResponse.data.id;
 
     const instagramUrl = `https://instagram.com/p/${postId}`;
@@ -207,6 +268,11 @@ const uploadToInstagram = async (videoPath, title, description) => {
     };
   } catch (error) {
     logger.error("❌ Instagram upload failed:", error.message);
+    if (error.response) {
+      logger.error("Response status:", error.response.status);
+      logger.error("Response data:", error.response.data);
+    }
+
     return {
       success: false,
       error: error.message,
@@ -226,28 +292,15 @@ const uploadToBothPlatforms = async (videoPath, title, description) => {
       instagram: null,
     };
 
-    // Upload to YouTube (try OAuth2 first, then service account)
+    // Upload to YouTube
     try {
-      logger.info("🎯 Attempting YouTube OAuth2 upload first...");
-      results.youtube = await uploadToYouTubeOAuth2(
-        videoPath,
-        title,
-        description
-      );
-
-      // If OAuth2 fails, try service account as fallback
-      if (!results.youtube.success) {
-        logger.warn(
-          "⚠️ OAuth2 upload failed, trying service account fallback..."
-        );
-        results.youtube = await uploadToYouTube(videoPath, title, description);
-      }
+      results.youtube = await uploadToYouTube(videoPath, title, description);
     } catch (error) {
       logger.error("YouTube upload failed:", error);
       results.youtube = { success: false, error: error.message };
     }
 
-    // Upload to Instagram
+    // Upload to Instagram (this will handle Filebase upload internally)
     try {
       results.instagram = await uploadToInstagram(
         videoPath,
@@ -260,7 +313,7 @@ const uploadToBothPlatforms = async (videoPath, title, description) => {
     }
 
     const uploadSummary = {
-      success: results.youtube.success || results.instagram.success,
+      success: results.youtube.success && results.instagram.success, // Both must succeed
       youtube: results.youtube,
       instagram: results.instagram,
       youtubeUrl: results.youtube.success ? results.youtube.url : null,
@@ -366,10 +419,112 @@ const uploadToYouTubeOAuth2 = async (videoPath, title, description) => {
   }
 };
 
+/**
+ * Upload video to Filebase and get public shareable link
+ */
+const uploadToFilebaseAndGetLink = async (videoPath, title) => {
+  try {
+    logger.info("☁️ Uploading video to Filebase...");
+
+    if (!FILEBASE_ACCESS_KEY || !FILEBASE_SECRET_KEY) {
+      throw new Error(
+        "FILEBASE_ACCESS_KEY and FILEBASE_SECRET_KEY environment variables are required"
+      );
+    }
+
+    const fileName = `${title.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.mp4`;
+    const fileStream = fs.createReadStream(videoPath);
+    const fileStats = fs.statSync(videoPath);
+
+    logger.info(`📁 Uploading file: ${fileName}`);
+    logger.info(
+      `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`
+    );
+
+    // Upload to Filebase using multipart upload for large files
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: FILEBASE_BUCKET,
+        Key: fileName,
+        Body: fileStream,
+        ContentType: "video/mp4",
+        ACL: "public-read", // Make file publicly accessible
+      },
+    });
+
+    const result = await upload.done();
+    logger.info(`✅ File uploaded to Filebase. Key: ${fileName}`);
+
+    // Generate public URL using Filebase gateway
+    const publicLink = `https://ipfs.filebase.io/ipfs/${result.Location.split(
+      "/"
+    ).pop()}`;
+    logger.info(`🔗 Public link: ${publicLink}`);
+
+    return {
+      success: true,
+      fileName: fileName,
+      publicLink: publicLink,
+      bucket: FILEBASE_BUCKET,
+    };
+  } catch (error) {
+    logger.error("❌ Filebase upload failed:", error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
+ * Delete file from Filebase S3
+ */
+const deleteFromDrive = async (fileId) => {
+  try {
+    logger.info(`🗑️ Deleting file from Filebase S3: ${fileId}`);
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: FILEBASE_BUCKET,
+        Key: fileId,
+      })
+    );
+    logger.info("✅ File deleted from Filebase S3");
+    return { success: true };
+  } catch (error) {
+    logger.error("❌ Failed to delete from Filebase S3:", error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Delete file from Filebase
+ */
+const deleteFromFilebase = async (fileName, bucket) => {
+  try {
+    logger.info(`🗑️ Deleting file from Filebase: ${fileName}`);
+
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: fileName,
+    });
+
+    await s3Client.send(deleteCommand);
+    logger.info("✅ File deleted from Filebase");
+    return { success: true };
+  } catch (error) {
+    logger.error("❌ Failed to delete from Filebase:", error.message);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
   uploadToBothPlatforms,
   generateSocialMediaContent,
   uploadToYouTubeOAuth2,
+  uploadToFilebaseAndGetLink,
+  deleteFromDrive,
+  deleteFromFilebase,
 };
