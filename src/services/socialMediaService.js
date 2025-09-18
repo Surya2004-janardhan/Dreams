@@ -2,25 +2,19 @@ const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
-const {
-  S3Client,
-  PutObjectCommand,
-  DeleteObjectCommand,
-} = require("@aws-sdk/client-s3");
-const { Upload } = require("@aws-sdk/lib-storage");
+const { createClient } = require("@supabase/supabase-js");
 
-// Filebase configuration
-const FILEBASE_ACCESS_KEY = process.env.FILEBASE_ACCESS_KEY;
-const FILEBASE_SECRET_KEY = process.env.FILEBASE_SECRET_KEY;
-const FILEBASE_BUCKET = process.env.FILEBASE_BUCKET || "ai-content-videos";
+// Supabase configuration
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "videos";
 
-// Initialize Filebase S3 client
-const s3Client = new S3Client({
-  region: "us-east-1",
-  endpoint: "https://s3.filebase.com",
-  credentials: {
-    accessKeyId: FILEBASE_ACCESS_KEY,
-    secretAccessKey: FILEBASE_SECRET_KEY,
+// Initialize Supabase client
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
   },
 });
 
@@ -90,6 +84,90 @@ ${allHashtags.join(" ")}`;
 };
 
 /**
+ * Generate AI-powered social media content using Groq
+ */
+const generateAISocialMediaContent = async (
+  title,
+  description,
+  scriptContent = ""
+) => {
+  try {
+    const groqApiKey = process.env.GROQ_API_KEY;
+    if (!groqApiKey) {
+      logger.warn(
+        "⚠️ GROQ_API_KEY not found, falling back to template generation"
+      );
+      return generateSocialMediaContent(title, description);
+    }
+
+    logger.info("🤖 Generating AI-powered social media content with Groq...");
+
+    const prompt = `Generate engaging social media content for a short educational video.
+
+Video Title: "${title}"
+Video Description: "${description}"
+${scriptContent ? `Script Content: "${scriptContent}"` : ""}
+
+Please generate:
+1. YouTube Title (max 100 chars, engaging and SEO-friendly)
+2. YouTube Description (detailed, with emojis and call-to-action)
+3. Instagram Caption (engaging, with emojis and hashtags)
+4. Relevant hashtags for both platforms (15-20 hashtags total)
+
+Make it educational, engaging, and optimized for social media algorithms.
+Format your response as JSON with keys: youtubeTitle, youtubeDescription, instagramCaption, hashtags`;
+
+    const groqResponse = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama3-8b-8192",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${groqApiKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const aiContent = JSON.parse(groqResponse.data.choices[0].message.content);
+
+    // Extract hashtags from the AI response
+    const hashtags = aiContent.hashtags || [];
+    const hashtagString = Array.isArray(hashtags)
+      ? hashtags.join(" ")
+      : hashtags;
+
+    return {
+      youtube: {
+        title: aiContent.youtubeTitle || title,
+        description: aiContent.youtubeDescription || description,
+        tags: hashtags.slice(0, 10).map((h) => h.replace("#", "")),
+        hashtags: hashtagString,
+      },
+      instagram: {
+        caption: aiContent.instagramCaption || description,
+        hashtags: hashtagString,
+      },
+    };
+  } catch (error) {
+    logger.error(
+      "❌ AI content generation failed, using template:",
+      error.message
+    );
+    return generateSocialMediaContent(title, description);
+  }
+};
+
+/**
  * Upload video to YouTube
  */
 const uploadToYouTube = async (videoPath, title, description) => {
@@ -115,7 +193,10 @@ const uploadToYouTube = async (videoPath, title, description) => {
       auth: oauth2Client,
     });
 
-    const socialContent = generateSocialMediaContent(title, description);
+    const socialContent = await generateAISocialMediaContent(
+      title,
+      description
+    );
 
     // Ensure #Shorts tag is included for proper short video recognition
     const tags = [...socialContent.youtube.tags];
@@ -178,10 +259,15 @@ const uploadToYouTube = async (videoPath, title, description) => {
  * Upload video to Instagram (using Instagram Graph API for reels)
  */
 const uploadToInstagram = async (videoPath, title, description) => {
+  let uploadedFileName = null; // Changed from filebaseFileName to be more descriptive
+
   try {
     logger.info("📱 Starting Instagram upload...");
 
-    const socialContent = generateSocialMediaContent(title, description);
+    const socialContent = await generateAISocialMediaContent(
+      title,
+      description
+    );
 
     // Required environment variables
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
@@ -193,40 +279,40 @@ const uploadToInstagram = async (videoPath, title, description) => {
       );
     }
 
-    // Step 1: Upload to Filebase and get public link
-    const filebaseResult = await uploadToFilebaseAndGetLink(videoPath, title);
-    if (!filebaseResult.success) {
-      throw new Error(`Filebase upload failed: ${filebaseResult.error}`);
+    // Step 1: Upload to Supabase and get public link
+    const supabaseResult = await uploadToSupabaseAndGetLink(videoPath, title);
+    if (!supabaseResult.success) {
+      throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
     }
 
-    const filebaseFileName = filebaseResult.fileName;
-    const publicVideoUrl = filebaseResult.publicLink;
+    uploadedFileName = supabaseResult.fileName;
+    const publicVideoUrl = supabaseResult.publicLink;
 
-    logger.info(`🔗 Using Filebase link for Instagram: ${publicVideoUrl}`);
+    logger.info(`🔗 Using Supabase link for Instagram: ${publicVideoUrl}`);
 
-    // Step 2: Upload video to get media ID using public URL
-    const uploadUrl = `https://graph.facebook.com/v18.0/${accountId}/media`;
-    const uploadParams = {
+    // Step 2: Create Reels Container using Instagram Graph API v23.0
+    const containerUrl = `https://graph.facebook.com/v23.0/${accountId}/media`;
+    const containerParams = {
       media_type: "REELS",
-      video_url: publicVideoUrl, // Use public Filebase URL
-      caption: socialContent.caption,
+      video_url: publicVideoUrl,
+      caption: socialContent.instagram.caption,
+      share_to_feed: false, // Set to false for Reels-only posts
       access_token: accessToken,
     };
 
-    logger.info("📤 Uploading media to Instagram...");
-    const uploadResponse = await axios.post(uploadUrl, uploadParams);
-    const mediaId = uploadResponse.data.id;
+    logger.info("📦 Creating Reels container...");
+    const containerResponse = await axios.post(containerUrl, containerParams);
+    const containerId = containerResponse.data.id;
+    logger.info(`✅ Reels container created. Container ID: ${containerId}`);
 
-    logger.info(`✅ Media uploaded successfully. Media ID: ${mediaId}`);
-
-    // Wait for Instagram to process the media before publishing
+    // Step 3: Wait for Instagram to process the media
     logger.info("⏳ Waiting for Instagram to process media (40 seconds)...");
     await new Promise((resolve) => setTimeout(resolve, 40000));
 
-    // Step 3: Publish the media with retry mechanism
-    const publishUrl = `https://graph.facebook.com/v18.0/${accountId}/media_publish`;
+    // Step 4: Publish the Reels container
+    const publishUrl = `https://graph.facebook.com/v23.0/${accountId}/media_publish`;
     const publishParams = {
-      creation_id: mediaId,
+      creation_id: containerId,
       access_token: accessToken,
     };
 
@@ -237,15 +323,25 @@ const uploadToInstagram = async (videoPath, title, description) => {
     while (retryCount < maxRetries) {
       try {
         logger.info(
-          `🚀 Publishing media (attempt ${retryCount + 1}/${maxRetries})...`
+          `🚀 Publishing Reels (attempt ${retryCount + 1}/${maxRetries})...`
         );
         publishResponse = await axios.post(publishUrl, publishParams);
-        break; // Success, exit retry loop
+
+        // Check if publish was successful
+        if (publishResponse.data.id) {
+          break; // Success, exit retry loop
+        }
       } catch (publishError) {
         retryCount++;
         if (retryCount < maxRetries) {
           logger.warn(
             `⚠️ Publish attempt ${retryCount} failed, retrying in 25 seconds...`
+          );
+          logger.warn(
+            `Error: ${
+              publishError.response?.data?.error?.message ||
+              publishError.message
+            }`
           );
           await new Promise((resolve) => setTimeout(resolve, 25000));
         } else {
@@ -255,22 +351,39 @@ const uploadToInstagram = async (videoPath, title, description) => {
     }
 
     const postId = publishResponse.data.id;
+    const instagramUrl = `https://instagram.com/reel/${postId}`;
 
-    const instagramUrl = `https://instagram.com/p/${postId}`;
+    // Get the actual permalink from Instagram
+    const permalink = await getInstagramPermalink(postId, accessToken);
+    const finalUrl = permalink || instagramUrl;
 
-    logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
+    logger.info(`✅ Instagram Reels upload successful: ${finalUrl}`);
+
+    // Clean up Supabase file after successful Instagram upload
+    if (uploadedFileName) {
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
 
     return {
       success: true,
-      url: instagramUrl,
+      url: finalUrl,
       postId: postId,
-      caption: socialContent.caption,
+      containerId: containerId,
+      caption: socialContent.instagram.caption,
     };
   } catch (error) {
     logger.error("❌ Instagram upload failed:", error.message);
     if (error.response) {
       logger.error("Response status:", error.response.status);
       logger.error("Response data:", error.response.data);
+    }
+
+    // Clean up Supabase file on error
+    if (uploadedFileName) {
+      logger.warn(
+        "🧹 Cleaning up Supabase file due to Instagram upload failure..."
+      );
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
     }
 
     return {
@@ -283,9 +396,22 @@ const uploadToInstagram = async (videoPath, title, description) => {
 /**
  * Upload video to both platforms
  */
-const uploadToBothPlatforms = async (videoPath, title, description) => {
+const uploadToBothPlatforms = async (
+  videoPath,
+  title,
+  description,
+  scriptContent = ""
+) => {
   try {
     logger.info("🚀 Starting upload to both YouTube and Instagram...");
+
+    // Generate AI-powered content for both platforms
+    const socialContent = await generateAISocialMediaContent(
+      title,
+      description,
+      scriptContent
+    );
+    logger.info("🤖 AI-generated content ready for upload");
 
     const results = {
       youtube: null,
@@ -294,17 +420,21 @@ const uploadToBothPlatforms = async (videoPath, title, description) => {
 
     // Upload to YouTube
     try {
-      results.youtube = await uploadToYouTube(videoPath, title, description);
+      results.youtube = await uploadToYouTube(
+        videoPath,
+        socialContent.youtube.title,
+        socialContent.youtube.description
+      );
     } catch (error) {
       logger.error("YouTube upload failed:", error);
       results.youtube = { success: false, error: error.message };
     }
 
-    // Upload to Instagram (this will handle Filebase upload internally)
+    // Upload to Instagram (this will handle Supabase upload internally)
     try {
       results.instagram = await uploadToInstagram(
         videoPath,
-        title,
+        socialContent.instagram.caption,
         description
       );
     } catch (error) {
@@ -420,20 +550,21 @@ const uploadToYouTubeOAuth2 = async (videoPath, title, description) => {
 };
 
 /**
- * Upload video to Filebase and get public shareable link
+ * Upload video to Supabase and get public shareable link
  */
-const uploadToFilebaseAndGetLink = async (videoPath, title) => {
+const uploadToSupabaseAndGetLink = async (videoPath, title) => {
   try {
-    logger.info("☁️ Uploading video to Filebase...");
+    logger.info("☁️ Uploading video to Supabase...");
 
-    if (!FILEBASE_ACCESS_KEY || !FILEBASE_SECRET_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error(
-        "FILEBASE_ACCESS_KEY and FILEBASE_SECRET_KEY environment variables are required"
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required"
       );
     }
 
     const fileName = `${title.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.mp4`;
     const fileContent = fs.readFileSync(videoPath);
+    const fileBuffer = Buffer.from(fileContent);
     const fileStats = fs.statSync(videoPath);
 
     logger.info(`📁 Uploading file: ${fileName}`);
@@ -441,30 +572,36 @@ const uploadToFilebaseAndGetLink = async (videoPath, title) => {
       `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`
     );
 
-    // Upload to Filebase S3 with proper public access
-    const uploadCommand = new PutObjectCommand({
-      Bucket: FILEBASE_BUCKET,
-      Key: fileName,
-      Body: fileContent,
-      ContentType: "video/mp4",
-      ACL: "public-read",
-    });
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(SUPABASE_BUCKET)
+      .upload(fileName, fileBuffer, {
+        contentType: "video/mp4",
+        upsert: false,
+      });
 
-    const uploadResult = await s3Client.send(uploadCommand);
-    logger.info(`✅ File uploaded to Filebase. Key: ${fileName}`);
+    if (error) {
+      throw new Error(`Supabase upload failed: ${error.message}`);
+    }
 
-    // Use Filebase's dedicated public gateway for better Instagram compatibility
-    const publicLink = `https://ipfs.filebase.io/ipfs/${fileName}`;
+    logger.info(`✅ File uploaded to Supabase. Key: ${fileName}`);
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(SUPABASE_BUCKET)
+      .getPublicUrl(fileName);
+
+    const publicLink = urlData.publicUrl;
     logger.info(`🔗 Public link: ${publicLink}`);
 
     return {
       success: true,
       fileName: fileName,
       publicLink: publicLink,
-      bucket: FILEBASE_BUCKET,
+      bucket: SUPABASE_BUCKET,
     };
   } catch (error) {
-    logger.error("❌ Filebase upload failed:", error.message);
+    logger.error("❌ Supabase upload failed:", error.message);
     return {
       success: false,
       error: error.message,
@@ -473,43 +610,48 @@ const uploadToFilebaseAndGetLink = async (videoPath, title) => {
 };
 
 /**
- * Delete file from Filebase S3
+ * Delete file from Supabase
  */
-const deleteFromDrive = async (fileId) => {
+const deleteFromSupabase = async (fileName, bucket) => {
   try {
-    logger.info(`🗑️ Deleting file from Filebase S3: ${fileId}`);
-    await s3Client.send(
-      new DeleteObjectCommand({
-        Bucket: FILEBASE_BUCKET,
-        Key: fileId,
-      })
-    );
-    logger.info("✅ File deleted from Filebase S3");
+    logger.info(`🗑️ Deleting file from Supabase: ${fileName}`);
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .remove([fileName]);
+
+    if (error) {
+      throw new Error(`Supabase delete failed: ${error.message}`);
+    }
+
+    logger.info("✅ File deleted from Supabase");
     return { success: true };
   } catch (error) {
-    logger.error("❌ Failed to delete from Filebase S3:", error.message);
+    logger.error("❌ Failed to delete from Supabase:", error.message);
     return { success: false, error: error.message };
   }
 };
 
 /**
- * Delete file from Filebase
+ * Get Instagram permalink using media ID
  */
-const deleteFromFilebase = async (fileName, bucket) => {
+const getInstagramPermalink = async (mediaId, accessToken) => {
   try {
-    logger.info(`🗑️ Deleting file from Filebase: ${fileName}`);
+    logger.info(`🔗 Getting Instagram permalink for media ID: ${mediaId}`);
 
-    const deleteCommand = new DeleteObjectCommand({
-      Bucket: bucket,
-      Key: fileName,
-    });
+    const url = `https://graph.facebook.com/v18.0/${mediaId}?fields=permalink&access_token=${accessToken}`;
+    const response = await axios.get(url);
 
-    await s3Client.send(deleteCommand);
-    logger.info("✅ File deleted from Filebase");
-    return { success: true };
+    const permalink = response.data.permalink;
+    logger.info(`✅ Instagram permalink: ${permalink}`);
+
+    return permalink;
   } catch (error) {
-    logger.error("❌ Failed to delete from Filebase:", error.message);
-    return { success: false, error: error.message };
+    logger.error("❌ Failed to get Instagram permalink:", error.message);
+    if (error.response) {
+      logger.error("Response data:", error.response.data);
+    }
+    return null;
   }
 };
 
@@ -519,7 +661,8 @@ module.exports = {
   uploadToBothPlatforms,
   generateSocialMediaContent,
   uploadToYouTubeOAuth2,
-  uploadToFilebaseAndGetLink,
-  deleteFromDrive,
-  deleteFromFilebase,
+  uploadToSupabaseAndGetLink,
+  deleteFromSupabase,
+  getInstagramPermalink,
+  generateAISocialMediaContent,
 };

@@ -36,61 +36,8 @@ const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 
 /**
- * Clean up all generated files on error
+ * Store current workflow state (no checkpoints)
  */
-const cleanupOnError = async () => {
-  try {
-    logger.info("🧹 Starting emergency cleanup due to error...");
-
-    const folders = ["audio", "images", "subtitles", "temp", "scripts"];
-
-    for (const folder of folders) {
-      if (fs.existsSync(folder)) {
-        const files = fs.readdirSync(folder);
-        for (const file of files) {
-          try {
-            const filePath = path.join(folder, file);
-            const stat = fs.statSync(filePath);
-            if (stat.isFile()) {
-              fs.unlinkSync(filePath);
-              logger.info(`🗑️ Deleted: ${filePath}`);
-            }
-          } catch (error) {
-            logger.error(`Failed to delete ${file}:`, error.message);
-          }
-        }
-      }
-    }
-
-    // Clean videos folder but preserve base video
-    if (fs.existsSync("videos")) {
-      const files = fs.readdirSync("videos");
-      for (const file of files) {
-        if (!file.toLowerCase().includes("base")) {
-          try {
-            const filePath = path.join("videos", file);
-            const stat = fs.statSync(filePath);
-            if (stat.isFile()) {
-              fs.unlinkSync(filePath);
-              logger.info(`🗑️ Deleted: ${filePath}`);
-            }
-          } catch (error) {
-            logger.error(`Failed to delete ${file}:`, error.message);
-          }
-        }
-      }
-    }
-
-    // Clean root directory but preserve final video copies
-    await cleanupRootDirectory();
-
-    logger.info("✅ Emergency cleanup completed");
-  } catch (error) {
-    logger.error("❌ Emergency cleanup failed:", error);
-  }
-};
-
-// Store current workflow state (no checkpoints)
 let currentWorkflow = {
   taskId: null,
   status: "idle",
@@ -176,14 +123,34 @@ const runCompleteWorkflow = async (taskData) => {
     );
     currentWorkflow.results.finalVideo = finalVideo.videoPath;
     currentWorkflow.results.rootCopyPath = finalVideo.rootCopyPath;
+
+    // Move final video to final_video folder for organized storage
+    const finalVideoFolder = "final_video";
+    const videoTimestamp = Date.now();
+    const finalVideoName = `final_video_${videoTimestamp}.mp4`;
+    const finalVideoPath = path.join(finalVideoFolder, finalVideoName);
+
+    // Ensure final_video folder exists
+    if (!fs.existsSync(finalVideoFolder)) {
+      fs.mkdirSync(finalVideoFolder, { recursive: true });
+    }
+
+    // Copy video to final_video folder
+    fs.copyFileSync(finalVideo.videoPath, finalVideoPath);
+    currentWorkflow.results.finalVideoPath = finalVideoPath;
+
     logger.info("✓ Video merged successfully");
     logger.info(`📋 Root copy available at: ${finalVideo.rootCopyPath}`);
+    logger.info(`📁 Final video stored at: ${finalVideoPath}`);
 
     // Step 7: Upload to platforms
     logger.info("📤 Step 7: Uploading to platforms");
     currentWorkflow.currentStep = "upload/platforms";
+
+    // Use the video from final_video folder for uploads
+    const uploadVideoPath = currentWorkflow.results.finalVideoPath;
     const uploadResult = await uploadToBothPlatforms(
-      finalVideo.videoPath,
+      uploadVideoPath,
       taskData.idea,
       script
     );
@@ -195,7 +162,7 @@ const runCompleteWorkflow = async (taskData) => {
       currentWorkflow.status = "failed";
       currentWorkflow.error = "Upload to platforms failed";
 
-      // Emergency cleanup on upload failure (this will clean Drive files too via Instagram function)
+      // Emergency cleanup on upload failure
       await cleanupOnError();
 
       // Send error notification for upload failure
@@ -226,13 +193,13 @@ const runCompleteWorkflow = async (taskData) => {
     logger.info("📊 Step 8: Updating status and sheets");
     currentWorkflow.currentStep = "sheets/update";
 
-    const timestamp = new Date().toISOString();
+    const updateTimestamp = new Date().toISOString();
     const youtubeUrl = uploadResult.youtubeUrl || "";
     const instagramUrl = uploadResult.instagramUrl || "";
 
     await updateSheetStatus(taskData.rowId, "Posted", youtubeUrl, instagramUrl);
     logger.info(
-      `✓ Marked as "Posted" in sheets with links and timestamp: ${new Date().toISOString()}`
+      `✓ Marked as "Posted" in sheets with links and timestamp: ${updateTimestamp}`
     );
 
     // Step 9: Cleanup
@@ -242,7 +209,7 @@ const runCompleteWorkflow = async (taskData) => {
 
     // Step 10: Success notification with both links
     logger.info("📧 Step 10: Sending success notification");
-    await sendSuccessNotification(taskData, finalVideo.videoPath, uploadResult);
+    await sendSuccessNotification(taskData, uploadResult);
     logger.info("✅ Success notification email sent");
 
     currentWorkflow.status = "completed";

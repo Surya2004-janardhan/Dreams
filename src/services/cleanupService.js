@@ -255,6 +255,49 @@ const cleanupRootDirectory = async () => {
   }
 };
 
+/**
+ * Emergency cleanup on error - removes all temporary files and folders
+ */
+const cleanupOnError = async () => {
+  try {
+    logger.info("🚨 Emergency cleanup initiated due to error");
+
+    const directoriesToClean = [
+      path.join(__dirname, "../../audio"),
+      path.join(__dirname, "../../images"),
+      path.join(__dirname, "../../scripts"),
+      path.join(__dirname, "../../subtitles"),
+      path.join(__dirname, "../../temp"),
+      path.join(__dirname, "../../videos"),
+      path.join(__dirname, "../../final_video"),
+    ];
+
+    let totalDeleted = 0;
+
+    for (const dir of directoriesToClean) {
+      try {
+        const result = await cleanDirectory(dir);
+        if (result.success) {
+          totalDeleted += result.filesDeleted;
+          logger.info(
+            `🗑️ Cleaned ${result.filesDeleted} files from ${path.basename(dir)}`
+          );
+        }
+      } catch (error) {
+        logger.error(`Failed to clean ${dir}:`, error.message);
+      }
+    }
+
+    logger.info(
+      `✅ Emergency cleanup completed. Deleted ${totalDeleted} files total`
+    );
+    return { success: true, filesDeleted: totalDeleted };
+  } catch (error) {
+    logger.error("❌ Emergency cleanup failed:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   cleanDirectory,
   cleanupAllMediaFolders,
@@ -263,4 +306,5 @@ module.exports = {
   ensureDirectoryExists,
   initializeDirectories,
   cleanupRootDirectory,
+  cleanupOnError,
 };
