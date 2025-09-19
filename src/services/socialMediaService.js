@@ -72,7 +72,7 @@ ${allHashtags.join(" ")}`;
 
   return {
     youtube: {
-      title: title.length > 100 ? title.substring(0, 97) + "..." : title,
+      title: title.length > 55 ? title.substring(0, 50) + "..." : title,
       description: youtubeCaption,
       tags: allHashtags.map((h) => h.replace("#", "")).slice(0, 10),
       hashtags: allHashtags.join(" "),
@@ -110,13 +110,17 @@ Video Description: "${description}"
 ${scriptContent ? `Script Content: "${scriptContent}"` : ""}
 
 Please generate:
-1. YouTube Title (max 100 chars, engaging and SEO-friendly)
-2. YouTube Description (detailed, with emojis and call-to-action)
-3. Instagram Caption (engaging, with emojis and hashtags)
-4. Relevant hashtags for both platforms (15-20 hashtags total)
+1. YouTube Description (detailed, with emojis and call-to-action, max 5000 chars)
+2. Instagram Description/Caption body (engaging content about the topic, max 2000 chars)
+3. Relevant hashtags for both platforms (15-20 hashtags total)
 
-Make it educational, engaging, and optimized for social media algorithms.
-Format your response as JSON with keys: youtubeTitle, youtubeDescription, instagramCaption, hashtags`;
+IMPORTANT: 
+- Keep the original title "${title}" as-is for both platforms
+- Only generate descriptions and hashtags
+- Make descriptions educational and engaging
+- Format your response as JSON with keys: youtubeDescription, instagramDescription, hashtags
+
+Make it educational, engaging, and optimized for social media algorithms.`;
 
     const groqResponse = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -149,13 +153,15 @@ Format your response as JSON with keys: youtubeTitle, youtubeDescription, instag
 
     return {
       youtube: {
-        title: aiContent.youtubeTitle || title,
+        title: title, // Use original title from sheet
         description: aiContent.youtubeDescription || description,
         tags: hashtags.slice(0, 10).map((h) => h.replace("#", "")),
         hashtags: hashtagString,
       },
       instagram: {
-        caption: aiContent.instagramCaption || description,
+        caption: `${title}\n\n${
+          aiContent.instagramDescription || description
+        }\n\n${hashtagString}`, // Title + AI description + hashtags
         hashtags: hashtagString,
       },
     };
@@ -199,17 +205,9 @@ const uploadToYouTube = async (videoPath, title, description) => {
       description
     );
 
-    // Ensure #Shorts tag is included for proper short video recognition
+    // Use the original title from sheet without modifications
+    const finalTitle = socialContent.youtube.title;
     const tags = [...socialContent.youtube.tags];
-    if (!tags.includes("Shorts")) {
-      tags.push("Shorts");
-    }
-
-    // Add #Shorts to title if not present
-    let finalTitle = socialContent.youtube.title;
-    if (!finalTitle.includes("#Shorts")) {
-      finalTitle = `${finalTitle} #Shorts`;
-    }
 
     logger.info(`🏷️ Final tags: ${tags.join(", ")}`);
     logger.info(`📹 Final title: ${finalTitle}`);

@@ -1,6 +1,6 @@
 const {
   generateAudioWithBatchingStrategy,
-} = require("./src/services/audioService");
+} = require("../src/services/audioService");
 
 async function testGeminiAudio() {
   console.log("Testing Gemini TTS audio generation...");

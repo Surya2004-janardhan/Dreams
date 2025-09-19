@@ -75,12 +75,14 @@ const cleanupAllMediaFolders = async () => {
     // Clean scripts folder (remove all generated script files)
     cleanupResults.scripts = await cleanDirectory("scripts", []);
 
-    // Clean videos folder but preserve base videos and default image
+    // Clean videos folder but preserve ALL essential files
     cleanupResults.videos = await cleanDirectory("videos", [
       "base",
       "background",
       "template",
       "default-image",
+      "Base-vedio", // Preserve the actual base video file
+      "default-image.jpg", // Preserve the actual default image file
     ]);
 
     // Clean root directory but preserve final video copies
@@ -126,12 +128,19 @@ const cleanupOldFiles = async (dirPath, maxAgeInDays = 7) => {
       try {
         const stat = fs.statSync(filePath);
         if (stat.isFile() && stat.mtime.getTime() < cutoffTime) {
-          // Preserve default image in videos folder
-          if (path.basename(dirPath) === 'videos' && file.toLowerCase().includes('default-image')) {
-            logger.info(`📁 Preserved default image: ${filePath}`);
+          // Preserve essential files in videos folder
+          if (
+            path.basename(dirPath) === "videos" &&
+            (file.toLowerCase().includes("default-image") ||
+              file.toLowerCase().includes("base-vedio") ||
+              file.toLowerCase().includes("base") ||
+              file.toLowerCase().includes("background") ||
+              file.toLowerCase().includes("template"))
+          ) {
+            logger.info(`📁 Preserved essential video file: ${filePath}`);
             continue;
           }
-          
+
           fs.unlinkSync(filePath);
           deletedCount++;
           logger.info(`🗑️ Deleted old file: ${filePath}`);
@@ -199,9 +208,9 @@ const ensureDirectoryExists = (dirPath) => {
 };
 
 /**
- * Initialize all required directories
+ * Initialize all required directories and ensure essential files
  */
-const initializeDirectories = () => {
+const initializeDirectories = async () => {
   const requiredDirs = [
     "audio",
     "images",
@@ -216,6 +225,14 @@ const initializeDirectories = () => {
   });
 
   logger.info("📁 All required directories initialized");
+
+  // Ensure essential video files are present
+  const essentialCheck = await ensureEssentialVideoFiles();
+  if (!essentialCheck.success) {
+    logger.error("❌ Essential video files check failed:", essentialCheck);
+  }
+
+  return essentialCheck;
 };
 
 /**
@@ -283,26 +300,68 @@ const cleanupOnError = async () => {
 
     for (const dir of directoriesToClean) {
       try {
-        // Preserve default image in videos folder
-        const preserveFiles = path.basename(dir) === 'videos' ? ['default-image'] : [];
+        // Preserve essential files in videos folder
+        const preserveFiles =
+          path.basename(dir) === "videos"
+            ? ["default-image", "Base-vedio", "base", "background", "template"]
+            : [];
         const result = await cleanDirectory(dir, preserveFiles);
         if (result.success) {
           totalDeleted += result.filesDeleted;
-          logger.info(
-            `🗑️ Cleaned ${result.filesDeleted} files from ${path.basename(dir)}`
-          );
         }
       } catch (error) {
-        logger.error(`Failed to clean ${dir}:`, error.message);
+        logger.error(`Error cleaning directory ${dir}:`, error);
       }
     }
 
     logger.info(
-      `✅ Emergency cleanup completed. Deleted ${totalDeleted} files total`
+      `✅ Emergency cleanup completed: ${totalDeleted} files deleted`
     );
     return { success: true, filesDeleted: totalDeleted };
   } catch (error) {
     logger.error("❌ Emergency cleanup failed:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Ensure videos folder has essential files
+ */
+const ensureEssentialVideoFiles = async () => {
+  try {
+    const videosDir = "videos";
+    ensureDirectoryExists(videosDir);
+
+    const essentialFiles = {
+      "Base-vedio.mp4": "Base video file for video composition",
+      "default-image.jpg": "Default image for fallback scenarios",
+    };
+
+    let missingFiles = [];
+
+    for (const [fileName, description] of Object.entries(essentialFiles)) {
+      const filePath = path.join(videosDir, fileName);
+      if (!fs.existsSync(filePath)) {
+        missingFiles.push(fileName);
+        logger.warn(`⚠️ Essential file missing: ${fileName} (${description})`);
+      } else {
+        logger.info(`✅ Essential file present: ${fileName}`);
+      }
+    }
+
+    if (missingFiles.length > 0) {
+      logger.error(`❌ Missing essential files: ${missingFiles.join(", ")}`);
+      logger.error("🚨 Please ensure these files exist in the videos folder:");
+      missingFiles.forEach((file) => {
+        logger.error(`   - ${file}`);
+      });
+      return { success: false, missingFiles };
+    }
+
+    logger.info("✅ All essential video files are present");
+    return { success: true, missingFiles: [] };
+  } catch (error) {
+    logger.error("❌ Error checking essential video files:", error);
     return { success: false, error: error.message };
   }
 };
@@ -316,4 +375,5 @@ module.exports = {
   initializeDirectories,
   cleanupRootDirectory,
   cleanupOnError,
+  ensureEssentialVideoFiles,
 };

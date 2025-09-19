@@ -153,67 +153,67 @@ const saveWaveFile = async (
 };
 
 // Generate TTS audio using Gemini API with retry logic
-const generateTTSAudio = async (text, voiceName = "Kore") => {
-  try {
-    logger.info(`🎤 Generating TTS audio for voice: ${voiceName}`);
-    logger.info(`📝 TTS text: "${text}"`);
-    logger.info(
-      `📊 Text analysis: ${text.length} total chars, ${
-        text.replace(/\s/g, "").length
-      } letters, ${
-        text.split(/\s+/).filter((word) => word.length > 0).length
-      } words`
-    );
+// const generateTTSAudio = async (text, voiceName = "Kore") => {
+//   try {
+//     logger.info(`🎤 Generating TTS audio for voice: ${voiceName}`);
+//     logger.info(`📝 TTS text: "${text}"`);
+//     logger.info(
+//       `📊 Text analysis: ${text.length} total chars, ${
+//         text.replace(/\s/g, "").length
+//       } letters, ${
+//         text.split(/\s+/).filter((word) => word.length > 0).length
+//       } words`
+//     );
 
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: text }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: {
-              voiceName: voiceName,
-            },
-          },
-          // Add slower speech rate for more natural pacing
-          speakingRate: 0.85, // 15% slower than default
-        },
-      },
-    });
+//     const response = await genAI.models.generateContent({
+//       model: "gemini-2.5-flash-preview-tts",
+//       contents: [{ parts: [{ text: text }] }],
+//       config: {
+//         responseModalities: ["AUDIO"],
+//         speechConfig: {
+//           voiceConfig: {
+//             prebuiltVoiceConfig: {
+//               voiceName: voiceName,
+//             },
+//           },
+//           // Add slower speech rate for more natural pacing
+//           speakingRate: 0.85, // 15% slower than default
+//         },
+//       },
+//     });
 
-    const audioData =
-      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+//     const audioData =
+//       response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
-    if (!audioData) {
-      logger.error("❌ API Response Debug:", {
-        hasResponse: !!response,
-        hasCandidates: !!response.candidates,
-        candidatesLength: response.candidates?.length,
-        firstCandidate: response.candidates?.[0],
-        finishReason: response.candidates?.[0]?.finishReason,
-        hasContent: !!response.candidates?.[0]?.content,
-        content: response.candidates?.[0]?.content,
-        hasParts: !!response.candidates?.[0]?.content?.parts,
-        parts: response.candidates?.[0]?.content?.parts,
-      });
-      throw new Error("No audio data received from API");
-    }
+//     if (!audioData) {
+//       logger.error("❌ API Response Debug:", {
+//         hasResponse: !!response,
+//         hasCandidates: !!response.candidates,
+//         candidatesLength: response.candidates?.length,
+//         firstCandidate: response.candidates?.[0],
+//         finishReason: response.candidates?.[0]?.finishReason,
+//         hasContent: !!response.candidates?.[0]?.content,
+//         content: response.candidates?.[0]?.content,
+//         hasParts: !!response.candidates?.[0]?.content?.parts,
+//         parts: response.candidates?.[0]?.content?.parts,
+//       });
+//       throw new Error("No audio data received from API");
+//     }
 
-    const buffer = Buffer.from(audioData, "base64");
-    const fileName = `tts_${Date.now()}_${voiceName}.wav`;
-    const filePath = path.resolve(path.join(audioDir, fileName));
+//     const buffer = Buffer.from(audioData, "base64");
+//     const fileName = `tts_${Date.now()}_${voiceName}.wav`;
+//     const filePath = path.resolve(path.join(audioDir, fileName));
 
-    await saveWaveFile(filePath, buffer, 1, 24000, 2);
+//     await saveWaveFile(filePath, buffer, 1, 24000, 2);
 
-    logger.info(`✓ TTS audio generated: ${filePath}`);
-    return filePath;
-  } catch (error) {
-    logger.error("❌ TTS generation failed:", error.message || error);
-    logger.error("Full error details:", JSON.stringify(error, null, 2));
-    throw error;
-  }
-};
+//     logger.info(`✓ TTS audio generated: ${filePath}`);
+//     return filePath;
+//   } catch (error) {
+//     logger.error("❌ TTS generation failed:", error.message || error);
+//     logger.error("Full error details:", JSON.stringify(error, null, 2));
+//     throw error;
+//   }
+// };
 
 // Main audio generation function - Multi-speaker support (single attempt)
 const generateAudioWithBatchingStrategy = async (script) => {
@@ -417,5 +417,5 @@ const parseScriptDialogues = (script) => {
 
 module.exports = {
   generateAudioWithBatchingStrategy,
-  generateTTSAudio,
+  // generateTTSAudio,
 };

@@ -30,13 +30,11 @@ const {
   cleanupRootDirectory,
   cleanupOnError,
 } = require("../services/cleanupService");
+const cleanLLMData = require("../utils/textCleaner");
+const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
-
-/**
- * Store current workflow state (no checkpoints)
- */
 let currentWorkflow = {
   taskId: null,
   status: "idle",
@@ -101,7 +99,7 @@ const runCompleteWorkflow = async (taskData) => {
     // Step 5: Generate images
     logger.info("🖼️ Step 5: Generating images");
     currentWorkflow.currentStep = "images/generate";
-    
+
     let images = [];
     try {
       images = await generateImages(subtitlesPath);
@@ -109,35 +107,39 @@ const runCompleteWorkflow = async (taskData) => {
     } catch (error) {
       logger.warn(`⚠️ Image generation failed: ${error.message}`);
       logger.info("🔄 Using default image as fallback...");
-      
+
       // Use default image as fallback with proper timing structure
       const defaultImagePath = path.join("videos", "default-image.jpg");
       if (fs.existsSync(defaultImagePath)) {
         // Create fallback image structure matching the expected format
-        images = [{
-          index: 1,
-          filename: defaultImagePath,
-          concept: "Default educational image",
-          prompt: "Default fallback image",
-          timing: {
-            startTime: 0,
-            endTime: 59, // Full video duration
-            duration: 59,
+        images = [
+          {
+            index: 1,
+            filename: defaultImagePath,
+            concept: "Default educational image",
+            prompt: "Default fallback image",
+            timing: {
+              startTime: 0,
+              endTime: 59, // Full video duration
+              duration: 59,
+            },
+            placement: {
+              fromTime: 0,
+              toTime: 59,
+              subtitleText: "Educational content",
+              subtitleCount: 1,
+            },
           },
-          placement: {
-            fromTime: 0,
-            toTime: 59,
-            subtitleText: "Educational content",
-            subtitleCount: 1,
-          },
-        }];
+        ];
         logger.info(`✓ Using default image: ${defaultImagePath}`);
       } else {
-        logger.error("❌ Default image not found, cannot proceed with video composition");
+        logger.error(
+          "❌ Default image not found, cannot proceed with video composition"
+        );
         throw new Error("Image generation failed and default image not found");
       }
     }
-    
+
     currentWorkflow.results.images = images;
     logger.info(`📸 Using ${images.length} image(s) for video composition`);
 

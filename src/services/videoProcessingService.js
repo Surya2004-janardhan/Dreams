@@ -175,11 +175,11 @@ const composeVideo = async (
         "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
       );
 
-      // Scale each image to 1000:500 with black padding
+      // Scale each image to 900:600 with black padding (matches test video)
       validImages.forEach((image, index) => {
         const inputIndex = index + (audioPath ? 2 : 1); // Images start from input 2 if audio, input 1 if no audio
         filterParts.push(
-          `[${inputIndex}:v]scale=1000:500:force_original_aspect_ratio=decrease,pad=1000:500:(ow-iw)/2:(oh-ih)/2:black[img${index}]`
+          `[${inputIndex}:v]scale=900:600:force_original_aspect_ratio=decrease,pad=900:600:(ow-iw)/2:(oh-ih)/2:black[img${index}]`
         );
       });
 
@@ -195,7 +195,7 @@ const composeVideo = async (
               : `[v${index}]`;
 
           filterParts.push(
-            `${currentVideo}[img${index}]overlay=40:200:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
+            `${currentVideo}[img${index}]overlay=90:48:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
           );
 
           currentVideo = nextVideo;
@@ -219,7 +219,7 @@ const composeVideo = async (
         const videoSource =
           validImages.length > 0 ? "[video_with_overlays]" : "[base]";
         filterParts.push(
-          `${videoSource}subtitles='${simpleSubtitlesPath}':force_style='FontName=Verdana,FontSize=12,Bold=1,PrimaryColour=&H00FFFFFF&,BackColour=&H80000000&,BorderStyle=3,Outline=1,Shadow=0,Alignment=2,MarginV=20'[final_video]`
+          `${videoSource}subtitles='${simpleSubtitlesPath}':force_style='FontName=Impact,FontSize=12,PrimaryColour=&H0000FFFF,OutlineColour=&H000000,BorderStyle=3,BackColour=&H80000080,Bold=1,Alignment=2,MarginV=28,Outline=2,Spacing=1'[final_video]`
         );
       }
 

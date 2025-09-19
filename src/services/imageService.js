@@ -581,7 +581,7 @@ ${content}
 RULES:
 - Exactly 5 prompts
 - Each under 20 words
-- Only diagrammatic/technical terms from content
+- Only technical terms from content
 - White background
 - Strictly 9:8 aspect ratio
 - Professional technical style

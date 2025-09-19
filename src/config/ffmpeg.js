@@ -1,22 +1,28 @@
+const ffmpegPath = require("ffmpeg-static");
 const ffmpeg = require("fluent-ffmpeg");
 const fs = require("fs");
 
-// Configure FFmpeg path
-const ffmpegPath = "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe";
-const ffprobePath = "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffprobe.exe";
-
-// Set FFmpeg paths for fluent-ffmpeg
-if (fs.existsSync(ffmpegPath)) {
+// Configure FFmpeg path using ffmpeg-static
+if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
-  ffmpeg.setFfprobePath(ffprobePath);
-  console.log("✅ FFmpeg configured successfully");
+  console.log("✅ FFmpeg configured successfully with ffmpeg-static");
 } else {
   console.warn(
-    "⚠️ FFmpeg not found at expected path. Some audio processing features may not work."
+    "⚠️ ffmpeg-static not found. Some video processing features may not work."
   );
-  console.warn(
-    "📝 Please ensure FFmpeg is installed at: C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\"
-  );
+}
+
+// Fallback paths for manual installation
+const manualFfmpegPath =
+  "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe";
+const manualFfprobePath =
+  "C:\\ffmpeg\\ffmpeg-8.0-essentials_build\\bin\\ffprobe.exe";
+
+// Only set manual paths if ffmpeg-static failed and manual paths exist
+if (!ffmpegPath && fs.existsSync(manualFfmpegPath)) {
+  ffmpeg.setFfmpegPath(manualFfmpegPath);
+  ffmpeg.setFfprobePath(manualFfprobePath);
+  console.log("✅ FFmpeg configured with manual installation");
 }
 
 module.exports = {

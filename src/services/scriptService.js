@@ -48,6 +48,7 @@ Guidelines:
 - Strictly 120–130 words total.
 - Cover deeper, essential technical points (avoid surface-level talk).
 - Output ONLY dialogue lines, no extra comments or thanks.
+- **Overall Rani dailogues must be maximum 2 and rest all Raju only**
 
 Format Example:
 Rani: Yaar, can you tell me about [topic]?
