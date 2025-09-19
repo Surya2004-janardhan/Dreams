@@ -219,6 +219,7 @@ const sendStatusUpdate = async (status, message, details = {}) => {
       ];
     }
 
+    
     const subject = `📊 Workflow Status: ${status}`;
 
     const htmlContent = `
