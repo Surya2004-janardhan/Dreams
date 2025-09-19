@@ -25,6 +25,11 @@ if (!ffmpegPath && fs.existsSync(manualFfmpegPath)) {
   console.log("✅ FFmpeg configured with manual installation");
 }
 
+// Define ffprobePath for export (use ffmpeg-static path or manual path)
+const ffprobePath = ffmpegPath
+  ? ffmpegPath.replace("ffmpeg.exe", "ffprobe.exe")
+  : manualFfprobePath;
+
 module.exports = {
   ffmpegPath,
   ffprobePath,

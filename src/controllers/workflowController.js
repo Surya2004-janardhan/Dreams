@@ -23,6 +23,7 @@ const {
 const {
   sendSuccessNotification,
   sendErrorNotification,
+  sendStatusUpdate,
 } = require("../services/emailService");
 const {
   cleanupAllMediaFolders,
@@ -287,8 +288,41 @@ const runAutomatedWorkflow = async (req, res) => {
 
     // Get next task from Google Sheets
     logger.info("📋 Getting next task from Google Sheets");
-    taskData = await getNextTask();
-    logger.info(`📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`);
+
+    try {
+      taskData = await getNextTask();
+      logger.info(
+        `📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`
+      );
+    } catch (taskError) {
+      if (taskError.message.includes("No 'Not Posted' tasks found")) {
+        logger.info("📋 No tasks available for processing");
+
+        // Send immediate response
+        res.json({
+          success: true,
+          message: "No tasks available for processing",
+          status: "completed",
+          note: "All tasks have been processed. Add new tasks to continue.",
+        });
+
+        // Send helpful status update
+        await sendStatusUpdate(
+          "No Tasks Available",
+          "The automated workflow checked for tasks but found none marked as 'Not Posted'. All current tasks have been processed successfully.",
+          {
+            "Checked At": new Date().toLocaleString(),
+            "Next Steps":
+              "Add new content ideas to your Google Sheet with status 'Not Posted'",
+          }
+        );
+
+        return; // Exit early
+      } else {
+        // Re-throw other errors
+        throw taskError;
+      }
+    }
 
     // Send immediate response
     res.json({
@@ -317,6 +351,30 @@ const runAutomatedWorkflow = async (req, res) => {
     // Send error notification if we have task data
     if (taskData) {
       await sendErrorNotification(taskData, error, "automated-workflow");
+    } else {
+      // Send error notification even without task data
+      const fallbackTaskData = {
+        idea: "Automated Workflow Error",
+        description: "Error occurred before task retrieval",
+        sno: "N/A",
+        rowId: "N/A",
+      };
+      await sendErrorNotification(
+        fallbackTaskData,
+        error,
+        "automated-workflow"
+      );
+
+      // Also send a status update notification
+      await sendStatusUpdate(
+        "No Tasks Available",
+        "The automated workflow checked for tasks but found none marked as 'Not Posted'. Please add new tasks to the Google Sheet.",
+        {
+          "Checked At": new Date().toLocaleString(),
+          Suggestion:
+            "Add new content ideas to your Google Sheet with status 'Not Posted'",
+        }
+      );
     }
   }
 };
@@ -730,4 +788,3 @@ module.exports = {
   getWorkflowStatus,
   runCompleteWorkflow,
 };
-
