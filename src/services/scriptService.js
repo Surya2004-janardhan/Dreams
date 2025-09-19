@@ -35,25 +35,24 @@ const generateScript = async (topic, description = "") => {
   // - Must be short enough for ~70 seconds speech
   // - Cover the key technical points with clarity, not surface-level
   // - Keep it natural, engaging, and educational in tone`;
-  const prompt = `Write a natural dialogue in Indian English between Rani (curious and only small questions) and Raj (knowledgeable and lenghty answers) on: ${topic}
+  const prompt = `Write a dialogue in Indian English between Raj and Rani on: ${topic}
 
 ${description ? `Context: ${description}` : ""}
 
-Style:
-- Casual Indian English with fillers ("yaar", "actually", "see", "you know", "right?", "no yaar", "tell me na")
-- Rani asks short, curious questions
-- Raj explains clearly, friendly, not robotic
-- Keep it flowing like two friends chatting
-
-Rules:
-- 2–3 exchanges only
-- **Length: strictly 120–130 words total**
-- Must cover key technical points, not just surface talk
-- Should feel engaging, natural, and easy for ~70s speech
+Guidelines:
+- Rani: very short, curious questions only (1–2 lines each, max 10 words).
+- Raj: detailed, clear, friendly answers (bulk of word count).
+- Style: casual Indian English with natural fillers ("yaar", "actually", "see", "you know", "right?", "na").
+- Keep flow like two friends chatting, not robotic.
+- 2–3 exchanges only.
+- Strictly 120–130 words total.
+- Cover deeper, essential technical points (avoid surface-level talk).
+- Output ONLY dialogue lines, no extra comments or thanks.
 
 Format Example:
 Rani: Yaar, can you tell me about [topic]?
-Raj: Actually, see... [explanation]`;
+Raj: Actually, see... [detailed explanation]`;
+
 
   try {
     const response = await axios.post(

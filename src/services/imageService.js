@@ -580,12 +580,16 @@ ${content}
 
 RULES:
 - Exactly 5 prompts
-- Each under 50 words
+- Each under 20 words
 - Only diagrammatic/technical terms from content
 - White background
 - Strictly 9:8 aspect ratio
-- Professional technical illustration style
-- Focus on system architectures, schemas, or concepts
+- Professional technical style
+✅ Good Types of Images for Edu  Content:
+
+Infographic Snippets – minimal icons + labels (like memory, CPU, network, DB).
+
+Minimal UI Mockups – simplified boxes showing “how software works” without real UI clutter.
 
 OUTPUT:
 Return only a JSON array of 5 strings.`;
@@ -598,7 +602,7 @@ Return only a JSON array of 5 strings.`;
           {
             role: "system",
             content:
-              "You are an expert at creating concise, technical image prompts for educational content. Focus on technical diagrams, workflows, and system architectures. Always return valid JSON arrays.",
+              "You are an expert at creating concise, technical image prompts for educational content. Focus on technical terms. Always return valid JSON arrays.",
           },
           {
             role: "user",

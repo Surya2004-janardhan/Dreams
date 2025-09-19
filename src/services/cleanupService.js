@@ -75,11 +75,12 @@ const cleanupAllMediaFolders = async () => {
     // Clean scripts folder (remove all generated script files)
     cleanupResults.scripts = await cleanDirectory("scripts", []);
 
-    // Clean videos folder but preserve base videos
+    // Clean videos folder but preserve base videos and default image
     cleanupResults.videos = await cleanDirectory("videos", [
       "base",
       "background",
       "template",
+      "default-image",
     ]);
 
     // Clean root directory but preserve final video copies
@@ -125,6 +126,12 @@ const cleanupOldFiles = async (dirPath, maxAgeInDays = 7) => {
       try {
         const stat = fs.statSync(filePath);
         if (stat.isFile() && stat.mtime.getTime() < cutoffTime) {
+          // Preserve default image in videos folder
+          if (path.basename(dirPath) === 'videos' && file.toLowerCase().includes('default-image')) {
+            logger.info(`📁 Preserved default image: ${filePath}`);
+            continue;
+          }
+          
           fs.unlinkSync(filePath);
           deletedCount++;
           logger.info(`🗑️ Deleted old file: ${filePath}`);
@@ -276,7 +283,9 @@ const cleanupOnError = async () => {
 
     for (const dir of directoriesToClean) {
       try {
-        const result = await cleanDirectory(dir);
+        // Preserve default image in videos folder
+        const preserveFiles = path.basename(dir) === 'videos' ? ['default-image'] : [];
+        const result = await cleanDirectory(dir, preserveFiles);
         if (result.success) {
           totalDeleted += result.filesDeleted;
           logger.info(

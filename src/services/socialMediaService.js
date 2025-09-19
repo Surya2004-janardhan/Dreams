@@ -2,6 +2,7 @@ const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { google } = require("googleapis");
 const { createClient } = require("@supabase/supabase-js");
 
 // Supabase configuration
