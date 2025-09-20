@@ -186,51 +186,68 @@ const composeVideo = async (
         "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
       );
 
-      // Scale each image to 900:600 with black padding (matches test video)
+      // Scale each image to fit within video width (90% of 1080 = 972px) without padding
       validImages.forEach((image, index) => {
         const inputIndex = index + (audioPath ? 2 : 1); // Images start from input 2 if audio, input 1 if no audio
+        // Scale to fit within 90% of video width (972px) while maintaining aspect ratio
         filterParts.push(
-          `[${inputIndex}:v]scale=900:600:force_original_aspect_ratio=decrease,pad=900:600:(ow-iw)/2:(oh-ih)/2:black[img${index}]`
+          `[${inputIndex}:v]scale=972:-1:force_original_aspect_ratio=decrease[img${index}]`
         );
       });
 
-      // Create overlay chain with timing
+      // Create overlay chain with timing (reference test video approach)
       let currentVideo = "[base]";
       if (validImages.length > 0) {
-        validImages.forEach((image, index) => {
-          const startTime = image.timing.startTime;
-          const endTime = image.timing.endTime;
-          const nextVideo =
-            index === validImages.length - 1
-              ? "[video_with_overlays]"
-              : `[v${index}]`;
-
-          filterParts.push(
-            `${currentVideo}[img${index}]overlay=90:48:enable=between(t\\,${startTime}\\,${endTime})${nextVideo}`
+        if (validImages.length === 1) {
+          // Single image - use simple overlay like test video
+          const startTime = Math.max(
+            0,
+            parseFloat(validImages[0].timing.startTime) || 0
+          );
+          const endTime = Math.max(
+            startTime + 1,
+            parseFloat(validImages[0].timing.endTime) || startTime + 14
           );
 
-          currentVideo = nextVideo;
-        });
+          filterParts.push(
+            `${currentVideo}[img0]overlay=(W-w)/2:20:enable='between(t,${startTime},${endTime})'[video]`
+          );
+          currentVideo = "[video]";
+        } else {
+          // Multiple images - create overlay chain
+          validImages.forEach((image, index) => {
+            const startTime = Math.max(
+              0,
+              parseFloat(image.timing.startTime) || 0
+            );
+            const endTime = Math.max(
+              startTime + 1,
+              parseFloat(image.timing.endTime) || startTime + 14
+            );
+            const nextVideo =
+              index === validImages.length - 1 ? "[video]" : `[v${index}]`;
+
+            filterParts.push(
+              `${currentVideo}[img${index}]overlay=(W-w)/2:20:enable='between(t,${startTime},${endTime})'${nextVideo}`
+            );
+
+            currentVideo = nextVideo;
+          });
+        }
       }
 
       // Handle subtitles based on whether we have overlays or not
       if (!fs.existsSync(subtitlesPath)) {
         // No subtitles, use base video or video with overlays
-        if (validImages.length > 0) {
-          filterParts.push(`[video_with_overlays]copy[final_video]`);
-        } else {
-          filterParts.push(`[base]copy[final_video]`);
-        }
+        filterParts.push(`${currentVideo}copy[final]`);
       } else {
-        const simpleSubtitlesPath = subtitlesPath
+        // Use working subtitles approach from test video
+        const safeSubtitlePath = subtitlesPath
           .replace(/\\/g, "\\\\")
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
-        // Apply subtitles to base video or video with overlays
-        const videoSource =
-          validImages.length > 0 ? "[video_with_overlays]" : "[base]";
-        const subtitleFilter = `[video]subtitles='${simpleSubtitlesPath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
 
+        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
         filterParts.push(subtitleFilter);
       }
 
@@ -257,7 +274,7 @@ const composeVideo = async (
       ];
 
       // Map video stream
-      outputOptions.push("-map", "[final_video]");
+      outputOptions.push("-map", "[final]");
 
       // Map audio stream - use the provided audio if available, otherwise use base video audio
       if (audioPath) {
@@ -279,6 +296,8 @@ const composeVideo = async (
         .on("start", (commandLine) => {
           logger.info("🔄 FFmpeg process started with command:");
           logger.info(commandLine);
+          logger.info("🎬 Filter parts:", filterParts);
+          logger.info("🎬 Complete filter:", filterParts.join(";"));
         })
         .on("progress", (progress) => {
           if (progress.percent) {

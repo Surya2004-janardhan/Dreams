@@ -349,6 +349,173 @@ const extractTechnicalKeywords = (text) => {
 };
 
 /**
+ * Extract 5 most important technical terms from content using Gemini
+ */
+const extractTechnicalTerms = async (content) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
+    if (!apiKey) {
+      throw new Error(
+        "GEMINI_API_KEY_FOR_T2T environment variable is required"
+      );
+    }
+
+    logger.info("🔍 Extracting technical terms using Gemini...");
+
+    const prompt = `Analyze this educational content and extract exactly 5 of the most important technical terms or concepts.
+
+CONTENT:
+${content}
+
+RULES:
+- Extract exactly 5 technical terms/concepts
+- Focus on specific technologies, tools, frameworks, or methodologies
+- Prefer concrete terms over abstract concepts
+- Include company names, software names, or technical standards
+- Return only a JSON array of 5 strings
+- Each term should be 1-3 words maximum
+
+OUTPUT FORMAT:
+["Term1", "Term2", "Term3", "Term4", "Term5"]`;
+
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `You are an expert at identifying key technical terms from educational content. Focus on specific, actionable technical terms that would be recognizable to developers and IT professionals.
+
+${prompt}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          topK: 10,
+          topP: 0.5,
+          maxOutputTokens: 256,
+        },
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const responseContent =
+      response.data.candidates[0].content.parts[0].text.trim();
+    logger.info("📝 Technical terms extraction response:", responseContent);
+
+    // Parse the JSON response
+    let terms;
+    try {
+      const cleanContent = responseContent
+        .replace(/```json\s*|\s*```/g, "")
+        .trim();
+      terms = JSON.parse(cleanContent);
+    } catch (parseError) {
+      logger.error("❌ Failed to parse technical terms:", parseError.message);
+      // Fallback: extract basic terms manually
+      const fallbackTerms = [
+        "Technology",
+        "Software",
+        "Development",
+        "System",
+        "Process",
+      ];
+      logger.info("🔄 Using fallback terms:", fallbackTerms);
+      return fallbackTerms;
+    }
+
+    if (!Array.isArray(terms) || terms.length !== 5) {
+      logger.warn("⚠️ Invalid terms format, using fallback");
+      return ["Technology", "Software", "Development", "System", "Process"];
+    }
+
+    logger.info("✅ Extracted technical terms:", terms);
+    return terms;
+  } catch (error) {
+    logger.error("❌ Technical terms extraction failed:", error.message);
+    // Return fallback terms
+    return ["Technology", "Software", "Development", "System", "Process"];
+  }
+};
+
+/**
+ * Generate simple white background image prompts using extracted terms
+ */
+const generateSimpleImagePrompts = async (technicalTerms) => {
+  const prompts = [];
+
+  // Company/product logos and simple diagrams
+  const logoPrompts = [
+    "Clean white background with centered company logo",
+    "Minimal white background with product logo and name",
+    "Simple white background with technology icon",
+    "Clean white background with software logo",
+    "Minimal white background with tech brand logo",
+  ];
+
+  // Single diagram types (no flowcharts)
+  const diagramPrompts = [
+    "Simple architecture diagram on white background",
+    "Clean system overview diagram on white background",
+    "Minimal process diagram on white background",
+    "Simple workflow diagram on white background",
+    "Clean technical diagram on white background",
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    const term = technicalTerms[i];
+    let prompt;
+
+    if (i < 3) {
+      // First 3: Logo-based prompts
+      prompt = `${logoPrompts[i]} for ${term}. Professional, clean design, white background only.`;
+    } else {
+      // Last 2: Simple diagram prompts
+      prompt = `${
+        diagramPrompts[i - 3]
+      } showing ${term}. Clean lines, white background, minimal design.`;
+    }
+
+    prompts.push(prompt);
+  }
+
+  logger.info("🎨 Generated simple image prompts:", prompts);
+  return prompts;
+};
+
+/**
+ * Generate 5 concise image prompts using Gemini based on technical terms
+ */
+const generateImagePromptsWithGemini = async (content) => {
+  try {
+    // First, extract technical terms
+    const technicalTerms = await extractTechnicalTerms(content);
+
+    // Then generate simple prompts based on those terms
+    const prompts = await generateSimpleImagePrompts(technicalTerms);
+
+    return prompts;
+  } catch (error) {
+    logger.error("❌ Image prompt generation failed:", error.message);
+    // Return very simple fallback prompts
+    return [
+      "Clean white background with technology logo",
+      "Simple white background with software icon",
+      "Minimal white background with tech diagram",
+      "Clean white background with system logo",
+      "Simple white background with process diagram",
+    ];
+  }
+};
+
+/**
  * Generate contextual educational images using subtitle timing and Gemini prompts
  */
 const generateImages = async (subtitlesPath, scriptContent = null) => {
@@ -578,156 +745,6 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
       timestamp: new Date().toISOString(),
     });
     throw new Error(`Image generation failed: ${error.message}`);
-  }
-};
-
-/**
- * Generate 5 concise image prompts using Gemini based on the full script
- */
-const generateImagePromptsWithGemini = async (content) => {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
-    if (!apiKey) {
-      throw new Error(
-        "GEMINI_API_KEY_FOR_T2T environment variable is required"
-      );
-    }
-
-    logger.info("🤖 Generating image prompts using Gemini...");
-
-    const prompt = `From the content below, generate 5 concise image prompts for technical content.
-
-CONTENT:
-${content}
-
-RULES:
-- Exactly 5 prompts
-- Each under 15 words
-- Focus on real-world tech elements
-- Include company logos and brand colors
-- Use actual technology names and tools
-- Professional, clean design
-- White background
-- Strictly 9:8 aspect ratio
-- Real logos, not diagrams
-- Include specific colors (blue, green, orange, etc.)
-- Show actual software interfaces or tools
-
-OUTPUT:
-Return only a JSON array of 5 strings.`;
-
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: `You are an expert at creating realistic technical image prompts. Focus on real-world software, logos, and actual technology tools. Use specific brand colors and real company logos. Avoid abstract diagrams - show actual interfaces, tools, and recognizable tech elements. Always return valid JSON arrays.
-
-${prompt}`,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          topK: 20,
-          topP: 0.8,
-          maxOutputTokens: 1024,
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const responseContent =
-      response.data.candidates[0].content.parts[0].text.trim();
-    logger.info("📝 Gemini generated prompts response:", responseContent);
-
-    // Parse the JSON response
-    let prompts;
-    try {
-      // Remove any markdown formatting if present
-      const cleanContent = responseContent
-        .replace(/```json\s*|\s*```/g, "")
-        .trim();
-      prompts = JSON.parse(cleanContent);
-    } catch (parseError) {
-      logger.error(
-        "❌ Failed to parse Gemini response as JSON:",
-        parseError.message
-      );
-      logger.error("Raw response content:", responseContent);
-      throw new Error(
-        `Failed to parse image prompts from Gemini response: ${parseError.message}`
-      );
-    }
-
-    if (!Array.isArray(prompts) || prompts.length !== 5) {
-      logger.error(
-        "❌ Invalid prompts format - expected array of 5 strings, got:",
-        prompts
-      );
-      throw new Error(
-        `Invalid prompts format from Gemini - expected 5 prompts, got ${
-          Array.isArray(prompts) ? prompts.length : "non-array"
-        }`
-      );
-    }
-
-    // Validate each prompt is a string
-    for (let i = 0; i < prompts.length; i++) {
-      if (typeof prompts[i] !== "string" || prompts[i].trim().length === 0) {
-        logger.error(`❌ Invalid prompt at index ${i}:`, prompts[i]);
-        throw new Error(
-          `Invalid prompt at index ${i} - must be non-empty string`
-        );
-      }
-    }
-
-    // Ensure all prompts include white background and 9:8 ratio
-    const enhancedPrompts = prompts.map((prompt) => {
-      if (!prompt.includes("white background")) {
-        prompt += " with white background";
-      }
-      if (!prompt.includes("9:8")) {
-        prompt += " in 9:8 aspect ratio";
-      }
-      return prompt;
-    });
-
-    logger.info(
-      `✅ Generated ${enhancedPrompts.length} image prompts with Gemini`
-    );
-    return enhancedPrompts;
-  } catch (error) {
-    logger.error(
-      "❌ Failed to generate image prompts with Gemini:",
-      error.message
-    );
-    throw error;
   }
 };
 

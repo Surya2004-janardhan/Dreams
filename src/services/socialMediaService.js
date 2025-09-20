@@ -119,20 +119,20 @@ Create a detailed, educational summary (200-300 words) that covers all the key p
 
 Video Title: "${title}"
 Video Description: "${description}"
-${scriptContent ? `Script Summary Request: ${summaryPrompt}` : ""}
+${scriptContent ? `Script Summary: ${scriptContent.substring(0, 500)}...` : ""}
 
-Please generate:
-1. YouTube Description (detailed summary of the topic, educational and informative, 300-400 words, formal tone)
-2. Instagram Caption (engaging combination of title + key points summary, 150-200 words, conversational but informative)
-3. Relevant hashtags for both platforms (15-20 hashtags total)
+Please generate content in this exact JSON format:
+{
+  "youtubeDescription": "Detailed YouTube description here (400-500 words)",
+  "instagramDescription": "Engaging Instagram caption here (200-250 words)",
+  "hashtags": ["hashtag1", "hashtag2", "hashtag3"]
+}
 
-IMPORTANT RULES: 
-- YouTube Description: Must be a proper summary paragraph, NOT the conversation script
-- Instagram Caption: Title + engaging summary, NOT the full conversation
-- Keep descriptions educational and detailed
-- Format your response as JSON with keys: youtubeDescription, instagramDescription, hashtags
-
-Make it educational, engaging, and optimized for social media algorithms.`;
+IMPORTANT RULES:
+- YouTube Description: Comprehensive, educational, multiple paragraphs, cover key concepts
+- Instagram Description: Start with title, engaging explanation, emojis, call-to-action
+- Hashtags: Array of strings, 15-20 relevant hashtags
+- Return ONLY valid JSON, no additional text or formatting`;
 
     const geminiResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
@@ -180,9 +180,28 @@ ${prompt}`,
       }
     );
 
-    const aiContent = JSON.parse(
-      geminiResponse.data.candidates[0].content.parts[0].text
-    );
+    // Parse AI response
+    let aiContent;
+    try {
+      const rawResponse =
+        geminiResponse.data.candidates[0].content.parts[0].text.trim();
+      logger.info("🤖 Raw AI response:", rawResponse);
+
+      // Clean the response if it has markdown formatting
+      const cleanResponse = rawResponse
+        .replace(/```json\s*|\s*```/g, "")
+        .trim();
+      aiContent = JSON.parse(cleanResponse);
+
+      logger.info("✅ AI content parsed successfully");
+    } catch (parseError) {
+      logger.error("❌ Failed to parse AI response:", parseError.message);
+      logger.error(
+        "Raw response:",
+        geminiResponse.data.candidates[0].content.parts[0].text
+      );
+      throw new Error(`AI response parsing failed: ${parseError.message}`);
+    }
 
     // Extract hashtags from the AI response
     const hashtags = aiContent.hashtags || [];
@@ -198,9 +217,9 @@ ${prompt}`,
         hashtags: hashtagString,
       },
       instagram: {
-        caption: `${title}\n\n${
-          aiContent.instagramDescription || description
-        }\n\n${hashtagString}`, // Title + AI summary + hashtags
+        caption:
+          aiContent.instagramDescription ||
+          `${title}\n\n${description}\n\n💡 Educational content made simple!\n❤️ Like & Share if you learned something new!\n\n${hashtagString}`,
         hashtags: hashtagString,
       },
     };

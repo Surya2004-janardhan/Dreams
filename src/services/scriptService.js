@@ -17,12 +17,12 @@ const generateScript = async (topic, description = "") => {
 ${description ? `Additional Context: ${description}` : ""}
 
 REQUIREMENTS:
-- Rani asks very brief, curious questions (1-2 lines each, maximum 8 words)
+- Rani asks very brief, curious questions (1-2 lines each, minimum 5 words maximum 10 words)
 - Raj provides detailed, clear, educational answers (most of the content)
 - Use authentic Indian English expressions: "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me"
 - Keep conversation natural like friends chatting, not formal or robotic
 - Exactly 2-3 exchanges only
-- Total word count: STRICTLY 120-130 words
+- Total word count: STRICTLY 110-120 words
 - Focus on deeper technical concepts, not surface-level information
 - Output ONLY the dialogue lines, no extra comments or explanations
 
@@ -32,7 +32,7 @@ Raj: Actually, see... [detailed educational explanation with Indian English fill
 Rani: Oh really? Tell me more na?
 Raj: No yaar, its more complex server running inside the docker... [more detailed explanation]
 
-IMPORTANT: Count every word carefully and ensure total is exactly 120-130 words. Make it educational, engaging, and perfect for a 70-second video script.
+IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words. Make it educational, engaging, and perfect for a 70-second video script.
 `;
 
   try {
@@ -95,10 +95,10 @@ ${prompt}`,
     let retryCount = 0;
     const maxRetries = 3;
 
-    while ((wordCount < 110 || wordCount > 130) && retryCount < maxRetries) {
+    while ((wordCount < 105 || wordCount > 120) && retryCount < maxRetries) {
       retryCount++;
       logger.warn(
-        `⚠️ Script word count ${wordCount} is outside 110-130 range, retrying... (attempt ${retryCount}/${maxRetries})`
+        `⚠️ Script word count ${wordCount} is outside 110-120 range, retrying... (attempt ${retryCount}/${maxRetries})`
       );
 
       try {
@@ -111,12 +111,12 @@ ${prompt}`,
                   {
                     text: `You are an expert educational content creator specializing in natural Indian English conversations.
 
-The previous script had ${wordCount} words, which is not between 120-130 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 120-130 words.
+The previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.
 
 Original topic: ${topic}
 ${description ? `Original description: ${description}` : ""}
 
-CRITICAL: Count every single word and ensure total is 120-130 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.
+CRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.
 
 ${prompt}`,
                   },
@@ -161,7 +161,7 @@ ${prompt}`,
           .filter((word) => word.length > 0).length;
         logger.info(`📊 Retry ${retryCount} word count: ${newWordCount}`);
 
-        if (newWordCount >= 110 && newWordCount <= 130) {
+        if (newWordCount >= 105 && newWordCount <= 120) {
           logger.info(`✅ Word count now within range: ${newWordCount} words`);
           break;
         }
