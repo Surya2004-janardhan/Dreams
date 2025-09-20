@@ -1,89 +1,89 @@
 const axios = require("axios");
 const logger = require("../config/logger");
 
-// Groq API configuration
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// Gemini API configuration
+const GEMINI_API_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const generateScript = async (topic, description = "") => {
-  const apiKey = process.env.GROQ_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
 
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY environment variable is required");
+    throw new Error("GEMINI_API_KEY_FOR_T2T environment variable is required");
   }
 
-  //   const prompt = `Write a natural conversation in pure Indian English between Rani (curious girl) and Raj (knowledgeable guy) about: ${topic}
+  const prompt = `Create an engaging educational dialogue in Indian English between Raj (knowledgeable expert) and Rani (curious learner) about: ${topic}
 
-  // ${description ? `Context: ${description}` : ""}
+${description ? `Additional Context: ${description}` : ""}
 
-  // Tone & Style:
-  // - Use casual Indian English with fillers like "yaar", "actually", "you know", "see", "basically", "right?", "no yaar", "tell me na"
-  // - Conversation should sound natural, like two friends talking
-  // - Rani asks short, curious questions with Indian English fillers
-  // - Raj gives clear, detailed explanations but in a friendly conversational way
-  // - Avoid robotic or formal tone; keep it flowing like real dialogue
-  // - Maximum 2–3 exchanges to fit time
-  // - Total must be 110–120 words (count every single word, including fillers)
+REQUIREMENTS:
+- Rani asks very brief, curious questions (1-2 lines each, maximum 8 words)
+- Raj provides detailed, clear, educational answers (most of the content)
+- Use authentic Indian English expressions: "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me"
+- Keep conversation natural like friends chatting, not formal or robotic
+- Exactly 2-3 exchanges only
+- Total word count: STRICTLY 120-130 words
+- Focus on deeper technical concepts, not surface-level information
+- Output ONLY the dialogue lines, no extra comments or explanations
 
-  // Format Example:
-  // Rani: Hey, can you tell me about [topic]? I've been wondering...
-  // Raj: Yaar, [topic] is actually quite interesting. See, basically...
-  // Rani: Oh really? But how does it work exactly?
-  // Raj: No yaar, let me explain properly. You know...
+EXAMPLE FORMAT:
+Rani: Yaar, can you explain [topic]?
+Raj: Actually, see... [detailed educational explanation with Indian English fillers]
+Rani: Oh really? Tell me more na?
+Raj: No yaar, its more complex server running inside the docker... [more detailed explanation]
 
-  // CRITICAL RULES:
-  // - Strictly 110–120 words only
-  // - Must be short enough for ~70 seconds speech
-  // - Cover the key technical points with clarity, not surface-level
-  // - Keep it natural, engaging, and educational in tone`;
-  const prompt = `Write a dialogue in Indian English between Raj and Rani on: ${topic}
-
-${description ? `Context: ${description}` : ""}
-
-Guidelines:
-- Rani: very short, curious questions only (1–2 lines each, max 10 words).
-- Raj: detailed, clear, friendly answers (bulk of word count).
-- Style: casual Indian English with natural fillers ("yaar", "actually", "see", "you know", "right?", "na").
-- Keep flow like two friends chatting, not robotic.
-- 2–3 exchanges only.
-- Strictly 120–130 words total.
-- Cover deeper, essential technical points (avoid surface-level talk).
-- Output ONLY dialogue lines, no extra comments or thanks.
-- **Overall Rani dailogues must be maximum 2 and rest all Raju only**
-
-Format Example:
-Rani: Yaar, can you tell me about [topic]?
-Raj: Actually, see... [detailed explanation]`;
-
+IMPORTANT: Count every word carefully and ensure total is exactly 120-130 words. Make it educational, engaging, and perfect for a 70-second video script.
+`;
 
   try {
     const response = await axios.post(
-      GROQ_API_URL,
+      `${GEMINI_API_URL}?key=${apiKey}`,
       {
-        model: "llama-3.3-70b-versatile",
-        messages: [
+        contents: [
           {
-            role: "system",
-            content:
-              "You are an expert educational content creator who specializes in creating natural, engaging conversations in pure Indian English between Rani (curious female questioner) and Raj (knowledgeable male expert). Focus on clear, content-oriented explanations that are purely educational and informative. Use authentic Indian English expressions like 'yaar', 'actually', 'you know', 'see', 'basically', 'right?', 'no yaar', 'tell me na'. Make it sound like real people talking casually, not formal or robotic. Keep total speaking time to exactly 70 seconds.",
-          },
-          {
-            role: "user",
-            content: prompt,
+            parts: [
+              {
+                text: `You are an expert educational content creator specializing in natural Indian English conversations.
+
+${prompt}`,
+              },
+            ],
           },
         ],
-        temperature: 0.8,
-        max_tokens: 2800,
+        generationConfig: {
+          temperature: 0.8,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 2048,
+        },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        ],
       },
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
         },
       }
     );
 
-    logger.info("✓ Multi-speaker Q&A script generated via Groq API");
-    let script = response.data.choices[0].message.content;
+    logger.info("✓ Multi-speaker Q&A script generated via Gemini API");
+    let script = response.data.candidates[0].content.parts[0].text;
 
     // Count words and ensure it's within range
     const wordCount = script
@@ -103,37 +103,59 @@ Raj: Actually, see... [detailed explanation]`;
 
       try {
         const retryResponse = await axios.post(
-          GROQ_API_URL,
+          `${GEMINI_API_URL}?key=${apiKey}`,
           {
-            model: "llama-3.3-70b-versatile",
-            messages: [
+            contents: [
               {
-                role: "system",
-                content:
-                  "You are an expert educational content creator who specializes in creating natural, engaging conversations in pure Indian English between Rani (curious female questioner) and Raj (knowledgeable male expert). Focus on clear, content-oriented explanations that are purely educational and informative. Use authentic Indian English expressions like 'yaar', 'actually', 'you know', 'see', 'basically', 'right?', 'no yaar', 'tell me na'. Make it sound like real people talking casually, not formal or robotic. Keep total speaking time to exactly 70 seconds.",
-              },
-              {
-                role: "user",
-                content: `The previous script had ${wordCount} words, which is not between 110-130 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-130 words.
+                parts: [
+                  {
+                    text: `You are an expert educational content creator specializing in natural Indian English conversations.
+
+The previous script had ${wordCount} words, which is not between 120-130 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 120-130 words.
 
 Original topic: ${topic}
-Original description: ${description}
+${description ? `Original description: ${description}` : ""}
 
-CRITICAL: Count every single word and ensure total is 110-130 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.`,
+CRITICAL: Count every single word and ensure total is 120-130 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.
+
+${prompt}`,
+                  },
+                ],
               },
             ],
-            temperature: 0.8,
-            max_tokens: 2500,
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 2048,
+            },
+            safetySettings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_HATE_SPEECH",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+            ],
           },
           {
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
             },
           }
         );
 
-        script = retryResponse.data.choices[0].message.content;
+        script = retryResponse.data.candidates[0].content.parts[0].text;
         const newWordCount = script
           .split(/\s+/)
           .filter((word) => word.length > 0).length;
@@ -166,9 +188,12 @@ CRITICAL: Count every single word and ensure total is 110-130 words exactly. Do 
       apiResponse: error.response?.data,
       topic: topic,
       description: description,
+      api: "Gemini",
       timestamp: new Date().toISOString(),
     });
-    throw new Error(`Failed to generate script: ${error.message}`);
+    throw new Error(
+      `Failed to generate script with Gemini API: ${error.message}`
+    );
   }
 };
 

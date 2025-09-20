@@ -250,18 +250,8 @@ const cleanupRootDirectory = async () => {
     let deletedCount = 0;
 
     for (const file of files) {
-      // Preserve final video copies
-      if (file.startsWith("final_video_") && file.endsWith(".mp4")) {
-        logger.info(`📁 Preserved root copy: ${file}`);
-        continue;
-      }
-
-      // Delete other video files in root (but not base videos)
-      if (
-        file.endsWith(".mp4") &&
-        !file.toLowerCase().includes("base") &&
-        !file.includes("final_video_")
-      ) {
+      // Delete all video files in root (no longer preserving final_video copies)
+      if (file.endsWith(".mp4")) {
         try {
           fs.unlinkSync(file);
           deletedCount++;
@@ -366,6 +356,47 @@ const ensureEssentialVideoFiles = async () => {
   }
 };
 
+/**
+ * Clean up final video folder after successful upload
+ */
+const cleanupFinalVideoFolder = async () => {
+  try {
+    logger.info("🧹 Cleaning final_video folder after successful upload...");
+
+    const finalVideoFolder = "final_video";
+    if (!fs.existsSync(finalVideoFolder)) {
+      logger.info("Final video folder does not exist, skipping cleanup");
+      return { success: true, filesDeleted: 0 };
+    }
+
+    const files = fs.readdirSync(finalVideoFolder);
+    let deletedCount = 0;
+
+    for (const file of files) {
+      const filePath = path.join(finalVideoFolder, file);
+
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.isFile() && file.endsWith(".mp4")) {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+          logger.info(`🗑️ Deleted final video: ${filePath}`);
+        }
+      } catch (error) {
+        logger.error(`Failed to delete ${filePath}:`, error.message);
+      }
+    }
+
+    logger.info(
+      `✅ Final video folder cleanup completed: ${deletedCount} files deleted`
+    );
+    return { success: true, filesDeleted: deletedCount };
+  } catch (error) {
+    logger.error("Error cleaning final video folder:", error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   cleanDirectory,
   cleanupAllMediaFolders,
@@ -376,4 +407,5 @@ module.exports = {
   cleanupRootDirectory,
   cleanupOnError,
   ensureEssentialVideoFiles,
+  cleanupFinalVideoFolder,
 };

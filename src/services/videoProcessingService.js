@@ -133,12 +133,23 @@ const composeVideo = async (
   try {
     logger.info("🎬 Starting final video composition...");
 
-    const outputPath = path.resolve(`videos/final_smallsubs.mp4`);
+    // Create final video directly in final_video folder
+    const finalVideoFolder = "final_video";
+    const timestamp = Date.now();
+    const outputPath = path.resolve(
+      path.join(finalVideoFolder, `final_video_${timestamp}.mp4`)
+    );
+
+    // Ensure final_video folder exists
+    if (!fs.existsSync(finalVideoFolder)) {
+      fs.mkdirSync(finalVideoFolder, { recursive: true });
+    }
 
     logger.info(`📹 Base video: ${baseVideoPath}`);
     logger.info(`🎵 Audio: ${audioPath}`);
     logger.info(`🖼️ Images: ${images.length} files`);
     logger.info(`📝 Subtitles: ${subtitlesPath}`);
+    logger.info(`📁 Output: ${outputPath}`);
 
     // Validate input files exist
     if (!fs.existsSync(baseVideoPath)) {
@@ -218,9 +229,9 @@ const composeVideo = async (
         // Apply subtitles to base video or video with overlays
         const videoSource =
           validImages.length > 0 ? "[video_with_overlays]" : "[base]";
-        filterParts.push(
-          `${videoSource}subtitles='${simpleSubtitlesPath}':force_style='FontName=Impact,FontSize=12,PrimaryColour=&H0000FFFF,OutlineColour=&H000000,BorderStyle=3,BackColour=&H80000080,Bold=1,Alignment=2,MarginV=28,Outline=2,Spacing=1'[final_video]`
-        );
+        const subtitleFilter = `[video]subtitles='${safeSubtitlePath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
+
+        filterParts.push(subtitleFilter);
       }
 
       // Set up output options - optimized for both YouTube and Instagram
@@ -264,9 +275,7 @@ const composeVideo = async (
       command
         .complexFilter(filterParts.join(";"))
         .outputOptions(outputOptions)
-        .output(outputPath);
-
-      command
+        .output(outputPath)
         .on("start", (commandLine) => {
           logger.info("🔄 FFmpeg process started with command:");
           logger.info(commandLine);
@@ -281,19 +290,9 @@ const composeVideo = async (
         .on("end", async () => {
           logger.info(`✅ Final video composed successfully: ${outputPath}`);
 
-          // Save a copy to root directory
-          const rootCopyPath = path.resolve(`final_video_${Date.now()}.mp4`);
-          try {
-            fs.copyFileSync(outputPath, rootCopyPath);
-            logger.info(`📋 Root copy saved: ${rootCopyPath}`);
-          } catch (copyError) {
-            logger.error(`❌ Failed to save root copy:`, copyError.message);
-          }
-
           resolve({
             success: true,
             videoPath: outputPath,
-            rootCopyPath: rootCopyPath,
             duration: null,
             format: "mp4",
             resolution: "1080x1920",

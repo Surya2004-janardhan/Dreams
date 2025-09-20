@@ -160,33 +160,16 @@ const runCompleteWorkflow = async (taskData) => {
       taskData.idea
     );
     currentWorkflow.results.finalVideo = finalVideo.videoPath;
-    currentWorkflow.results.rootCopyPath = finalVideo.rootCopyPath;
-
-    // Move final video to final_video folder for organized storage
-    const finalVideoFolder = "final_video";
-    const videoTimestamp = Date.now();
-    const finalVideoName = `final_video_${videoTimestamp}.mp4`;
-    const finalVideoPath = path.join(finalVideoFolder, finalVideoName);
-
-    // Ensure final_video folder exists
-    if (!fs.existsSync(finalVideoFolder)) {
-      fs.mkdirSync(finalVideoFolder, { recursive: true });
-    }
-
-    // Copy video to final_video folder
-    fs.copyFileSync(finalVideo.videoPath, finalVideoPath);
-    currentWorkflow.results.finalVideoPath = finalVideoPath;
 
     logger.info("✓ Video merged successfully");
-    logger.info(`📋 Root copy available at: ${finalVideo.rootCopyPath}`);
-    logger.info(`📁 Final video stored at: ${finalVideoPath}`);
+    logger.info(`📁 Final video stored at: ${finalVideo.videoPath}`);
 
     // Step 7: Upload to platforms
     logger.info("📤 Step 7: Uploading to platforms");
     currentWorkflow.currentStep = "upload/platforms";
 
     // Use the video from final_video folder for uploads
-    const uploadVideoPath = currentWorkflow.results.finalVideoPath;
+    const uploadVideoPath = currentWorkflow.results.finalVideo;
     const uploadResult = await uploadToBothPlatforms(
       uploadVideoPath,
       taskData.idea,
@@ -249,6 +232,12 @@ const runCompleteWorkflow = async (taskData) => {
     logger.info("📧 Step 10: Sending success notification");
     await sendSuccessNotification(taskData, uploadResult);
     logger.info("✅ Success notification email sent");
+
+    // Step 11: Clean final video folder after successful upload
+    logger.info("🧹 Step 11: Cleaning final video folder");
+    const { cleanupFinalVideoFolder } = require("../services/cleanupService");
+    await cleanupFinalVideoFolder();
+    logger.info("✓ Final video folder cleanup completed");
 
     currentWorkflow.status = "completed";
     logger.info(`🎉 Workflow completed successfully: ${taskData.idea}`);

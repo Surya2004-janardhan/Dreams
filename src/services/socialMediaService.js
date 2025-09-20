@@ -50,19 +50,20 @@ const generateSocialMediaContent = (title, description) => {
 
   const allHashtags = [...baseHashtags, ...topicHashtags].slice(0, 15);
 
-  const youtubeCaption = `${title}
+  // For fallback, create a simple summary instead of using conversation
+  const simpleSummary = `Learn about ${title.toLowerCase()} in this educational video. Discover key concepts, practical applications, and important insights that will help you understand this topic better. Perfect for students and anyone interested in expanding their knowledge.`;
 
-${description}
+  const youtubeDescription = `${simpleSummary}
 
 🎯 Learn something new every day! 
 📚 Educational content in easy Q&A format
 🔔 Subscribe for more educational shorts!
 
-${allHashtags.join(" ")}"`;
+${allHashtags.join(" ")}`;
 
-  const instagramCaption = `${title} ✨
+  const instagramCaption = `${title}
 
-${description}
+${simpleSummary}
 
 💡 Did you know this? 
 📖 Educational content made simple!
@@ -73,7 +74,7 @@ ${allHashtags.join(" ")}`;
   return {
     youtube: {
       title: title.length > 55 ? title.substring(0, 50) + "..." : title,
-      description: youtubeCaption,
+      description: youtubeDescription,
       tags: allHashtags.map((h) => h.replace("#", "")).slice(0, 10),
       hashtags: allHashtags.join(" "),
     },
@@ -85,7 +86,7 @@ ${allHashtags.join(" ")}`;
 };
 
 /**
- * Generate AI-powered social media content using Groq
+ * Generate AI-powered social media content using Gemini
  */
 const generateAISocialMediaContent = async (
   title,
@@ -93,57 +94,95 @@ const generateAISocialMediaContent = async (
   scriptContent = ""
 ) => {
   try {
-    const groqApiKey = process.env.GROQ_API_KEY;
-    if (!groqApiKey) {
+    const geminiApiKey = process.env.GEMINI_API_KEY_FOR_T2T;
+    if (!geminiApiKey) {
       logger.warn(
-        "⚠️ GROQ_API_KEY not found, falling back to template generation"
+        "⚠️ GEMINI_API_KEY_FOR_T2T not found, falling back to template generation"
       );
       return generateSocialMediaContent(title, description);
     }
 
-    logger.info("🤖 Generating AI-powered social media content with Groq...");
+    logger.info("🤖 Generating AI-powered social media content with Gemini...");
+
+    // Generate a proper summary of the script content for descriptions
+    let summaryPrompt = "";
+    if (scriptContent) {
+      summaryPrompt = `
+Based on this educational conversation script, create a comprehensive summary:
+
+Script: "${scriptContent}"
+
+Create a detailed, educational summary (200-300 words) that covers all the key points discussed in the conversation. Write it as a single cohesive paragraph in formal educational tone, not as a conversation. Focus on the technical concepts, explanations, and learning outcomes.`;
+    }
 
     const prompt = `Generate engaging social media content for a short educational video.
 
 Video Title: "${title}"
 Video Description: "${description}"
-${scriptContent ? `Script Content: "${scriptContent}"` : ""}
+${scriptContent ? `Script Summary Request: ${summaryPrompt}` : ""}
 
 Please generate:
-1. YouTube Description (detailed, with emojis and call-to-action, max 5000 chars)
-2. Instagram Description/Caption body (engaging content about the topic, max 2000 chars)
+1. YouTube Description (detailed summary of the topic, educational and informative, 300-400 words, formal tone)
+2. Instagram Caption (engaging combination of title + key points summary, 150-200 words, conversational but informative)
 3. Relevant hashtags for both platforms (15-20 hashtags total)
 
-IMPORTANT: 
-- Keep the original title "${title}" as-is for both platforms
-- Only generate descriptions and hashtags
-- Make descriptions educational and engaging
+IMPORTANT RULES: 
+- YouTube Description: Must be a proper summary paragraph, NOT the conversation script
+- Instagram Caption: Title + engaging summary, NOT the full conversation
+- Keep descriptions educational and detailed
 - Format your response as JSON with keys: youtubeDescription, instagramDescription, hashtags
 
 Make it educational, engaging, and optimized for social media algorithms.`;
 
-    const groqResponse = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
+    const geminiResponse = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
       {
-        model: "llama3-8b-8192",
-        messages: [
+        contents: [
           {
-            role: "user",
-            content: prompt,
+            parts: [
+              {
+                text: `You are an expert social media content creator for educational videos.
+
+${prompt}`,
+              },
+            ],
           },
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 2048,
+        },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        ],
       },
       {
         headers: {
-          Authorization: `Bearer ${groqApiKey}`,
           "Content-Type": "application/json",
         },
       }
     );
 
-    const aiContent = JSON.parse(groqResponse.data.choices[0].message.content);
+    const aiContent = JSON.parse(
+      geminiResponse.data.candidates[0].content.parts[0].text
+    );
 
     // Extract hashtags from the AI response
     const hashtags = aiContent.hashtags || [];
@@ -161,7 +200,7 @@ Make it educational, engaging, and optimized for social media algorithms.`;
       instagram: {
         caption: `${title}\n\n${
           aiContent.instagramDescription || description
-        }\n\n${hashtagString}`, // Title + AI description + hashtags
+        }\n\n${hashtagString}`, // Title + AI summary + hashtags
         hashtags: hashtagString,
       },
     };
@@ -240,7 +279,7 @@ const uploadToYouTube = async (videoPath, title, description) => {
       url: videoUrl,
       videoId: videoId,
       title: finalTitle,
-      caption: socialContent.youtube.description,
+      caption: finalTitle, // Use only title for YouTube caption, not the full description
     };
   } catch (error) {
     logger.error("❌ YouTube upload failed:", error.message);

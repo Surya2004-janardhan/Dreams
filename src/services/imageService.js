@@ -379,7 +379,9 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
     // Step 2: Generate image prompts using Groq with subtitle content or script
     let imagePrompts;
     if (subtitlesPath) {
-      logger.info("🤖 Generating prompts using Groq with subtitle content...");
+      logger.info(
+        "🤖 Generating prompts using Gemini with subtitle content..."
+      );
 
       // Extract all subtitle text for prompt generation
       let allSubtitleText = "";
@@ -411,7 +413,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         throw new Error("No subtitle content found to generate prompts from");
       }
 
-      imagePrompts = await generateImagePromptsWithGroq(allSubtitleText);
+      imagePrompts = await generateImagePromptsWithGemini(allSubtitleText);
 
       if (!imagePrompts || imagePrompts.length === 0) {
         throw new Error(
@@ -424,7 +426,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         imagePrompts
       );
     } else if (scriptContent) {
-      logger.info("🤖 Generating prompts using Groq with script content...");
+      logger.info("🤖 Generating prompts using Gemini with script content...");
       logger.info(
         `📝 Script content length: ${scriptContent.length} characters`
       );
@@ -433,7 +435,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         throw new Error("No script content provided to generate prompts from");
       }
 
-      imagePrompts = await generateImagePromptsWithGroq(scriptContent);
+      imagePrompts = await generateImagePromptsWithGemini(scriptContent);
 
       if (!imagePrompts || imagePrompts.length === 0) {
         throw new Error("Failed to generate image prompts from script content");
@@ -456,7 +458,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
     for (let i = 0; i < imageChunks.length; i++) {
       const chunk = imageChunks[i];
       try {
-        // Use the corresponding Groq-generated prompt
+        // Use the corresponding Gemini-generated prompt
         if (i >= imagePrompts.length) {
           throw new Error(
             `No prompt available for chunk ${i + 1} - only ${
@@ -473,7 +475,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
             1
           )}s`
         );
-        logger.info(`📝 Using Groq prompt: "${imagePrompt}"`);
+        logger.info(`📝 Using Gemini prompt: "${imagePrompt}"`);
 
         // Generate image using Gemini
         const apiKey =
@@ -562,16 +564,18 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
 };
 
 /**
- * Generate 5 concise image prompts using Groq based on the full script
+ * Generate 5 concise image prompts using Gemini based on the full script
  */
-const generateImagePromptsWithGroq = async (content) => {
+const generateImagePromptsWithGemini = async (content) => {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
     if (!apiKey) {
-      throw new Error("GROQ_API_KEY environment variable is required");
+      throw new Error(
+        "GEMINI_API_KEY_FOR_T2T environment variable is required"
+      );
     }
 
-    logger.info("🤖 Generating image prompts using Groq...");
+    logger.info("🤖 Generating image prompts using Gemini...");
 
     const prompt = `From the content below, generate 5 concise image prompts for technical diagrams.
 
@@ -580,48 +584,67 @@ ${content}
 
 RULES:
 - Exactly 5 prompts
-- Each under 20 words
+- Each under 15 words
 - Only technical terms from content
 - White background
 - Strictly 9:8 aspect ratio
 - Professional technical style
-✅ Good Types of Images for Edu  Content:
-
-Infographic Snippets – minimal icons + labels (like memory, CPU, network, DB).
-
-Minimal UI Mockups – simplified boxes showing “how software works” without real UI clutter.
+- Simple, minimal design
+- No complex architecture explanations
+- Just technical words and basic diagrams
 
 OUTPUT:
 Return only a JSON array of 5 strings.`;
 
     const response = await axios.post(
-      GROQ_API_URL,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
-        model: "llama-3.3-70b-versatile",
-        messages: [
+        contents: [
           {
-            role: "system",
-            content:
-              "You are an expert at creating concise, technical image prompts for educational content. Focus on technical terms. Always return valid JSON arrays.",
-          },
-          {
-            role: "user",
-            content: prompt,
+            parts: [
+              {
+                text: `You are an expert at creating concise, technical image prompts for educational content. Focus on simple technical terms and basic diagrams. Always return valid JSON arrays.
+
+${prompt}`,
+              },
+            ],
           },
         ],
-        temperature: 0.7,
-        max_tokens: 1000,
+        generationConfig: {
+          temperature: 0.6,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
+        },
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE",
+          },
+        ],
       },
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
         },
       }
     );
 
-    const responseContent = response.data.choices[0].message.content.trim();
-    logger.info("📝 Groq generated prompts response:", responseContent);
+    const responseContent =
+      response.data.candidates[0].content.parts[0].text.trim();
+    logger.info("📝 Gemini generated prompts response:", responseContent);
 
     // Parse the JSON response
     let prompts;
@@ -633,12 +656,12 @@ Return only a JSON array of 5 strings.`;
       prompts = JSON.parse(cleanContent);
     } catch (parseError) {
       logger.error(
-        "❌ Failed to parse Groq response as JSON:",
+        "❌ Failed to parse Gemini response as JSON:",
         parseError.message
       );
       logger.error("Raw response content:", responseContent);
       throw new Error(
-        `Failed to parse image prompts from Groq response: ${parseError.message}`
+        `Failed to parse image prompts from Gemini response: ${parseError.message}`
       );
     }
 
@@ -676,20 +699,15 @@ Return only a JSON array of 5 strings.`;
     });
 
     logger.info(
-      `✅ Generated ${enhancedPrompts.length} image prompts from Groq`
+      `✅ Generated ${enhancedPrompts.length} image prompts with Gemini`
     );
     return enhancedPrompts;
   } catch (error) {
-    logger.error("❌ Failed to generate prompts with Groq:", {
-      error: error.message,
-      stack: error.stack,
-      apiResponse: error.response?.data,
-      contentLength: content?.length || 0,
-      timestamp: new Date().toISOString(),
-    });
-    throw new Error(
-      `Failed to generate image prompts with Groq: ${error.message}`
+    logger.error(
+      "❌ Failed to generate image prompts with Gemini:",
+      error.message
     );
+    throw error;
   }
 };
 
@@ -698,5 +716,5 @@ module.exports = {
   parseSRTFile,
   createImageChunksFromSubtitles,
   generateImageWithGemini,
-  generateImagePromptsWithGroq,
+  generateImagePromptsWithGemini,
 };
