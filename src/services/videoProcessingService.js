@@ -229,7 +229,7 @@ const composeVideo = async (
         // Apply subtitles to base video or video with overlays
         const videoSource =
           validImages.length > 0 ? "[video_with_overlays]" : "[base]";
-        const subtitleFilter = `[video]subtitles='${safeSubtitlePath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
+        const subtitleFilter = `[video]subtitles='${simpleSubtitlesPath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
 
         filterParts.push(subtitleFilter);
       }

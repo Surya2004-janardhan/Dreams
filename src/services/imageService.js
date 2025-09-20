@@ -4,8 +4,8 @@ const logger = require("../config/logger");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 
-// Groq API configuration
-const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+// Gemini API configuration
+// const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 /**
  */
@@ -57,21 +57,39 @@ const generateImageWithGemini = async (prompt, index, apiKey) => {
     );
     console.error(`Full error details:`, JSON.stringify(error, null, 2));
 
-    // Create a simple fallback image
+    // Use default image from videos folder as fallback
     try {
-      const imagePath = path.resolve(`images/ERROR${index}.png`);
-      // Create a minimal 1x1 pixel PNG as fallback
-      const minimalPNG = Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
-        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
-        0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0x99, 0x01, 0x01, 0x00, 0x00, 0x00,
-        0xff, 0xff, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
-        0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-      ]);
-      fs.writeFileSync(imagePath, minimalPNG);
-      logger.info(`✅ Fallback image ${index} created: ${imagePath}`);
-      return imagePath;
+      const defaultImagePath = path.resolve("videos/default-image.jpg");
+      const fallbackImagePath = path.resolve(`images/fallback${index}.jpg`);
+
+      // Check if default image exists
+      if (fs.existsSync(defaultImagePath)) {
+        // Copy the default image to images folder
+        fs.copyFileSync(defaultImagePath, fallbackImagePath);
+        logger.info(
+          `✅ Fallback image ${index} created from default: ${fallbackImagePath}`
+        );
+        return fallbackImagePath;
+      } else {
+        logger.warn(
+          `⚠️ Default image not found at ${defaultImagePath}, creating minimal fallback`
+        );
+        // Fallback to minimal PNG if default image doesn't exist
+        const minimalPNG = Buffer.from([
+          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00,
+          0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+          0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
+          0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x08, 0x99, 0x01,
+          0x01, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0x00, 0x02, 0x00,
+          0x01, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42,
+          0x60, 0x82,
+        ]);
+        fs.writeFileSync(fallbackImagePath, minimalPNG);
+        logger.info(
+          `✅ Minimal fallback image ${index} created: ${fallbackImagePath}`
+        );
+        return fallbackImagePath;
+      }
     } catch (fallbackError) {
       logger.error(`❌ Fallback image creation failed:`, fallbackError.message);
       throw error;
@@ -331,12 +349,12 @@ const extractTechnicalKeywords = (text) => {
 };
 
 /**
- * Generate contextual educational images using subtitle timing and Groq prompts
+ * Generate contextual educational images using subtitle timing and Gemini prompts
  */
 const generateImages = async (subtitlesPath, scriptContent = null) => {
   try {
     logger.info(
-      "🖼️ Starting image generation using subtitle timing and Groq prompts..."
+      "🖼️ Starting image generation using subtitle timing and Gemini prompts..."
     );
     logger.info(`📝 Subtitles path: ${subtitlesPath}`);
 
@@ -376,7 +394,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
       logger.info(`📊 Created ${imageChunks.length} default image chunks`);
     }
 
-    // Step 2: Generate image prompts using Groq with subtitle content or script
+    // Step 2: Generate image prompts using Gemini with subtitle content or script
     let imagePrompts;
     if (subtitlesPath) {
       logger.info(
@@ -454,7 +472,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
     const generatedImages = [];
     let successCount = 0;
 
-    // Step 3: Generate images for each chunk using Groq prompts
+    // Step 3: Generate images for each chunk using Gemini prompts
     for (let i = 0; i < imageChunks.length; i++) {
       const chunk = imageChunks[i];
       try {
@@ -522,7 +540,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         // Create fallback image info even if generation failed
         const fallbackImageInfo = {
           index: chunk.index,
-          filename: `images/ERROR${chunk.index}.png`, // This will be created by the generateImageWithGemini function
+          filename: `images/fallback${chunk.index}.jpg`, // Updated to match the new fallback naming
           concept: `Fallback image for segment ${chunk.index}`,
           prompt: imagePrompt,
           timing: {
@@ -577,7 +595,7 @@ const generateImagePromptsWithGemini = async (content) => {
 
     logger.info("🤖 Generating image prompts using Gemini...");
 
-    const prompt = `From the content below, generate 5 concise image prompts for technical diagrams.
+    const prompt = `From the content below, generate 5 concise image prompts for technical content.
 
 CONTENT:
 ${content}
@@ -585,13 +603,15 @@ ${content}
 RULES:
 - Exactly 5 prompts
 - Each under 15 words
-- Only technical terms from content
+- Focus on real-world tech elements
+- Include company logos and brand colors
+- Use actual technology names and tools
+- Professional, clean design
 - White background
 - Strictly 9:8 aspect ratio
-- Professional technical style
-- Simple, minimal design
-- No complex architecture explanations
-- Just technical words and basic diagrams
+- Real logos, not diagrams
+- Include specific colors (blue, green, orange, etc.)
+- Show actual software interfaces or tools
 
 OUTPUT:
 Return only a JSON array of 5 strings.`;
@@ -603,7 +623,7 @@ Return only a JSON array of 5 strings.`;
           {
             parts: [
               {
-                text: `You are an expert at creating concise, technical image prompts for educational content. Focus on simple technical terms and basic diagrams. Always return valid JSON arrays.
+                text: `You are an expert at creating realistic technical image prompts. Focus on real-world software, logos, and actual technology tools. Use specific brand colors and real company logos. Avoid abstract diagrams - show actual interfaces, tools, and recognizable tech elements. Always return valid JSON arrays.
 
 ${prompt}`,
               },
@@ -611,9 +631,9 @@ ${prompt}`,
           },
         ],
         generationConfig: {
-          temperature: 0.6,
-          topK: 40,
-          topP: 0.95,
+          temperature: 0.3,
+          topK: 20,
+          topP: 0.8,
           maxOutputTokens: 1024,
         },
         safetySettings: [
@@ -671,7 +691,7 @@ ${prompt}`,
         prompts
       );
       throw new Error(
-        `Invalid prompts format from Groq - expected 5 prompts, got ${
+        `Invalid prompts format from Gemini - expected 5 prompts, got ${
           Array.isArray(prompts) ? prompts.length : "non-array"
         }`
       );

@@ -1,5 +1,7 @@
 const nodemailer = require("nodemailer");
 const logger = require("../config/logger");
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Create email transporter
@@ -99,6 +101,9 @@ const sendSuccessNotification = async (taskData, results) => {
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Success notification email sent for: ${taskData.idea}`);
+
+    // Clear log files after successful workflow completion
+    await clearLogFiles();
   } catch (error) {
     logger.error("Failed to send success notification:", error);
   }
@@ -189,6 +194,9 @@ ${error.stack}
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Error notification email sent for failed task`);
+
+    // Clear log files after error notification is sent
+    await clearLogFiles();
   } catch (emailError) {
     logger.error("Failed to send error notification:", emailError);
   }
@@ -219,7 +227,6 @@ const sendStatusUpdate = async (status, message, details = {}) => {
       ];
     }
 
-    
     const subject = `📊 Workflow Status: ${status}`;
 
     const htmlContent = `
@@ -382,9 +389,39 @@ const analyzeError = (error, step) => {
   return { summary, solutions };
 };
 
+/**
+ * Clear log files after workflow completion
+ */
+const clearLogFiles = async () => {
+  try {
+    const logFiles = [
+      path.join(process.cwd(), "combined.log"),
+      path.join(process.cwd(), "error.log"),
+    ];
+
+    for (const logFile of logFiles) {
+      if (fs.existsSync(logFile)) {
+        // Clear the file by writing empty content
+        fs.writeFileSync(logFile, "", "utf8");
+        logger.info(`🧹 Cleared log file: ${path.basename(logFile)}`);
+      } else {
+        logger.info(
+          `📝 Log file not found (skipping): ${path.basename(logFile)}`
+        );
+      }
+    }
+
+    logger.info("✅ Log files cleared successfully after workflow completion");
+  } catch (error) {
+    logger.error("❌ Failed to clear log files:", error.message);
+    // Don't throw error here as log clearing failure shouldn't break the workflow
+  }
+};
+
 module.exports = {
   sendSuccessNotification,
   sendErrorNotification,
   sendStatusUpdate,
   analyzeError,
+  clearLogFiles,
 };
