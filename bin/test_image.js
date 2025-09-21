@@ -15,6 +15,7 @@ async function generateImage() {
     model: "gemini-2.0-flash-exp",
     generationConfig: {
       responseModalities: ["Text", "Image"],
+      aspectRatio: "9:8", // 9:8 aspect ratio for portrait orientation
     },
   });
 

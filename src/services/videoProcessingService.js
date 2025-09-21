@@ -7,6 +7,7 @@ const logger = require("../config/logger");
 const { getGoogleDriveClient } = require("../config/google");
 // Load FFmpeg configuration
 require("../config/ffmpeg");
+const fontspath = require("../../fonts");
 
 /**
  * Get base video from Google Drive or local videos folder
@@ -210,7 +211,9 @@ const composeVideo = async (
           );
 
           filterParts.push(
-            `${currentVideo}[img0]overlay=(W-w)/2:20:enable='between(t,${startTime},${endTime})'[video]`
+            `${currentVideo}[img0]overlay=(W-w)/2:(${Math.round(
+              0.02 * 1920
+            )}):enable='between(t,${startTime},${endTime})'[video]`
           );
           currentVideo = "[video]";
         } else {
@@ -228,7 +231,9 @@ const composeVideo = async (
               index === validImages.length - 1 ? "[video]" : `[v${index}]`;
 
             filterParts.push(
-              `${currentVideo}[img${index}]overlay=(W-w)/2:20:enable='between(t,${startTime},${endTime})'${nextVideo}`
+              `${currentVideo}[img${index}]overlay=(W-w)/2:(${Math.round(
+                0.02 * 1920
+              )}):enable='between(t,${startTime},${endTime})'${nextVideo}`
             );
 
             currentVideo = nextVideo;
@@ -241,13 +246,18 @@ const composeVideo = async (
         // No subtitles, use base video or video with overlays
         filterParts.push(`${currentVideo}copy[final]`);
       } else {
-        // Use working subtitles approach from test video
+        // Use working subtitles approach from test video with explicit font file
+        const fontFilePath = path.resolve("fonts/Montserrat-Black.ttf");
+        const safeFontPath = fontFilePath
+          .replace(/\\/g, "\\\\")
+          .replace(/:/g, "\\:");
+
         const safeSubtitlePath = subtitlesPath
           .replace(/\\/g, "\\\\")
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
 
-        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontName=Montserrat Black,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
+        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=11,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
         filterParts.push(subtitleFilter);
       }
 

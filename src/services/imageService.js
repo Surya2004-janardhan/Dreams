@@ -22,6 +22,7 @@ const generateImageWithGemini = async (prompt, index, apiKey) => {
       model: "gemini-2.0-flash-exp",
       generationConfig: {
         responseModalities: ["Text", "Image"],
+        aspectRatio: "9:8", // 9:8 aspect ratio for portrait orientation
       },
     });
 
@@ -349,7 +350,7 @@ const extractTechnicalKeywords = (text) => {
 };
 
 /**
- * Extract 5 most important technical terms from content using Gemini
+ * Extract 10 most important technical terms from content using Gemini
  */
 const extractTechnicalTerms = async (content) => {
   try {
@@ -436,7 +437,9 @@ ${prompt}`,
       return ["Technology", "Software", "Development", "System", "Process"];
     }
 
-    logger.info("✅ Extracted technical terms:", terms);
+    logger.info(
+      `✅ Extracted ${technicalTerms.length} technical terms: ${technicalTerms}`
+    );
     return terms;
   } catch (error) {
     logger.error("❌ Technical terms extraction failed:", error.message);
@@ -449,45 +452,207 @@ ${prompt}`,
  * Generate simple white background image prompts using extracted terms
  */
 const generateSimpleImagePrompts = async (technicalTerms) => {
-  const prompts = [];
+  try {
+    const prompts = [];
 
-  // Company/product logos and simple diagrams
-  const logoPrompts = [
-    "Clean white background with centered company logo",
-    "Minimal white background with product logo and name",
-    "Simple white background with technology icon",
-    "Clean white background with software logo",
-    "Minimal white background with tech brand logo",
-  ];
+    for (let i = 0; i < technicalTerms.length; i++) {
+      const term = technicalTerms[i];
 
-  // Single diagram types (no flowcharts)
-  const diagramPrompts = [
-    "Simple architecture diagram on white background",
-    "Clean system overview diagram on white background",
-    "Minimal process diagram on white background",
-    "Simple workflow diagram on white background",
-    "Clean technical diagram on white background",
-  ];
+      const prompt = `Create a detailed, professional image prompt for the technical concept "${term}" that would be perfect for an educational video.
 
-  for (let i = 0; i < 5; i++) {
-    const term = technicalTerms[i];
-    let prompt;
+Requirements:
+- Focus on clean, professional design
+- White or very light background
+- Include visual elements that represent the concept
+- Make it suitable for technical education
+- Keep it concise but descriptive
+- Avoid text overlays, use visual metaphors
+- Image must be in 9:8 aspect ratio (portrait orientation)
+- Important elements should be positioned in the top 45% of the image only
+- Leave bottom 55% relatively empty for video overlay text
+- Ensure main visual content stays within the upper portion
 
-    if (i < 3) {
-      // First 3: Logo-based prompts
-      prompt = `${logoPrompts[i]} for ${term}. Professional, clean design, white background only.`;
-    } else {
-      // Last 2: Simple diagram prompts
-      prompt = `${
-        diagramPrompts[i - 3]
-      } showing ${term}. Clean lines, white background, minimal design.`;
+Example style: "Clean white background with a stylized 3D network diagram showing interconnected nodes representing ${term}, professional blue and green color scheme, minimal design, 9:8 aspect ratio, main elements positioned in top 45% of image"
+
+Create a prompt for: ${term}`;
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("GEMINI_API_KEY not found");
+      }
+
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.8,
+            maxOutputTokens: 150,
+          },
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const generatedPrompt =
+        response.data.candidates[0].content.parts[0].text.trim();
+      prompts.push(generatedPrompt);
+      logger.info(
+        `🎨 Generated prompt ${
+          i + 1
+        } for "${term}": ${generatedPrompt.substring(0, 80)}...`
+      );
     }
 
-    prompts.push(prompt);
+    logger.info(
+      `🎨 Successfully generated ${prompts.length} LLM-crafted image prompts`
+    );
+    return prompts;
+  } catch (error) {
+    logger.error("❌ LLM prompt generation failed:", error.message);
+    // Fallback to simple prompts
+    const fallbackPrompts = technicalTerms.map(
+      (term) =>
+        `Clean white background with professional illustration representing ${term}, minimal design, educational style, 9:8 aspect ratio`
+    );
+    logger.info("🔄 Using fallback prompts:", fallbackPrompts);
+    return fallbackPrompts;
+  }
+};
+
+/**
+ * Create dynamic image chunks based on when technical terms appear in subtitles
+ */
+const createDynamicImageChunksFromTerms = (
+  technicalTerms,
+  subtitleSegments,
+  actualDuration = 70
+) => {
+  const imageChunks = [];
+
+  // Find appearance times for each technical term
+  const termAppearances = [];
+
+  technicalTerms.forEach((term, index) => {
+    const appearances = [];
+
+    subtitleSegments.forEach((segment, segmentIndex) => {
+      // Check if the term appears in this subtitle segment (case-insensitive)
+      if (segment.text.toLowerCase().includes(term.toLowerCase())) {
+        appearances.push({
+          startTime: segment.startTime,
+          endTime: segment.endTime,
+          segmentIndex: segmentIndex,
+          text: segment.text,
+        });
+      }
+    });
+
+    termAppearances.push({
+      term: term,
+      index: index,
+      appearances: appearances,
+    });
+
+    logger.info(
+      `Term "${term}" appears in ${appearances.length} subtitle segments`
+    );
+  });
+
+  // Create dynamic chunks based on term appearances
+  for (let i = 0; i < technicalTerms.length; i++) {
+    const termData = termAppearances[i];
+    let chunkStart, chunkEnd;
+
+    if (termData.appearances.length > 0) {
+      // Use the first appearance of this term as start time
+      chunkStart = termData.appearances[0].startTime;
+
+      // Find when the next term appears to determine end time
+      if (i < technicalTerms.length - 1) {
+        const nextTermData = termAppearances[i + 1];
+        if (nextTermData.appearances.length > 0) {
+          // End this chunk when the next term starts appearing
+          chunkEnd = nextTermData.appearances[0].startTime;
+        } else {
+          // Next term not found, use a default duration
+          chunkEnd = chunkStart + 7; // Default 7 seconds
+        }
+      } else {
+        // Last term, extend to end of video or use remaining time
+        chunkEnd = actualDuration;
+      }
+
+      // Ensure minimum duration of 3 seconds
+      if (chunkEnd - chunkStart < 3) {
+        chunkEnd = Math.min(chunkStart + 7, actualDuration);
+      }
+
+      // Ensure we don't exceed video duration
+      chunkEnd = Math.min(chunkEnd, actualDuration);
+    } else {
+      // Term not found in subtitles, use fallback timing
+      const fallbackStart = (i / technicalTerms.length) * actualDuration;
+      chunkStart = fallbackStart;
+      chunkEnd = Math.min(fallbackStart + 7, actualDuration);
+
+      logger.warn(
+        `Term "${
+          termData.term
+        }" not found in subtitles, using fallback timing: ${chunkStart.toFixed(
+          1
+        )}-${chunkEnd.toFixed(1)}s`
+      );
+    }
+
+    // Collect subtitle text that falls within this dynamic chunk
+    const chunkTexts = [];
+    subtitleSegments.forEach((segment) => {
+      if (segment.startTime < chunkEnd && segment.endTime > chunkStart) {
+        chunkTexts.push(segment.text);
+      }
+    });
+
+    const mergedText = chunkTexts.join(" ").trim();
+
+    imageChunks.push({
+      index: i + 1,
+      term: termData.term,
+      startTime: chunkStart,
+      endTime: chunkEnd,
+      duration: chunkEnd - chunkStart,
+      text: mergedText,
+      subtitleCount: chunkTexts.length,
+      appearances: termData.appearances.length,
+    });
+
+    logger.info(
+      `📊 Dynamic Chunk ${i + 1} (${termData.term}): ${chunkStart.toFixed(
+        1
+      )}s-${chunkEnd.toFixed(1)}s (${chunkTexts.length} segments, ${
+        termData.appearances.length
+      } appearances)`
+    );
   }
 
-  logger.info("🎨 Generated simple image prompts:", prompts);
-  return prompts;
+  logger.info(
+    `📊 Created ${imageChunks.length} dynamic image chunks based on term timing`
+  );
+
+  return imageChunks;
 };
 
 /**
@@ -506,11 +671,11 @@ const generateImagePromptsWithGemini = async (content) => {
     logger.error("❌ Image prompt generation failed:", error.message);
     // Return very simple fallback prompts
     return [
-      "Clean white background with technology logo",
-      "Simple white background with software icon",
-      "Minimal white background with tech diagram",
-      "Clean white background with system logo",
-      "Simple white background with process diagram",
+      "Clean white background with technology logo, 9:8 aspect ratio",
+      "Simple white background with software icon, 9:8 aspect ratio",
+      "Minimal white background with tech diagram, 9:8 aspect ratio",
+      "Clean white background with system logo, 9:8 aspect ratio",
+      "Simple white background with process diagram, 9:8 aspect ratio",
     ];
   }
 };
@@ -525,20 +690,49 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
     );
     logger.info(`📝 Subtitles path: ${subtitlesPath}`);
 
-    // Step 1: Parse SRT file or create default chunks
+    // Step 1: Parse SRT file and extract technical terms for dynamic timing
     let imageChunks;
+    let technicalTerms = [];
+    let subtitleSegments = [];
+
     if (subtitlesPath) {
-      logger.info("📝 Parsing SRT file for timing...");
-      const subtitleSegments = parseSRTFile(subtitlesPath);
+      logger.info("📝 Parsing SRT file for dynamic timing...");
+      subtitleSegments = parseSRTFile(subtitlesPath);
       logger.info(`📊 Found ${subtitleSegments.length} subtitle segments`);
 
       if (subtitleSegments.length === 0) {
         logger.warn("⚠️ No subtitle segments found, cannot generate images");
         return [];
       }
-      imageChunks = createImageChunksFromSubtitles(subtitleSegments);
+
+      // Extract all subtitle text for term extraction
+      const allSubtitleText = subtitleSegments.map((seg) => seg.text).join(" ");
+
+      if (!allSubtitleText || allSubtitleText.trim().length === 0) {
+        throw new Error("No subtitle content found to extract terms from");
+      }
+
+      // Extract technical terms first
+      logger.info("🔍 Extracting technical terms for dynamic timing...");
+      technicalTerms = await extractTechnicalTerms(allSubtitleText);
       logger.info(
-        `📊 Created ${imageChunks.length} image chunks from subtitles`
+        `✅ Extracted ${technicalTerms.length} technical terms: ${technicalTerms}`
+      );
+
+      // Create dynamic chunks based on term appearances
+      imageChunks = [];
+
+      // Calculate actual duration from subtitles if available
+      let actualDuration = 70; // Default 70 seconds
+      if (subtitleSegments && subtitleSegments.length > 0) {
+        const maxEndTime = Math.max(...subtitleSegments.map((s) => s.endTime));
+        actualDuration = Math.max(maxEndTime, 70);
+      }
+
+      imageChunks = createDynamicImageChunksFromTerms(
+        technicalTerms,
+        subtitleSegments,
+        actualDuration
       );
     } else {
       // Create default chunks without timing for manual workflow
@@ -548,14 +742,26 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
       imageChunks = [];
       const totalDuration = 70; // 70 seconds default
       const chunkDuration = totalDuration / 5;
+
+      // Generate default technical terms for fallback
+      technicalTerms = [
+        "Technology",
+        "Software",
+        "Development",
+        "System",
+        "Process",
+      ];
+
       for (let i = 0; i < 5; i++) {
         imageChunks.push({
           index: i + 1,
+          term: technicalTerms[i],
           startTime: i * chunkDuration,
           endTime: (i + 1) * chunkDuration,
           duration: chunkDuration,
           text: `Segment ${i + 1} of educational content`,
           subtitleCount: 0,
+          appearances: 0,
         });
       }
       logger.info(`📊 Created ${imageChunks.length} default image chunks`);
@@ -656,7 +862,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         logger.info(
           `🎨 Generating image ${
             chunk.index
-          }/5 for time ${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(
+          }/10 for time ${chunk.startTime.toFixed(1)}-${chunk.endTime.toFixed(
             1
           )}s`
         );
@@ -664,7 +870,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
 
         // Generate image using Gemini
         const apiKey =
-          chunk.index <= 3
+          chunk.index <= 5
             ? process.env.GEMINI_API_KEY_FOR_IMAGES_1
             : process.env.GEMINI_API_KEY_FOR_IMAGES_2;
         const imagePath = await generateImageWithGemini(
@@ -676,7 +882,9 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         const imageInfo = {
           index: chunk.index,
           filename: imagePath,
-          concept: `Technical diagram for segment ${chunk.index}`,
+          concept: `Technical diagram for ${
+            chunk.term || `segment ${chunk.index}`
+          }`,
           prompt: imagePrompt,
           timing: {
             startTime: chunk.startTime,
@@ -707,7 +915,7 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
         // Create fallback image info even if generation failed
         const fallbackImageInfo = {
           index: chunk.index,
-          filename: `images/fallback${chunk.index}.jpg`, // Updated to match the new fallback naming
+          filename: `images/fallback${chunk.index}.jpg`,
           concept: `Fallback image for segment ${chunk.index}`,
           prompt: imagePrompt,
           timing: {
@@ -752,6 +960,9 @@ module.exports = {
   generateImages,
   parseSRTFile,
   createImageChunksFromSubtitles,
+  createDynamicImageChunksFromTerms,
+  extractTechnicalTerms,
+  generateSimpleImagePrompts,
   generateImageWithGemini,
   generateImagePromptsWithGemini,
 };

@@ -108,9 +108,9 @@ const createLocalTestVideo = async () => {
       "[1:v]scale=972:-1:force_original_aspect_ratio=decrease[img]"
     );
 
-    // 3. Overlay image on base video with timing
+    // 3. Overlay image on base video with timing (10 segments)
     filterParts.push(
-      "[base][img]overlay=(W-w)/2:20:enable='between(t,0,8)+between(t,10,18)+between(t,20,28)+between(t,30,38)+between(t,40,48)'[video]"
+      "[base][img]overlay=(W-w)/2:38:enable='between(t,0,7)+between(t,7,14)+between(t,14,21)+between(t,21,28)+between(t,28,35)+between(t,35,42)+between(t,42,49)+between(t,49,56)+between(t,56,63)+between(t,63,70)'[video]"
     );
 
     // 4. Add styled SRT subtitles with Montserrat Black font
@@ -141,7 +141,7 @@ const createLocalTestVideo = async () => {
       "-r",
       "30",
       "-t",
-      "55", // 55 seconds for all subtitles
+      "70", // 70 seconds for 10 segments (7 seconds each)
       "-map",
       "[final]",
       "-map",
@@ -169,7 +169,7 @@ const createLocalTestVideo = async () => {
           logger.info("✅ Image borders: None (displayed as-is)");
           logger.info("✅ Image width: 90% of video width (972px)");
           logger.info(
-            "✅ Image position: Upper portion, centered horizontally"
+            "✅ Image position: Top portion (2% from top), centered horizontally"
           );
           logger.info("✅ Video quality: Optimized for both platforms");
           resolve();
@@ -190,12 +190,12 @@ const createLocalTestVideo = async () => {
     return {
       success: true,
       outputPath,
-      duration: 55,
+      duration: 70,
       subtitles: subtitleEntries.length,
       font: "Montserrat-Black.ttf",
       imageWidth: "972px (90% of 1080px)",
       borderColor: "none (displayed as-is)",
-      position: "centered horizontally",
+      position: "top 2% from top of video height",
       quality: "optimized for YouTube and Instagram",
     };
   } catch (error) {

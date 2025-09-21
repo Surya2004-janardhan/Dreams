@@ -53,21 +53,53 @@ const generateSocialMediaContent = (title, description) => {
   // For fallback, create a simple summary instead of using conversation
   const simpleSummary = `Learn about ${title.toLowerCase()} in this educational video. Discover key concepts, practical applications, and important insights that will help you understand this topic better. Perfect for students and anyone interested in expanding their knowledge.`;
 
-  const youtubeDescription = `${simpleSummary}
+  const youtubeDescription = `🚀 ${simpleSummary}
 
-🎯 Learn something new every day! 
-📚 Educational content in easy Q&A format
-🔔 Subscribe for more educational shorts!
+📌 What You'll Learn:
+• ${title
+    .toLowerCase()
+    .split(" ")
+    .slice(0, 3)
+    .join(" ")} fundamentals and concepts
+• Practical applications in real-world scenarios
+• Step-by-step implementation guide
+• Best practices and common pitfalls
+• Advanced techniques and optimization tips
+
+🎯 Key Benefits:
+• Understand complex concepts simply
+• Apply knowledge to your projects
+• Stay updated with latest trends
+• Learn from practical examples
+• Get expert insights and tips
+
+💡 Learning Outcomes:
+• Master ${title.toLowerCase()} fundamentals
+• Build confidence in implementation
+• Solve real-world problems effectively
+• Stay ahead in your field
+• Create innovative solutions
+
+🔥 Don't forget to:
+👍 Like this video if you learned something new
+🔔 Subscribe for more educational content
+💬 Share your thoughts in the comments
+🔗 Check out related videos in the description
 
 ${allHashtags.join(" ")}`;
 
   const instagramCaption = `${title}
 
-${simpleSummary}
+📌 Key Takeaways:
+• ${title.toLowerCase().split(" ").slice(0, 3).join(" ")} fundamentals explained
+• Practical applications you can implement
+• Important concepts for your projects
+• Real-world use cases and examples
+• Best practices and tips
 
-💡 Did you know this? 
-📖 Educational content made simple!
-❤️ Like & Share if you learned something new!
+🤔 What did you learn? Share in comments!
+
+💡 Like & Share if you found this helpful!
 
 ${allHashtags.join(" ")}`;
 
@@ -94,132 +126,94 @@ const generateAISocialMediaContent = async (
   scriptContent = ""
 ) => {
   try {
-    const geminiApiKey = process.env.GEMINI_API_KEY_FOR_T2T;
-    if (!geminiApiKey) {
-      logger.warn(
-        "⚠️ GEMINI_API_KEY_FOR_T2T not found, falling back to template generation"
-      );
-      return generateSocialMediaContent(title, description);
-    }
-
-    logger.info("🤖 Generating AI-powered social media content with Gemini...");
-
-    // Generate a proper summary of the script content for descriptions
-    let summaryPrompt = "";
-    if (scriptContent) {
-      summaryPrompt = `
-Based on this educational conversation script, create a comprehensive summary:
-
-Script: "${scriptContent}"
-
-Create a detailed, educational summary (200-300 words) that covers all the key points discussed in the conversation. Write it as a single cohesive paragraph in formal educational tone, not as a conversation. Focus on the technical concepts, explanations, and learning outcomes.`;
-    }
-
-    const prompt = `Generate engaging social media content for a short educational video.
-
-Video Title: "${title}"
-Video Description: "${description}"
-${scriptContent ? `Script Summary: ${scriptContent.substring(0, 500)}...` : ""}
-
-Please generate content in this exact JSON format:
-{
-  "youtubeDescription": "Detailed YouTube description here (400-500 words)",
-  "instagramDescription": "Engaging Instagram caption here (200-250 words)",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3"]
-}
-
-IMPORTANT RULES:
-- YouTube Description: Comprehensive, educational, multiple paragraphs, cover key concepts
-- Instagram Description: Start with title, engaging explanation, emojis, call-to-action
-- Hashtags: Array of strings, 15-20 relevant hashtags
-- Return ONLY valid JSON, no additional text or formatting`;
-
-    const geminiResponse = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: `You are an expert social media content creator for educational videos.
-
-${prompt}`,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
-        },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    // First, generate 10 key points about the topic
+    const topicPoints = await generateTopicPoints(
+      title,
+      description,
+      scriptContent
     );
 
-    // Parse AI response
-    let aiContent;
-    try {
-      const rawResponse =
-        geminiResponse.data.candidates[0].content.parts[0].text.trim();
-      logger.info("🤖 Raw AI response:", rawResponse);
+    // Get topic-related emoji
+    const topicEmoji = getTopicEmoji(title, description);
 
-      // Clean the response if it has markdown formatting
-      const cleanResponse = rawResponse
-        .replace(/```json\s*|\s*```/g, "")
-        .trim();
-      aiContent = JSON.parse(cleanResponse);
+    // Generate hashtags
+    const baseHashtags = [
+      "#education",
+      "#learning",
+      "#knowledge",
+      "#facts",
+      "#educational",
+      "#shorts",
+      "#viral",
+      "#trending",
+      "#india",
+      "#informative",
+      "#tech",
+      "#technology",
+      "#ai",
+      "#innovation",
+      "#digital",
+      "#tutorial",
+      "#howto",
+      "#explained",
+      "#guide",
+      "#tips",
+    ];
 
-      logger.info("✅ AI content parsed successfully");
-    } catch (parseError) {
-      logger.error("❌ Failed to parse AI response:", parseError.message);
-      logger.error(
-        "Raw response:",
-        geminiResponse.data.candidates[0].content.parts[0].text
-      );
-      throw new Error(`AI response parsing failed: ${parseError.message}`);
-    }
+    const text = `${title} ${description}`.toLowerCase();
+    const topicHashtags = [];
 
-    // Extract hashtags from the AI response
-    const hashtags = aiContent.hashtags || [];
-    const hashtagString = Array.isArray(hashtags)
-      ? hashtags.join(" ")
-      : hashtags;
+    if (text.includes("science")) topicHashtags.push("#science", "#scientific");
+    if (text.includes("tech")) topicHashtags.push("#programming", "#coding");
+    if (text.includes("ai"))
+      topicHashtags.push("#artificialintelligence", "#machinelearning");
+    if (text.includes("data")) topicHashtags.push("#datascience", "#analytics");
+    if (text.includes("web"))
+      topicHashtags.push("#webdevelopment", "#javascript");
+    if (text.includes("mobile")) topicHashtags.push("#mobileapp", "#android");
+    if (text.includes("cloud")) topicHashtags.push("#cloudcomputing", "#aws");
+    if (text.includes("security"))
+      topicHashtags.push("#cybersecurity", "#hacking");
+    if (text.includes("business"))
+      topicHashtags.push("#business", "#entrepreneurship");
+    if (text.includes("design")) topicHashtags.push("#design", "#uiux");
+
+    const allHashtags = [...baseHashtags, ...topicHashtags].slice(0, 20);
+    const hashtagString = allHashtags.join(" ");
+
+    // Create YouTube description with 10 points
+    const youtubeDescription = `${topicEmoji} ${title}
+
+${topicPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")}
+
+🔥 Don't forget to:
+👍 Like this video if you learned something new!
+🔔 Subscribe for more educational content like this!
+💬 Share your thoughts in the comments below!
+🔗 Save this video to watch again later!
+
+${hashtagString}`;
+
+    // Create Instagram caption with 10 points
+    const instagramCaption = `${topicEmoji} ${title}
+
+${topicPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")}
+
+💡 What did you learn? Share in comments!
+👍 Like & Follow for more educational content!
+🔥 Share this with someone who needs to learn this!
+
+${hashtagString}`;
 
     return {
       youtube: {
-        title: title, // Use original title from sheet
-        description: aiContent.youtubeDescription || description,
-        tags: hashtags.slice(0, 10).map((h) => h.replace("#", "")),
+        title: title.length > 55 ? title.substring(0, 50) + "..." : title,
+        description: youtubeDescription,
+        tags: allHashtags.map((h) => h.replace("#", "")).slice(0, 10),
         hashtags: hashtagString,
       },
       instagram: {
-        caption:
-          aiContent.instagramDescription ||
-          `${title}\n\n${description}\n\n💡 Educational content made simple!\n❤️ Like & Share if you learned something new!\n\n${hashtagString}`,
+        caption: instagramCaption,
         hashtags: hashtagString,
       },
     };
@@ -315,16 +309,11 @@ const uploadToYouTube = async (videoPath, title, description) => {
 /**
  * Upload video to Instagram (using Instagram Graph API for reels)
  */
-const uploadToInstagram = async (videoPath, title, description) => {
+const uploadToInstagram = async (videoPath, caption, description) => {
   let uploadedFileName = null; // Changed from filebaseFileName to be more descriptive
 
   try {
     logger.info("📱 Starting Instagram upload...");
-
-    const socialContent = await generateAISocialMediaContent(
-      title,
-      description
-    );
 
     // Required environment variables
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
@@ -337,7 +326,10 @@ const uploadToInstagram = async (videoPath, title, description) => {
     }
 
     // Step 1: Upload to Supabase and get public link
-    const supabaseResult = await uploadToSupabaseAndGetLink(videoPath, title);
+    const supabaseResult = await uploadToSupabaseAndGetLink(
+      videoPath,
+      "Instagram Reel"
+    );
     if (!supabaseResult.success) {
       throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
     }
@@ -352,7 +344,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
     const containerParams = {
       media_type: "REELS",
       video_url: publicVideoUrl,
-      caption: socialContent.instagram.caption,
+      caption: caption,
       share_to_feed: false, // Set to false for Reels-only posts
       access_token: accessToken,
     };
@@ -426,7 +418,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
       url: finalUrl,
       postId: postId,
       containerId: containerId,
-      caption: socialContent.instagram.caption,
+      caption: caption,
     };
   } catch (error) {
     logger.error("❌ Instagram upload failed:", error.message);
@@ -712,6 +704,168 @@ const getInstagramPermalink = async (mediaId, accessToken) => {
   }
 };
 
+/**
+ * Generate 10 simple points about a topic using Gemini AI
+ */
+const generateTopicPoints = async (title, description, scriptContent = "") => {
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY_FOR_T2T;
+    if (!geminiApiKey) {
+      throw new Error("GEMINI_API_KEY_FOR_T2T not found");
+    }
+
+    logger.info("🤖 Generating 10 key points about the topic...");
+
+    const prompt = `Create exactly 10 simple, educational points about this topic:
+
+Topic: "${title}"
+Description: "${description}"
+${scriptContent ? `Content: ${scriptContent.substring(0, 1000)}` : ""}
+
+Generate exactly 10 bullet points that cover the most important aspects of this topic. Each point should be:
+- Simple and easy to understand
+- Educational and informative
+- 1-2 sentences maximum per point
+- Focus on key concepts, benefits, and practical applications
+
+Return only the 10 points as a JSON array of strings, like this:
+["Point 1 here", "Point 2 here", "Point 3 here", ...]`;
+
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.3,
+          topK: 20,
+          topP: 0.8,
+          maxOutputTokens: 1024,
+        },
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const responseContent =
+      response.data.candidates[0].content.parts[0].text.trim();
+    const cleanContent = responseContent
+      .replace(/```json\s*|\s*|\s*```/g, "")
+      .trim();
+    const points = JSON.parse(cleanContent);
+
+    if (!Array.isArray(points) || points.length !== 10) {
+      throw new Error("Invalid points format received from AI");
+    }
+
+    logger.info(`✅ Generated ${points.length} topic points`);
+    return points;
+  } catch (error) {
+    logger.error("❌ Failed to generate topic points:", error.message);
+
+    // Fallback points
+    return [
+      `Understanding the fundamentals of ${title.toLowerCase()}`,
+      "Practical applications in real-world scenarios",
+      "Key concepts and terminology explained",
+      "Step-by-step implementation guide",
+      "Common challenges and solutions",
+      "Best practices for success",
+      "Future trends and developments",
+      "Learning resources and next steps",
+      "Real-world examples and case studies",
+      "Tips for getting started today",
+    ];
+  }
+};
+
+/**
+ * Get emoji related to the topic
+ */
+const getTopicEmoji = (title, description) => {
+  const text = `${title} ${description}`.toLowerCase();
+
+  const emojiMap = {
+    tech: "💻",
+    technology: "🔧",
+    software: "🖥️",
+    development: "⚙️",
+    programming: "👨‍💻",
+    code: "📝",
+    data: "📊",
+    database: "🗄️",
+    ai: "🤖",
+    artificial: "🧠",
+    machine: "⚡",
+    learning: "📚",
+    science: "🔬",
+    research: "🔍",
+    health: "🏥",
+    medical: "⚕️",
+    business: "💼",
+    finance: "💰",
+    marketing: "📈",
+    education: "🎓",
+    history: "📜",
+    space: "🚀",
+    environment: "🌍",
+    music: "🎵",
+    art: "🎨",
+    sports: "⚽",
+    food: "🍽️",
+    travel: "✈️",
+    gaming: "🎮",
+    social: "👥",
+    security: "🔒",
+    cloud: "☁️",
+    mobile: "📱",
+    web: "🌐",
+    design: "🎯",
+    innovation: "💡",
+    future: "🔮",
+    digital: "📱",
+    automation: "🤖",
+    system: "⚙️",
+    process: "🔄",
+    framework: "🏗️",
+    api: "🔗",
+    network: "🌐",
+    algorithm: "🧮",
+    analytics: "📊",
+    blockchain: "⛓️",
+    crypto: "₿",
+    iot: "📡",
+    vr: "🥽",
+    ar: "📱",
+    quantum: "⚛️",
+    biotech: "🧬",
+    robotics: "🤖",
+    energy: "⚡",
+    climate: "🌡️",
+    sustainability: "♻️",
+  };
+
+  // Find matching emoji
+  for (const [keyword, emoji] of Object.entries(emojiMap)) {
+    if (text.includes(keyword)) {
+      return emoji;
+    }
+  }
+
+  // Default emoji
+  return "📚";
+};
+
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
@@ -722,4 +876,6 @@ module.exports = {
   deleteFromSupabase,
   getInstagramPermalink,
   generateAISocialMediaContent,
+  generateTopicPoints,
+  getTopicEmoji,
 };
