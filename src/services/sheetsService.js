@@ -57,9 +57,12 @@ const getNextTask = async () => {
     );
     const instaLinkIndex = headers.findIndex(
       (h) =>
-        h &&
-        (h.toLowerCase().includes("insta") ||
-          h.toLowerCase().includes("instagram"))
+        h.toLowerCase().includes("insta") ||
+        h.toLowerCase().includes("instagram")
+    );
+    const fbLinkIndex = headers.findIndex(
+      (h) =>
+        h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")
     );
     const timestampIndex = headers.findIndex(
       (h) =>
@@ -113,6 +116,7 @@ const getNextTask = async () => {
           status: row[statusIndex] || "Not Posted",
           ytLink: row[ytLinkIndex] || "",
           instaLink: row[instaLinkIndex] || "",
+          fbLink: row[fbLinkIndex] || "",
           timestamp: row[timestampIndex] || "",
         };
 
@@ -137,7 +141,8 @@ const updateSheetStatus = async (
   rowId,
   status,
   ytLink = "",
-  instaLink = ""
+  instaLink = "",
+  fbLink = ""
 ) => {
   try {
     const sheets = await getSheetsClient();
@@ -160,6 +165,10 @@ const updateSheetStatus = async (
       (h) =>
         h.toLowerCase().includes("insta") ||
         h.toLowerCase().includes("instagram")
+    );
+    const fbLinkIndex = headers.findIndex(
+      (h) =>
+        h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")
     );
     const timestampIndex = headers.findIndex(
       (h) =>
@@ -190,6 +199,14 @@ const updateSheetStatus = async (
       updates.push({
         range: `Sheet1!${getColumnLetter(instaLinkIndex + 1)}${rowId}`,
         values: [[instaLink]],
+      });
+    }
+
+    // Update Facebook link
+    if (fbLinkIndex !== -1 && fbLink) {
+      updates.push({
+        range: `Sheet1!${getColumnLetter(fbLinkIndex + 1)}${rowId}`,
+        values: [[fbLink]],
       });
     }
 

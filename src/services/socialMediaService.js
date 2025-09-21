@@ -126,8 +126,8 @@ const generateAISocialMediaContent = async (
   scriptContent = ""
 ) => {
   try {
-    // First, generate 10 key points about the topic
-    const topicPoints = await generateTopicPoints(
+    // First, generate educational explanation about the topic
+    const topicExplanation = await generateTopicExplanation(
       title,
       description,
       scriptContent
@@ -181,10 +181,10 @@ const generateAISocialMediaContent = async (
     const allHashtags = [...baseHashtags, ...topicHashtags].slice(0, 20);
     const hashtagString = allHashtags.join(" ");
 
-    // Create YouTube description with 10 points
+    // Create YouTube description with educational explanation
     const youtubeDescription = `${topicEmoji} ${title}
 
-${topicPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")}
+${topicExplanation}
 
 🔥 Don't forget to:
 👍 Like this video if you learned something new!
@@ -194,16 +194,19 @@ ${topicPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")}
 
 ${hashtagString}`;
 
-    // Create Instagram caption with 10 points
+    // Create Instagram caption with educational explanation
     const instagramCaption = `${topicEmoji} ${title}
 
-${topicPoints.map((point, index) => `${index + 1}. ${point}`).join("\n")}
+${topicExplanation}
 
-💡 What did you learn? Share in comments!
-👍 Like & Follow for more educational content!
-🔥 Share this with someone who needs to learn this!
+🤔 What did you learn? Share in comments!`;
 
-${hashtagString}`;
+    // Create Facebook caption (similar to Instagram but can be slightly different)
+    const facebookCaption = `${topicEmoji} ${title}
+
+${topicExplanation}
+
+💭 What are your thoughts on this topic? Share in the comments below!`;
 
     return {
       youtube: {
@@ -214,6 +217,10 @@ ${hashtagString}`;
       },
       instagram: {
         caption: instagramCaption,
+        hashtags: hashtagString,
+      },
+      facebook: {
+        caption: facebookCaption,
         hashtags: hashtagString,
       },
     };
@@ -443,6 +450,94 @@ const uploadToInstagram = async (videoPath, caption, description) => {
 };
 
 /**
+ * Upload video to Facebook page
+ */
+const uploadToFacebook = async (videoPath, caption, description) => {
+  let uploadedFileName = null;
+
+  try {
+    logger.info("📘 Starting Facebook upload...");
+
+    // Required environment variables
+    const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+    const pageId = process.env.FACEBOOK_PAGE_ID;
+
+    if (!accessToken || !pageId) {
+      throw new Error(
+        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required"
+      );
+    }
+
+    // Step 1: Upload to Supabase and get public link
+    const supabaseResult = await uploadToSupabaseAndGetLink(
+      videoPath,
+      "Facebook Video"
+    );
+    if (!supabaseResult.success) {
+      throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
+    }
+
+    uploadedFileName = supabaseResult.fileName;
+    const publicVideoUrl = supabaseResult.publicLink;
+
+    logger.info(`🔗 Using Supabase link for Facebook: ${publicVideoUrl}`);
+
+    // Step 2: Create video post using Facebook Graph API
+    const postUrl = `https://graph.facebook.com/v23.0/${pageId}/videos`;
+    const postParams = {
+      file_url: publicVideoUrl,
+      description: caption,
+      access_token: accessToken,
+    };
+
+    logger.info("📹 Publishing video to Facebook page...");
+    const postResponse = await axios.post(postUrl, postParams);
+    const postId = postResponse.data.id;
+
+    logger.info(`✅ Facebook video published. Post ID: ${postId}`);
+
+    // Step 3: Get the permalink
+    const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}?fields=permalink_url&access_token=${accessToken}`;
+    const permalinkResponse = await axios.get(permalinkUrl);
+    const facebookUrl =
+      permalinkResponse.data.permalink_url || `https://facebook.com/${postId}`;
+
+    logger.info(`✅ Facebook upload successful: ${facebookUrl}`);
+
+    // Clean up Supabase file after successful Facebook upload
+    if (uploadedFileName) {
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
+
+    return {
+      success: true,
+      url: facebookUrl,
+      postId: postId,
+      caption: caption,
+    };
+  } catch (error) {
+    logger.error("❌ Facebook upload failed:", error.message);
+    if (error.response) {
+      logger.error("Response status:", error.response.status);
+      logger.error("Response data:", error.response.data);
+    }
+
+    // Clean up Supabase file on error
+    if (uploadedFileName) {
+      logger.warn(
+        "🧹 Cleaning up Supabase file due to Facebook upload failure..."
+      );
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
  * Upload video to both platforms
  */
 const uploadToBothPlatforms = async (
@@ -452,7 +547,7 @@ const uploadToBothPlatforms = async (
   scriptContent = ""
 ) => {
   try {
-    logger.info("🚀 Starting upload to both YouTube and Instagram...");
+    logger.info("🚀 Starting upload to YouTube, Instagram, and Facebook...");
 
     // Generate AI-powered content for both platforms
     const socialContent = await generateAISocialMediaContent(
@@ -465,6 +560,7 @@ const uploadToBothPlatforms = async (
     const results = {
       youtube: null,
       instagram: null,
+      facebook: null,
     };
 
     // Upload to YouTube
@@ -491,12 +587,29 @@ const uploadToBothPlatforms = async (
       results.instagram = { success: false, error: error.message };
     }
 
+    // Upload to Facebook (this will handle Supabase upload internally)
+    try {
+      results.facebook = await uploadToFacebook(
+        videoPath,
+        socialContent.facebook.caption,
+        description
+      );
+    } catch (error) {
+      logger.error("Facebook upload failed:", error);
+      results.facebook = { success: false, error: error.message };
+    }
+
     const uploadSummary = {
-      success: results.youtube.success && results.instagram.success, // Both must succeed
+      success:
+        results.youtube.success &&
+        results.instagram.success &&
+        results.facebook.success, // All three must succeed
       youtube: results.youtube,
       instagram: results.instagram,
+      facebook: results.facebook,
       youtubeUrl: results.youtube.success ? results.youtube.url : null,
       instagramUrl: results.instagram.success ? results.instagram.url : null,
+      facebookUrl: results.facebook.success ? results.facebook.url : null,
     };
 
     logger.info("📊 Upload summary:", uploadSummary);
@@ -716,20 +829,22 @@ const generateTopicPoints = async (title, description, scriptContent = "") => {
 
     logger.info("🤖 Generating 10 key points about the topic...");
 
-    const prompt = `Create exactly 10 simple, educational points about this topic:
+    const prompt = `Create a simple, educational explanation about this topic:
 
 Topic: "${title}"
 Description: "${description}"
 ${scriptContent ? `Content: ${scriptContent.substring(0, 1000)}` : ""}
 
-Generate exactly 10 bullet points that cover the most important aspects of this topic. Each point should be:
-- Simple and easy to understand
-- Educational and informative
-- 1-2 sentences maximum per point
-- Focus on key concepts, benefits, and practical applications
+Write a clear, educational explanation that:
+- Explains the topic in simple, easy-to-understand language
+- Covers the most important concepts and key points
+- Is suitable for educational content and social media
+- Flows naturally as continuous text (not bullet points)
+- Is between 8-10 lines long when displayed
 
-Return only the 10 points as a JSON array of strings, like this:
-["Point 1 here", "Point 2 here", "Point 3 here", ...]`;
+Make it engaging and informative, like a teacher explaining to students. Focus on practical understanding and real-world relevance.
+
+Return only the explanation text, no additional formatting or headers.`;
 
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
@@ -757,35 +872,24 @@ Return only the 10 points as a JSON array of strings, like this:
       }
     );
 
-    const responseContent =
+    const explanation =
       response.data.candidates[0].content.parts[0].text.trim();
-    const cleanContent = responseContent
-      .replace(/```json\s*|\s*|\s*```/g, "")
-      .trim();
-    const points = JSON.parse(cleanContent);
 
-    if (!Array.isArray(points) || points.length !== 10) {
-      throw new Error("Invalid points format received from AI");
+    // Validate length (roughly 8-10 lines)
+    const lines = explanation.split("\n").length;
+    if (lines < 6 || lines > 12) {
+      logger.warn(
+        `⚠️ Explanation length (${lines} lines) outside target range, but proceeding`
+      );
     }
 
-    logger.info(`✅ Generated ${points.length} topic points`);
-    return points;
+    logger.info(`✅ Generated educational explanation (${lines} lines)`);
+    return explanation;
   } catch (error) {
-    logger.error("❌ Failed to generate topic points:", error.message);
+    logger.error("❌ Failed to generate topic explanation:", error.message);
 
-    // Fallback points
-    return [
-      `Understanding the fundamentals of ${title.toLowerCase()}`,
-      "Practical applications in real-world scenarios",
-      "Key concepts and terminology explained",
-      "Step-by-step implementation guide",
-      "Common challenges and solutions",
-      "Best practices for success",
-      "Future trends and developments",
-      "Learning resources and next steps",
-      "Real-world examples and case studies",
-      "Tips for getting started today",
-    ];
+    // Fallback explanation
+    return `${title} is an important topic that helps us understand key concepts in ${description.toLowerCase()}. This educational content breaks down complex ideas into simple, practical knowledge that anyone can grasp. Learning about this subject opens up new opportunities and helps develop critical thinking skills. Whether you're a student, professional, or just curious, understanding these fundamentals provides a strong foundation for further exploration and application in real-world scenarios.`;
   }
 };
 
@@ -869,6 +973,7 @@ const getTopicEmoji = (title, description) => {
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
+  uploadToFacebook,
   uploadToBothPlatforms,
   generateSocialMediaContent,
   uploadToYouTubeOAuth2,
@@ -878,4 +983,5 @@ module.exports = {
   generateAISocialMediaContent,
   generateTopicPoints,
   getTopicEmoji,
+  generateTopicExplanation,
 };

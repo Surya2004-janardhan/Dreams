@@ -7,7 +7,7 @@ const logger = require("../config/logger");
 const { getGoogleDriveClient } = require("../config/google");
 // Load FFmpeg configuration
 require("../config/ffmpeg");
-const fontspath = require("../../fonts");
+// const fontspath = require("../../fonts");
 
 /**
  * Get base video from Google Drive or local videos folder

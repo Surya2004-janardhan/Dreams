@@ -177,7 +177,7 @@ const runCompleteWorkflow = async (taskData) => {
     );
     currentWorkflow.results.uploadResult = uploadResult;
 
-    // Check upload results - both platforms must succeed
+    // Check upload results - all platforms must succeed
     if (!uploadResult.success) {
       logger.error("❌ Upload to platforms failed:", uploadResult);
       currentWorkflow.status = "failed";
@@ -198,6 +198,10 @@ const runCompleteWorkflow = async (taskData) => {
             uploadResult.instagram.success
               ? "Success"
               : uploadResult.instagram.error
+          }, Facebook: ${
+            uploadResult.facebook.success
+              ? "Success"
+              : uploadResult.facebook.error
           }`
         ),
         currentWorkflow.currentStep
@@ -205,10 +209,11 @@ const runCompleteWorkflow = async (taskData) => {
       throw new Error("Upload to platforms failed");
     }
 
-    // Both uploads succeeded - proceed with success workflow
-    logger.info("✅ Both YouTube and Instagram uploads successful!");
+    // All uploads succeeded - proceed with success workflow
+    logger.info("✅ YouTube, Instagram, and Facebook uploads successful!");
     logger.info(`📺 YouTube: ${uploadResult.youtubeUrl}`);
     logger.info(`📱 Instagram: ${uploadResult.instagramUrl}`);
+    logger.info(`📘 Facebook: ${uploadResult.facebookUrl}`);
 
     // Step 8: Mark as posted and update sheets
     logger.info("📊 Step 8: Updating status and sheets");
@@ -217,8 +222,15 @@ const runCompleteWorkflow = async (taskData) => {
     const updateTimestamp = new Date().toISOString();
     const youtubeUrl = uploadResult.youtubeUrl || "";
     const instagramUrl = uploadResult.instagramUrl || "";
+    const facebookUrl = uploadResult.facebookUrl || "";
 
-    await updateSheetStatus(taskData.rowId, "Posted", youtubeUrl, instagramUrl);
+    await updateSheetStatus(
+      taskData.rowId,
+      "Posted",
+      youtubeUrl,
+      instagramUrl,
+      facebookUrl
+    );
     logger.info(
       `✓ Marked as "Posted" in sheets with links and timestamp: ${updateTimestamp}`
     );
