@@ -411,8 +411,27 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     const mediaId = publishResponse.data.id;
     logger.info(`✅ Instagram Reel published. Media ID: ${mediaId}`);
 
-    // Step 4: Construct Instagram URL directly (permalink API has token issues)
+    // Step 4: Construct Instagram URL (API permalink has token issues)
     const instagramUrl = `https://instagram.com/reel/${mediaId}`;
+
+    // Try to get official permalink, but use constructed URL as fallback
+    try {
+      const permalink = await getInstagramPermalink(mediaId, accessToken);
+      if (permalink) {
+        logger.info(`✅ Instagram upload successful: ${permalink}`);
+        return {
+          success: true,
+          url: permalink,
+          mediaId: mediaId,
+          caption: caption,
+        };
+      }
+    } catch (error) {
+      logger.warn(
+        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`
+      );
+    }
+
     logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
 
     // Clean up Supabase file after successful Instagram upload
@@ -423,8 +442,7 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     return {
       success: true,
       url: instagramUrl,
-      postId: postId,
-      containerId: containerId,
+      mediaId: mediaId,
       caption: caption,
     };
   } catch (error) {
@@ -535,8 +553,27 @@ const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
     const mediaId = publishResponse.data.id;
     logger.info(`✅ Instagram Reel published. Media ID: ${mediaId}`);
 
-    // Step 4: Construct Instagram URL directly (permalink API has token issues)
+    // Step 4: Construct Instagram URL (API permalink has token issues)
     const instagramUrl = `https://instagram.com/reel/${mediaId}`;
+
+    // Try to get official permalink, but use constructed URL as fallback
+    try {
+      const permalink = await getInstagramPermalink(mediaId, accessToken);
+      if (permalink) {
+        logger.info(`✅ Instagram upload successful: ${permalink}`);
+        return {
+          success: true,
+          url: permalink,
+          mediaId: mediaId,
+          caption: caption,
+        };
+      }
+    } catch (error) {
+      logger.warn(
+        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`
+      );
+    }
+
     logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
 
     return {
@@ -983,11 +1020,20 @@ const deleteFromSupabase = async (fileName, bucket) => {
 /**
  * Get Instagram permalink using media ID
  */
-const getInstagramPermalink = async (mediaId, accessToken) => {
+const getInstagramPermalink = async (mediaId, instagramAccessToken) => {
   try {
     logger.info(`🔗 Getting Instagram permalink for media ID: ${mediaId}`);
 
-    const url = `https://graph.facebook.com/v18.0/${mediaId}?fields=permalink&access_token=${accessToken}`;
+    // Use Facebook access token for permalink API (Instagram token doesn't work)
+    const facebookAccessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+    if (!facebookAccessToken) {
+      logger.warn(
+        "⚠️ No Facebook access token available for permalink, using constructed URL"
+      );
+      return `https://instagram.com/reel/${mediaId}`;
+    }
+
+    const url = `https://graph.facebook.com/v18.0/${mediaId}?fields=permalink&access_token=${facebookAccessToken}`;
     const response = await axios.get(url);
 
     const permalink = response.data.permalink;
@@ -999,7 +1045,9 @@ const getInstagramPermalink = async (mediaId, accessToken) => {
     if (error.response) {
       logger.error("Response data:", error.response.data);
     }
-    return null;
+    // Fallback to constructed URL
+    logger.warn("⚠️ Using constructed URL as fallback");
+    return `https://instagram.com/reel/${mediaId}`;
   }
 };
 

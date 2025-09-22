@@ -3,7 +3,7 @@ const ffmpeg = require("fluent-ffmpeg");
 ffmpeg.setFfmpegPath(ffmpegPath);
 const fs = require("fs");
 const path = require("path");
-const logger = require("./src/config/logger");
+const logger = require("../src/config/logger");
 
 /**
  * Test subtitle overlay on base video
