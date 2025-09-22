@@ -35,65 +35,146 @@ const getNextCarouselTask = async () => {
     // Find header row
     const headers = rows[0];
     logger.info("📋 Posts sheet headers:", headers);
+    logger.info("📋 Raw headers array:", JSON.stringify(headers));
 
-    // Find column indexes - flexible header matching
-    const titleIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("title")
+    // Check if we have valid headers
+    if (!headers || headers.length === 0) {
+      throw new Error("No headers found in posts sheet");
+    }
+
+    // Find column indexes using exact matches first
+    let titleIndex = headers.findIndex((h) => h === "Title");
+    let slide1Index = headers.findIndex((h) => h === "Slide 1");
+    let slide2Index = headers.findIndex((h) => h === "Slide 2");
+    let slide3Index = headers.findIndex((h) => h === "Slide 3");
+    let statusIndex = headers.findIndex((h) => h === "Status");
+    let instaLinkIndex = headers.findIndex((h) => h === "Insta Link");
+    let ytLinkIndex = headers.findIndex((h) => h === "Yt Link");
+    let facebookLinkIndex = headers.findIndex((h) => h === "FaceBook Link");
+    let timestampIndex = headers.findIndex((h) => h === "Time Stamp");
+
+    // Log exact search results
+    logger.info(
+      `📋 Exact match results: Title=${titleIndex}, Slide1=${slide1Index}, Slide2=${slide2Index}, Slide3=${slide3Index}, Status=${statusIndex}`
     );
-    const slide1Index = headers.findIndex(
-      (h) =>
-        h && h.toLowerCase().includes("slide") && h.toLowerCase().includes("1")
-    );
-    const slide2Index = headers.findIndex(
-      (h) =>
-        h && h.toLowerCase().includes("slide") && h.toLowerCase().includes("2")
-    );
-    const slide3Index = headers.findIndex(
-      (h) =>
-        h && h.toLowerCase().includes("slide") && h.toLowerCase().includes("3")
-    );
-    const statusIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("status")
-    );
-    const instaLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("insta") ||
-          h.toLowerCase().includes("instagram"))
-    );
-    const ytLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
-    );
-    const facebookLinkIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("facebook")
-    );
-    const timestampIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("time") ||
-          h.toLowerCase().includes("timestamp"))
-    );
+
+    // If exact matches fail, try flexible matching
+    if (titleIndex === -1) {
+      titleIndex = headers.findIndex(
+        (h) => h && h.toLowerCase().includes("title")
+      );
+      logger.info(`📋 Flexible title search result: ${titleIndex}`);
+    }
+    if (slide1Index === -1) {
+      slide1Index = headers.findIndex(
+        (h) =>
+          h &&
+          h.toLowerCase().includes("slide") &&
+          h.toLowerCase().includes("1")
+      );
+    }
+    if (slide2Index === -1) {
+      slide2Index = headers.findIndex(
+        (h) =>
+          h &&
+          h.toLowerCase().includes("slide") &&
+          h.toLowerCase().includes("2")
+      );
+    }
+    if (slide3Index === -1) {
+      slide3Index = headers.findIndex(
+        (h) =>
+          h &&
+          h.toLowerCase().includes("slide") &&
+          h.toLowerCase().includes("3")
+      );
+    }
+    if (statusIndex === -1) {
+      statusIndex = headers.findIndex(
+        (h) => h && h.toLowerCase().includes("status")
+      );
+    }
+    if (instaLinkIndex === -1) {
+      instaLinkIndex = headers.findIndex(
+        (h) =>
+          h &&
+          (h.toLowerCase().includes("insta") ||
+            h.toLowerCase().includes("instagram"))
+      );
+    }
+    if (ytLinkIndex === -1) {
+      ytLinkIndex = headers.findIndex(
+        (h) =>
+          h &&
+          (h.toLowerCase().includes("yt") ||
+            h.toLowerCase().includes("youtube"))
+      );
+    }
+    if (facebookLinkIndex === -1) {
+      facebookLinkIndex = headers.findIndex(
+        (h) => h && h.toLowerCase().includes("facebook")
+      );
+    }
+    if (timestampIndex === -1) {
+      timestampIndex = headers.findIndex(
+        (h) =>
+          h &&
+          (h.toLowerCase().includes("time") ||
+            h.toLowerCase().includes("timestamp"))
+      );
+    }
 
     logger.info(
       `Column indexes - Title: ${titleIndex}, Slide1: ${slide1Index}, Slide2: ${slide2Index}, Slide3: ${slide3Index}, Status: ${statusIndex}, Insta: ${instaLinkIndex}, YT: ${ytLinkIndex}, FB: ${facebookLinkIndex}, Timestamp: ${timestampIndex}`
     );
+
+    // Validate that we found the essential columns
+    if (
+      titleIndex === -1 ||
+      slide1Index === -1 ||
+      slide2Index === -1 ||
+      slide3Index === -1
+    ) {
+      throw new Error(
+        `Missing essential columns. Found: Title=${titleIndex}, Slide1=${slide1Index}, Slide2=${slide2Index}, Slide3=${slide3Index}`
+      );
+    }
 
     // Find first unposted row
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const status = statusIndex >= 0 ? row[statusIndex] : null;
 
-      // Check if this row is not posted
+      logger.info(
+        `📝 Checking row ${i + 1}: Status="${status}", Title="${
+          row[titleIndex] || ""
+        }", HasSlides=${row[slide1Index] ? "Yes" : "No"}`
+      );
+
+      // Check if this row is not posted and has content
       if (!status || status.toLowerCase() !== "posted") {
+        const title = titleIndex >= 0 ? (row[titleIndex] || "").trim() : "";
+        const slide1 = slide1Index >= 0 ? (row[slide1Index] || "").trim() : "";
+        const slide2 = slide2Index >= 0 ? (row[slide2Index] || "").trim() : "";
+        const slide3 = slide3Index >= 0 ? (row[slide3Index] || "").trim() : "";
+
+        // Skip rows with empty essential content
+        if (!title || !slide1 || !slide2 || !slide3) {
+          logger.warn(
+            `⚠️ Skipping row ${
+              i + 1
+            }: Missing content (Title: "${title}", Slide1: "${slide1}", Slide2: "${slide2}", Slide3: "${slide3}")`
+          );
+          continue;
+        }
+
         const taskData = {
-          title: titleIndex >= 0 ? row[titleIndex] : "",
-          slide1: slide1Index >= 0 ? row[slide1Index] : "",
-          slide2: slide2Index >= 0 ? row[slide2Index] : "",
-          slide3: slide3Index >= 0 ? row[slide3Index] : "",
-          rowId: i + 1, // Use row number as ID
-          rowIndex: i + 1, // 1-based row index for sheet updates
+          title,
+          slide1,
+          slide2,
+          slide3,
+          rowId: i + 1,
+          rowIndex: i + 1,
         };
 
         logger.info(

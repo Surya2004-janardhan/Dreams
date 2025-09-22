@@ -28,10 +28,9 @@ class SocialMediaPostingService {
     const results = {
       instagram: null,
       facebook: null,
-      youtube: null,
     };
 
-    logger.info("📱 Starting carousel posting to all platforms...");
+    logger.info("📱 Starting carousel posting to Instagram and Facebook...");
 
     // Post to Instagram
     try {
@@ -75,82 +74,14 @@ class SocialMediaPostingService {
       results.facebook = { success: false, error: error.message };
     }
 
-    // Post to YouTube (Community Post)
-    try {
-      logger.info("📺 Posting to YouTube...");
-      const youtubeResult = await this.postToYouTube(
-        title,
-        caption,
-        imagePaths[0]
-      ); // Use first image for YouTube
-      results.youtube = {
-        success: youtubeResult.success,
-        url: youtubeResult.url || "",
-        error: youtubeResult.error || null,
-      };
-      logger.info(
-        `📺 YouTube result: ${results.youtube.success ? "Success" : "Failed"}`
-      );
-    } catch (error) {
-      logger.error("❌ YouTube posting failed:", error.message);
-      results.youtube = { success: false, error: error.message };
-    }
-
     const successfulPosts = Object.values(results).filter(
       (r) => r?.success
     ).length;
     logger.info(
-      `📊 Carousel posting complete: ${successfulPosts}/3 platforms succeeded`
+      `📊 Carousel posting complete: ${successfulPosts}/2 platforms succeeded`
     );
 
     return results;
-  }
-
-  /**
-   * Post to YouTube as community post
-   * @param {string} title - Post title
-   * @param {string} content - Post content
-   * @param {string} imagePath - Path to image (optional)
-   * @returns {Promise<Object>} - YouTube posting result
-   */
-  async postToYouTube(title, content, imagePath = null) {
-    try {
-      // YouTube community posts require OAuth2 and specific API endpoints
-      // This is a placeholder implementation
-      logger.warn(
-        "⚠️ YouTube community posting not fully implemented - requires YouTube API setup"
-      );
-
-      // For now, return success: false to indicate it's not implemented
-      return {
-        success: false,
-        error: "YouTube API credentials and setup required",
-        url: "",
-      };
-
-      // Future implementation would look like:
-      /*
-      const youtube = google.youtube('v3');
-      const response = await youtube.communityPosts.insert({
-        part: 'snippet',
-        requestBody: {
-          snippet: {
-            title: title,
-            content: content,
-            // image attachment if provided
-          }
-        }
-      });
-      return {
-        success: true,
-        url: `https://youtube.com/post/${response.data.id}`,
-        id: response.data.id
-      };
-      */
-    } catch (error) {
-      logger.error("❌ YouTube posting error:", error.message);
-      return { success: false, error: error.message };
-    }
   }
 
   /**

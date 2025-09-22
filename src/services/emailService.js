@@ -428,10 +428,156 @@ const clearLogFiles = async () => {
   }
 };
 
+/**
+ * Send carousel post success notification with platform links
+ * @param {Object} taskData - Carousel task data
+ * @param {Object} postResults - Results from both platforms
+ * @param {string} instagramUrl - Instagram post URL
+ * @param {string} facebookUrl - Facebook post URL
+ */
+const sendCarouselPostNotification = async (
+  taskData,
+  postResults,
+  instagramUrl,
+  facebookUrl
+) => {
+  try {
+    const transporter = createTransporter();
+
+    const subject = `🎠 Carousel Post Published Successfully: ${taskData.title}`;
+
+    const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #28a745;">🎉 Carousel Post Success!</h2>
+      
+       <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+         <h3>📋 Carousel Details:</h3>
+         <p><strong>Title:</strong> ${taskData.title}</p>
+         <p><strong>Slide 1:</strong> ${taskData.slide1}</p>
+         <p><strong>Slide 2:</strong> ${taskData.slide2}</p>
+         <p><strong>Slide 3:</strong> ${taskData.slide3}</p>
+         <p><strong>Row:</strong> ${taskData.rowIndex}</p>
+         <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+       </div>
+      
+      <div style="background: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
+        <h3>🔗 Published Platform Links:</h3>
+        
+        ${
+          instagramUrl
+            ? `
+        <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #e4405f;">
+          <p style="margin: 0;"><strong>📸 Instagram:</strong></p>
+          <a href="${instagramUrl}" target="_blank" style="color: #e4405f; text-decoration: none; font-weight: bold;">
+            ${instagramUrl}
+          </a>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">✅ Carousel posted successfully</p>
+        </div>
+        `
+            : `
+        <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #dc3545;">
+          <p style="margin: 0; color: #dc3545;"><strong>📸 Instagram:</strong> ❌ Failed to post</p>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Error: ${
+            postResults.instagram?.error || "Unknown error"
+          }</p>
+        </div>
+        `
+        }
+        
+        ${
+          facebookUrl
+            ? `
+        <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #1877f2;">
+          <p style="margin: 0;"><strong>📘 Facebook:</strong></p>
+          <a href="${facebookUrl}" target="_blank" style="color: #1877f2; text-decoration: none; font-weight: bold;">
+            ${facebookUrl}
+          </a>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">✅ Carousel posted successfully</p>
+        </div>
+        `
+            : `
+        <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #dc3545;">
+          <p style="margin: 0; color: #dc3545;"><strong>📘 Facebook:</strong> ❌ Failed to post</p>
+          <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Error: ${
+            postResults.facebook?.error || "Unknown error"
+          }</p>
+        </div>
+        `
+        }
+      </div>
+      
+      <div style="background: #f0f8f0; padding: 20px; border-radius: 5px; margin: 20px 0;">
+        <h3>📊 Carousel Process Summary:</h3>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li style="margin: 5px 0;">✅ Read task from Google Sheets</li>
+          <li style="margin: 5px 0;">✅ Generated 3 text overlay slides</li>
+          <li style="margin: 5px 0;">✅ Uploaded images to Supabase for public URLs</li>
+          <li style="margin: 5px 0;">✅ Posted carousel to ${
+            instagramUrl && facebookUrl
+              ? "both platforms"
+              : instagramUrl
+              ? "Instagram only"
+              : facebookUrl
+              ? "Facebook only"
+              : "no platforms (failed)"
+          }</li>
+          <li style="margin: 5px 0;">✅ Updated Google Sheets with "Posted" status</li>
+          <li style="margin: 5px 0;">✅ Cleaned up all temporary files</li>
+        </ul>
+      </div>
+      
+      <div style="background: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; color: #155724;">
+        <h3>🎯 Next Steps & Engagement Tips:</h3>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li style="margin: 5px 0;">📊 Monitor engagement metrics over the next 24 hours</li>
+          <li style="margin: 5px 0;">💬 Respond to comments and engage with your audience</li>
+          <li style="margin: 5px 0;">📱 Share to your stories for additional reach</li>
+          <li style="margin: 5px 0;">🔄 Consider creating similar carousel content on trending topics</li>
+          <li style="margin: 5px 0;">📈 Track which slides get the most engagement for future optimization</li>
+        </ul>
+      </div>
+      
+      <div style="text-align: center; margin: 30px 0; padding: 20px; background: #fff3cd; border-radius: 5px;">
+        <p style="margin: 0; color: #856404;">
+          <strong>🎠 Your carousel post is now live!</strong><br>
+          Check the links above to view your posts on each platform.
+        </p>
+      </div>
+      
+      <div style="text-align: center; margin: 20px 0; padding: 15px; background: #e6f3ff; border-radius: 5px;">
+        <p style="margin: 0; font-size: 12px; color: #666;">
+          This notification was automatically generated by your AI Content Automation system.<br>
+          Carousel posted from row ${taskData.rowIndex} of your Google Sheets.
+        </p>
+      </div>
+    </div>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.NOTIFICATION_EMAIL,
+      subject: subject,
+      html: htmlContent,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(
+      `✅ Carousel post notification email sent for: ${taskData.title}`
+    );
+  } catch (error) {
+    logger.error(
+      "❌ Failed to send carousel post notification:",
+      error.message
+    );
+    // Don't throw error to prevent workflow failure
+  }
+};
+
 module.exports = {
   sendSuccessNotification,
   sendErrorNotification,
   sendStatusUpdate,
+  sendCarouselPostNotification,
   analyzeError,
   clearLogFiles,
 };

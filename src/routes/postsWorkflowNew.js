@@ -5,8 +5,14 @@ const fs = require("fs");
 const ffmpeg = require("fluent-ffmpeg");
 
 const SocialMediaPostingService = require("../services/socialMediaPostingService");
-const { getNextCarouselTask, updateCarouselSheetStatus } = require("../services/postsSheetService");
-const { sendSuccessNotification, sendErrorNotification } = require("../services/emailService");
+const {
+  getNextCarouselTask,
+  updateCarouselSheetStatus,
+} = require("../services/postsSheetService");
+const {
+  sendSuccessNotification,
+  sendErrorNotification,
+} = require("../services/emailService");
 const logger = require("../config/logger");
 
 /**
@@ -34,7 +40,9 @@ router.post("/", async (req, res) => {
       });
     }
 
-    logger.info(`📋 Processing carousel task: "${taskData.title}" (Row ${taskData.rowIndex})`);
+    logger.info(
+      `📋 Processing carousel task: "${taskData.title}" (Row ${taskData.rowIndex})`
+    );
 
     // Step 2: Generate 3 slides with text overlays
     logger.info("🎨 Step 2: Generating carousel slides...");
@@ -43,8 +51,16 @@ router.post("/", async (req, res) => {
 
     // Step 3: Prepare caption and hashtags
     const fixedHashtags = [
-      "#education", "#learning", "#knowledge", "#motivation", "#inspiration",
-      "#success", "#growth", "#wisdom", "#mindset", "#achievement"
+      "#education",
+      "#learning",
+      "#knowledge",
+      "#motivation",
+      "#inspiration",
+      "#success",
+      "#growth",
+      "#wisdom",
+      "#mindset",
+      "#achievement",
     ];
 
     const caption = `${taskData.title}
@@ -60,7 +76,7 @@ ${fixedHashtags.join(" ")}`;
       slides: [taskData.slide1, taskData.slide2, taskData.slide3],
       imagePaths: slideImages,
       caption: caption,
-      hashtags: fixedHashtags
+      hashtags: fixedHashtags,
     });
 
     // Step 5: Check results and update sheet accordingly
@@ -110,11 +126,14 @@ Generated ${slideImages.length} slides successfully.
 Timestamp: ${new Date().toISOString()}
     `.trim();
 
-    await sendSuccessNotification({
-      title: taskData.title,
-      platforms: ["instagram", "facebook", "youtube"],
-      result: postResult
-    }, successMessage);
+    await sendSuccessNotification(
+      {
+        title: taskData.title,
+        platforms: ["instagram", "facebook", "youtube"],
+        result: postResult,
+      },
+      successMessage
+    );
 
     // Step 7: Clean up slides
     logger.info("🧹 Step 7: Cleaning up generated slides...");
@@ -130,12 +149,11 @@ Timestamp: ${new Date().toISOString()}
       results: {
         successful: successfulPosts,
         failed: failedPosts,
-        postResult
+        postResult,
       },
       duration: `${duration}s`,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-
   } catch (error) {
     logger.error("❌ Posts workflow failed:", error.message);
 
@@ -162,7 +180,7 @@ Generated Slides: ${slideImages.length}
       await sendErrorNotification({
         title: taskData?.title || "Posts Workflow Error",
         error: error.message,
-        taskData
+        taskData,
       });
     } catch (emailError) {
       logger.error("❌ Error notification failed:", emailError.message);
@@ -172,7 +190,7 @@ Generated Slides: ${slideImages.length}
       success: false,
       error: error.message,
       task: taskData,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -193,8 +211,11 @@ const generateCarouselSlides = async (taskData) => {
     logger.info("📁 Created slides directory");
   }
 
-  const baseImagePath = path.join(__dirname, "../../videos/Post-Base-Image.jpg");
-  
+  const baseImagePath = path.join(
+    __dirname,
+    "../../videos/Post-Base-Image.jpg"
+  );
+
   if (!fs.existsSync(baseImagePath)) {
     throw new Error(`Base image not found: ${baseImagePath}`);
   }
@@ -203,8 +224,14 @@ const generateCarouselSlides = async (taskData) => {
   const timestamp = Date.now();
 
   // Font paths
-  const montserratBlackFont = path.join(__dirname, "../../fonts/Montserrat-Black.ttf");
-  const ibmPlexFont = path.join(__dirname, "../../fonts/IBMPlexSerif-Regular.ttf");
+  const montserratBlackFont = path.join(
+    __dirname,
+    "../../fonts/Montserrat-Black.ttf"
+  );
+  const ibmPlexFont = path.join(
+    __dirname,
+    "../../fonts/IBMPlexSerif-Regular.ttf"
+  );
 
   // Check if fonts exist
   if (!fs.existsSync(montserratBlackFont)) {
@@ -222,14 +249,18 @@ const generateCarouselSlides = async (taskData) => {
     logger.info(`🎨 Generating slide ${i}/3...`);
 
     // Escape text for FFmpeg
-    const escapedTitle = taskData.title.replace(/'/g, "\\'").replace(/:/g, "\\:");
-    const escapedContent = slideContent.replace(/'/g, "\\'").replace(/:/g, "\\:");
+    const escapedTitle = taskData.title
+      .replace(/'/g, "\\'")
+      .replace(/:/g, "\\:");
+    const escapedContent = slideContent
+      .replace(/'/g, "\\'")
+      .replace(/:/g, "\\:");
 
     await new Promise((resolve, reject) => {
       ffmpeg(baseImagePath)
         .videoFilters([
           `drawtext=text='${escapedTitle}':fontfile='${montserratBlackFont}':fontsize=12:fontcolor=black:x=(w-text_w)/2:y=50`,
-          `drawtext=text='${escapedContent}':fontfile='${ibmPlexFont}':fontsize=10:fontcolor=black:x=(w-text_w)/2:y=100:text_w=w-100`
+          `drawtext=text='${escapedContent}':fontfile='${ibmPlexFont}':fontsize=10:fontcolor=black:x=(w-text_w)/2:y=100:text_w=w-100`,
         ])
         .outputOptions(["-q:v", "2"])
         .output(outputPath)
