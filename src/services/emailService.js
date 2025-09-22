@@ -57,6 +57,16 @@ const sendSuccessNotification = async (taskData, results) => {
         `
             : "<p><strong>Instagram:</strong> Upload failed</p>"
         }
+        
+        ${
+          results.facebookUrl
+            ? `
+        <p><strong>Facebook:</strong> 
+          <a href="${results.facebookUrl}" target="_blank" style="color: #1877f2;">${results.facebookUrl}</a>
+        </p>
+        `
+            : "<p><strong>Facebook:</strong> Upload failed</p>"
+        }
       </div>
       
       <div style="background: #f0f8f0; padding: 20px; border-radius: 5px; margin: 20px 0;">
