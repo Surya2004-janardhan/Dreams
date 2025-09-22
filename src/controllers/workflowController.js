@@ -177,20 +177,95 @@ const runCompleteWorkflow = async (taskData) => {
     );
     currentWorkflow.results.uploadResult = uploadResult;
 
-    // Check upload results - all platforms must succeed
-    if (!uploadResult.success) {
-      logger.error("❌ Upload to platforms failed:", uploadResult);
-      currentWorkflow.status = "failed";
-      currentWorkflow.error = "Upload to platforms failed";
+    // Check upload results and handle different scenarios
+    const successfulUploads = uploadResult.successfulCount;
+    const totalUploads = uploadResult.totalCount;
 
-      // Emergency cleanup on upload failure
-      await cleanupOnError();
+    logger.info(
+      `📊 Upload Results: ${successfulUploads}/${totalUploads} platforms succeeded`
+    );
 
-      // Send error notification for upload failure
+    if (uploadResult.youtube.success) {
+      logger.info(`📺 YouTube: ${uploadResult.youtubeUrl}`);
+    } else {
+      logger.warn(`📺 YouTube failed: ${uploadResult.youtube.error}`);
+    }
+
+    if (uploadResult.instagram.success) {
+      logger.info(`📱 Instagram: ${uploadResult.instagramUrl}`);
+    } else {
+      logger.warn(`📱 Instagram failed: ${uploadResult.instagram.error}`);
+    }
+
+    if (uploadResult.facebook.success) {
+      logger.info(`📘 Facebook: ${uploadResult.facebookUrl}`);
+    } else {
+      logger.warn(`📘 Facebook failed: ${uploadResult.facebook.error}`);
+    }
+
+    // Step 8: Mark as posted and update sheets (always attempt this)
+    logger.info("📊 Step 8: Updating status and sheets");
+    currentWorkflow.currentStep = "sheets/update";
+
+    const updateTimestamp = new Date().toISOString();
+    const youtubeUrl = uploadResult.youtubeUrl || "";
+    const instagramUrl = uploadResult.instagramUrl || "";
+    const facebookUrl = uploadResult.facebookUrl || "";
+
+    // Always update sheets with whatever links we have (empty for failed uploads)
+    await updateSheetStatus(
+      taskData.rowId,
+      "Posted",
+      youtubeUrl,
+      instagramUrl,
+      facebookUrl
+    );
+    logger.info(
+      `✓ Marked as "Posted" in sheets with ${successfulUploads} successful links and timestamp: ${updateTimestamp}`
+    );
+
+    // Handle different success scenarios
+    if (uploadResult.success) {
+      // ALL uploads succeeded - complete success
+      logger.info(
+        "🎉 COMPLETE SUCCESS: All 3 platforms uploaded successfully!"
+      );
+      currentWorkflow.status = "completed";
+
+      // Step 9: Cleanup
+      logger.info("🧹 Step 9: Cleaning up temporary files");
+      await cleanupAllMediaFolders();
+      logger.info("✓ Cleanup completed");
+
+      // Step 10: Success notification
+      logger.info("📧 Step 10: Sending success notification");
+      await sendSuccessNotification(taskData, uploadResult);
+      logger.info("✅ Success notification email sent");
+
+      // Step 11: Clean final video folder
+      logger.info("🧹 Step 11: Cleaning final video folder");
+      const { cleanupFinalVideoFolder } = require("../services/cleanupService");
+      await cleanupFinalVideoFolder();
+      logger.info("✓ Final video folder cleanup completed");
+    } else if (uploadResult.partialSuccess) {
+      // PARTIAL success - some succeeded, some failed
+      logger.info(
+        `⚠️ PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} platforms succeeded`
+      );
+      currentWorkflow.status = "partial_success";
+      currentWorkflow.error = `Partial upload success: ${successfulUploads}/${totalUploads} platforms`;
+
+      // Keep Supabase video for potential retry
+      logger.info(
+        "📁 Keeping Supabase video for potential retry of failed uploads"
+      );
+
+      // Send semi-success notification
+      logger.info("📧 Sending semi-success notification");
       await sendErrorNotification(
         taskData,
         new Error(
-          `Upload failed: YouTube: ${
+          `PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} uploads succeeded. YouTube: ${
             uploadResult.youtube.success
               ? "Success"
               : uploadResult.youtube.error
@@ -206,53 +281,29 @@ const runCompleteWorkflow = async (taskData) => {
         ),
         currentWorkflow.currentStep
       );
-      throw new Error("Upload to platforms failed");
+      logger.info("✅ Semi-success notification sent");
+    } else {
+      // ALL uploads failed
+      logger.error("❌ ALL UPLOADS FAILED: No platforms succeeded");
+      currentWorkflow.status = "failed";
+      currentWorkflow.error = "All uploads failed";
+
+      // Keep Supabase video for retry
+      logger.info("📁 Keeping Supabase video for retry of all failed uploads");
+
+      // Emergency cleanup (but keep Supabase video)
+      await cleanupOnError();
+
+      // Send error notification
+      await sendErrorNotification(
+        taskData,
+        new Error(
+          `ALL FAILED: YouTube: ${uploadResult.youtube.error}, Instagram: ${uploadResult.instagram.error}, Facebook: ${uploadResult.facebook.error}`
+        ),
+        currentWorkflow.currentStep
+      );
+      throw new Error("All uploads failed");
     }
-
-    // All uploads succeeded - proceed with success workflow
-    logger.info("✅ YouTube, Instagram, and Facebook uploads successful!");
-    logger.info(`📺 YouTube: ${uploadResult.youtubeUrl}`);
-    logger.info(`📱 Instagram: ${uploadResult.instagramUrl}`);
-    logger.info(`📘 Facebook: ${uploadResult.facebookUrl}`);
-
-    // Step 8: Mark as posted and update sheets
-    logger.info("📊 Step 8: Updating status and sheets");
-    currentWorkflow.currentStep = "sheets/update";
-
-    const updateTimestamp = new Date().toISOString();
-    const youtubeUrl = uploadResult.youtubeUrl || "";
-    const instagramUrl = uploadResult.instagramUrl || "";
-    const facebookUrl = uploadResult.facebookUrl || "";
-
-    await updateSheetStatus(
-      taskData.rowId,
-      "Posted",
-      youtubeUrl,
-      instagramUrl,
-      facebookUrl
-    );
-    logger.info(
-      `✓ Marked as "Posted" in sheets with links and timestamp: ${updateTimestamp}`
-    );
-
-    // Step 9: Cleanup
-    logger.info("🧹 Step 9: Cleaning up temporary files");
-    await cleanupAllMediaFolders();
-    logger.info("✓ Cleanup completed");
-
-    // Step 10: Success notification with both links
-    logger.info("📧 Step 10: Sending success notification");
-    await sendSuccessNotification(taskData, uploadResult);
-    logger.info("✅ Success notification email sent");
-
-    // Step 11: Clean final video folder after successful upload
-    logger.info("🧹 Step 11: Cleaning final video folder");
-    const { cleanupFinalVideoFolder } = require("../services/cleanupService");
-    await cleanupFinalVideoFolder();
-    logger.info("✓ Final video folder cleanup completed");
-
-    currentWorkflow.status = "completed";
-    logger.info(`🎉 Workflow completed successfully: ${taskData.idea}`);
   } catch (error) {
     logger.error("❌ Workflow failed:", {
       error: error.message,

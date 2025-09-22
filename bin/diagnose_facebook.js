@@ -29,8 +29,8 @@ async function diagnoseFacebookSetup() {
       return;
     }
 
-    // Test 1: Verify access token
-    console.log("🧪 Test 1: Verifying Access Token...");
+    // Test 1: Verify access token and permissions
+    console.log("🧪 Test 1: Verifying Access Token & Permissions...");
     try {
       const tokenDebugUrl = `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${accessToken}`;
       const tokenResponse = await axios.get(tokenDebugUrl);
@@ -45,8 +45,27 @@ async function diagnoseFacebookSetup() {
                 tokenResponse.data.data.expires_at * 1000
               ).toLocaleString()
             : "Never"
-        }\n`
+        }`
       );
+
+      const scopes = tokenResponse.data.data.scopes || [];
+      console.log(`   Permissions: ${scopes.join(", ")}`);
+
+      // Check for required permissions
+      const requiredPermissions = ["pages_manage_posts", "pages_show_list"];
+      const missingPermissions = requiredPermissions.filter((perm) =>
+        scopes.includes(perm)
+      );
+
+      if (missingPermissions.length > 0) {
+        console.log(
+          `⚠️  Missing permissions: ${missingPermissions.join(", ")}`
+        );
+        console.log("   This may cause posting to fail.");
+      } else {
+        console.log("✅ All required permissions present");
+      }
+      console.log("");
     } catch (error) {
       console.log("❌ Access token verification failed:");
       console.log(
@@ -55,10 +74,10 @@ async function diagnoseFacebookSetup() {
       return;
     }
 
-    // Test 2: Verify page access
-    console.log("🧪 Test 2: Verifying Page Access...");
+    // Test 2: Verify page access and admin status
+    console.log("🧪 Test 2: Verifying Page Access & Admin Status...");
     try {
-      const pageUrl = `https://graph.facebook.com/v23.0/${pageId}?fields=id,name,access_token&access_token=${accessToken}`;
+      const pageUrl = `https://graph.facebook.com/v23.0/${pageId}?fields=id,name,access_token,perms&access_token=${accessToken}`;
       const pageResponse = await axios.get(pageUrl);
 
       console.log("✅ Page access verified");
@@ -67,8 +86,40 @@ async function diagnoseFacebookSetup() {
       console.log(
         `   Has page access token: ${
           pageResponse.data.access_token ? "✅ Yes" : "❌ No"
-        }\n`
+        }`
       );
+
+      if (pageResponse.data.perms) {
+        console.log(
+          `   Page permissions: ${pageResponse.data.perms.join(", ")}`
+        );
+      }
+
+      // Check if we can get admin roles
+      try {
+        const rolesUrl = `https://graph.facebook.com/v23.0/${pageId}/roles?access_token=${accessToken}`;
+        const rolesResponse = await axios.get(rolesUrl);
+        const userRole = rolesResponse.data.data.find(
+          (role) => role.uid === tokenResponse.data.data.user_id
+        );
+
+        if (userRole) {
+          console.log(`   Your role on this page: ${userRole.role}`);
+          if (userRole.role !== "Administrator" && userRole.role !== "Editor") {
+            console.log(
+              "⚠️  Warning: You need Administrator or Editor role to post to this page"
+            );
+          }
+        } else {
+          console.log("⚠️  Could not determine your role on this page");
+        }
+      } catch (rolesError) {
+        console.log(
+          "⚠️  Could not check page roles (this is normal for some page types)"
+        );
+      }
+
+      console.log("");
     } catch (error) {
       console.log("❌ Page access verification failed:");
       console.log(
@@ -76,11 +127,36 @@ async function diagnoseFacebookSetup() {
       );
       console.log("   This could mean:");
       console.log("   - The page ID is incorrect");
-      console.log("   - You don't have admin access to this page");
-      console.log(
-        "   - The access token doesn't have pages_manage_posts permission\n"
-      );
+      console.log("   - You don't have access to this page");
+      console.log("   - The access token doesn't have page permissions\n");
       return;
+    }
+
+    // Test 2.5: Test basic text posting
+    console.log("🧪 Test 2.5: Testing Basic Text Posting...");
+    try {
+      const textPostUrl = `https://graph.facebook.com/v23.0/${pageId}/feed`;
+      const textPostParams = {
+        message: "🤖 TEST: Facebook API Diagnostic - Text Post Test",
+        access_token: accessToken,
+      };
+
+      const textResponse = await axios.post(textPostUrl, textPostParams);
+      const textPostId = textResponse.data.id;
+
+      console.log("✅ Text posting successful!");
+      console.log(`   Post ID: ${textPostId}`);
+
+      // Clean up the test post
+      console.log("🧹 Cleaning up test text post...");
+      const deleteUrl = `https://graph.facebook.com/v23.0/${textPostId}?access_token=${accessToken}`;
+      await axios.delete(deleteUrl);
+      console.log("✅ Test text post deleted\n");
+    } catch (error) {
+      console.log("❌ Text posting test failed:");
+      console.log(
+        `   Error: ${error.response?.data?.error?.message || error.message}\n`
+      );
     }
 
     // Test 3: Check posting permissions

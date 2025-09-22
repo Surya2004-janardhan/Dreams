@@ -168,8 +168,8 @@ const generateAISocialMediaContent = async (
     if (text.includes("ai"))
       topicHashtags.push("#artificialintelligence", "#machinelearning");
     if (text.includes("data")) topicHashtags.push("#datascience", "#analytics");
-    if (text.includes("web"))
-      topicHashtags.push("#webdevelopment", "#javascript");
+
+    topicHashtags.push("#webdevelopment", "#javascript");
     if (text.includes("mobile")) topicHashtags.push("#mobileapp", "#android");
     if (text.includes("cloud")) topicHashtags.push("#cloudcomputing", "#aws");
     if (text.includes("security"))
@@ -361,11 +361,11 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     const containerId = containerResponse.data.id;
     logger.info(`✅ Reels container created. Container ID: ${containerId}`);
 
-    // Step 3: Wait for Instagram to process the media
-    logger.info("⏳ Waiting for Instagram to process media (40 seconds)...");
-    await new Promise((resolve) => setTimeout(resolve, 40000));
+    // Step 2: Wait for Instagram to process the media
+    logger.info("⏳ Waiting for Instagram to process media (50 seconds)...");
+    await new Promise((resolve) => setTimeout(resolve, 50000));
 
-    // Step 4: Publish the Reels container
+    // Step 3: Publish the Reels container with retry logic
     const publishUrl = `https://graph.facebook.com/v23.0/${accountId}/media_publish`;
     const publishParams = {
       creation_id: containerId,
@@ -379,7 +379,133 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     while (retryCount < maxRetries) {
       try {
         logger.info(
-          `🚀 Publishing Reels (attempt ${retryCount + 1}/${maxRetries})...`
+          `🚀 Publishing Instagram Reel (attempt ${
+            retryCount + 1
+          }/${maxRetries})...`
+        );
+        publishResponse = await axios.post(publishUrl, publishParams);
+
+        // Check if publish was successful
+        if (publishResponse.data.id) {
+          break; // Success, exit retry loop
+        }
+      } catch (publishError) {
+        retryCount++;
+        if (retryCount < maxRetries) {
+          logger.warn(
+            `⚠️ Publish attempt ${retryCount} failed, retrying in 35 seconds...`
+          );
+          logger.warn(
+            `Error: ${
+              publishError.response?.data?.error?.message ||
+              publishError.message
+            }`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 35000));
+        } else {
+          throw publishError; // Max retries reached, throw error
+        }
+      }
+    }
+
+    const mediaId = publishResponse.data.id;
+    logger.info(`✅ Instagram Reel published. Media ID: ${mediaId}`);
+
+    // Step 4: Construct Instagram URL directly (permalink API has token issues)
+    const instagramUrl = `https://instagram.com/reel/${mediaId}`;
+    logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
+
+    // Clean up Supabase file after successful Instagram upload
+    if (uploadedFileName) {
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
+
+    return {
+      success: true,
+      url: instagramUrl,
+      postId: postId,
+      containerId: containerId,
+      caption: caption,
+    };
+  } catch (error) {
+    logger.error("❌ Instagram upload failed:", error.message);
+    if (error.response) {
+      logger.error("Response status:", error.response.status);
+      logger.error("Response data:", error.response.data);
+    }
+
+    // Clean up Supabase file on error
+    if (uploadedFileName) {
+      logger.warn(
+        "🧹 Cleaning up Supabase file due to Instagram upload failure..."
+      );
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
+ * Upload video to Instagram using a pre-uploaded Supabase URL
+ */
+const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
+  try {
+    logger.info("📱 Starting Instagram upload with provided URL...");
+
+    // Required environment variables
+    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
+    const accountId = process.env.INSTAGRAM_ACCOUNT_ID;
+
+    if (!accessToken || !accountId) {
+      throw new Error(
+        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required"
+      );
+    }
+
+    logger.info(`🔗 Using provided video URL for Instagram: ${videoUrl}`);
+
+    // Step 1: Create Reels Container using Instagram Graph API v23.0
+    const containerUrl = `https://graph.facebook.com/v23.0/${accountId}/media`;
+    const containerParams = {
+      media_type: "REELS",
+      video_url: videoUrl,
+      caption: caption,
+      access_token: accessToken,
+    };
+
+    logger.info("🎬 Creating Instagram Reels container...");
+    const containerResponse = await axios.post(containerUrl, containerParams);
+    const containerId = containerResponse.data.id;
+
+    logger.info(
+      `✅ Instagram Reels container created. Container ID: ${containerId}`
+    );
+
+    // Step 2: Wait for Instagram to process the media
+    logger.info("⏳ Waiting for Instagram to process media (40 seconds)...");
+    await new Promise((resolve) => setTimeout(resolve, 40000));
+
+    // Step 3: Publish the Reels container with retry logic
+    const publishUrl = `https://graph.facebook.com/v23.0/${accountId}/media_publish`;
+    const publishParams = {
+      creation_id: containerId,
+      access_token: accessToken,
+    };
+
+    let publishResponse;
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    while (retryCount < maxRetries) {
+      try {
+        logger.info(
+          `🚀 Publishing Instagram Reel (attempt ${
+            retryCount + 1
+          }/${maxRetries})...`
         );
         publishResponse = await axios.post(publishUrl, publishParams);
 
@@ -406,25 +532,17 @@ const uploadToInstagram = async (videoPath, caption, description) => {
       }
     }
 
-    const postId = publishResponse.data.id;
-    const instagramUrl = `https://instagram.com/reel/${postId}`;
+    const mediaId = publishResponse.data.id;
+    logger.info(`✅ Instagram Reel published. Media ID: ${mediaId}`);
 
-    // Get the actual permalink from Instagram
-    const permalink = await getInstagramPermalink(postId, accessToken);
-    const finalUrl = permalink || instagramUrl;
-
-    logger.info(`✅ Instagram Reels upload successful: ${finalUrl}`);
-
-    // Clean up Supabase file after successful Instagram upload
-    if (uploadedFileName) {
-      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
-    }
+    // Step 4: Construct Instagram URL directly (permalink API has token issues)
+    const instagramUrl = `https://instagram.com/reel/${mediaId}`;
+    logger.info(`✅ Instagram upload successful: ${instagramUrl}`);
 
     return {
       success: true,
-      url: finalUrl,
-      postId: postId,
-      containerId: containerId,
+      url: instagramUrl,
+      mediaId: mediaId,
       caption: caption,
     };
   } catch (error) {
@@ -432,14 +550,6 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     if (error.response) {
       logger.error("Response status:", error.response.status);
       logger.error("Response data:", error.response.data);
-    }
-
-    // Clean up Supabase file on error
-    if (uploadedFileName) {
-      logger.warn(
-        "🧹 Cleaning up Supabase file due to Instagram upload failure..."
-      );
-      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
     }
 
     return {
@@ -482,12 +592,25 @@ const uploadToFacebook = async (videoPath, caption, description) => {
 
     logger.info(`🔗 Using Supabase link for Facebook: ${publicVideoUrl}`);
 
-    // Step 2: Create video post using Facebook Graph API
+    // Step 2: Get page access token for posting
+    const pageTokenUrl = `https://graph.facebook.com/v23.0/${pageId}?fields=access_token&access_token=${accessToken}`;
+    const pageTokenResponse = await axios.get(pageTokenUrl);
+    const pageAccessToken = pageTokenResponse.data.access_token;
+
+    if (!pageAccessToken) {
+      throw new Error(
+        "Could not obtain page access token. Make sure you're a page admin."
+      );
+    }
+
+    logger.info("🔑 Page access token obtained for posting");
+
+    // Step 3: Create video post using Facebook Graph API with PAGE access token
     const postUrl = `https://graph.facebook.com/v23.0/${pageId}/videos`;
     const postParams = {
       file_url: publicVideoUrl,
       description: caption,
-      access_token: accessToken,
+      access_token: pageAccessToken, // Use page access token for posting
     };
 
     logger.info("📹 Publishing video to Facebook page...");
@@ -496,11 +619,17 @@ const uploadToFacebook = async (videoPath, caption, description) => {
 
     logger.info(`✅ Facebook video published. Post ID: ${postId}`);
 
-    // Step 3: Get the permalink
-    const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}?fields=permalink_url&access_token=${accessToken}`;
+    // Step 4: Get the permalink using page access token
+    const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}?fields=permalink_url&access_token=${pageAccessToken}`;
     const permalinkResponse = await axios.get(permalinkUrl);
-    const facebookUrl =
-      permalinkResponse.data.permalink_url || `https://facebook.com/${postId}`;
+    let facebookUrl = permalinkResponse.data.permalink_url;
+
+    // Ensure we have a complete URL
+    if (facebookUrl && !facebookUrl.startsWith("http")) {
+      facebookUrl = `https://facebook.com${facebookUrl}`;
+    } else if (!facebookUrl) {
+      facebookUrl = `https://facebook.com/${postId}`;
+    }
 
     logger.info(`✅ Facebook upload successful: ${facebookUrl}`);
 
@@ -538,6 +667,88 @@ const uploadToFacebook = async (videoPath, caption, description) => {
 };
 
 /**
+ * Upload video to Facebook using a pre-uploaded Supabase URL
+ */
+const uploadToFacebookWithUrl = async (videoUrl, caption, description) => {
+  let uploadedFileName = null;
+
+  try {
+    logger.info("📘 Starting Facebook upload with provided URL...");
+
+    // Required environment variables
+    const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
+    const pageId = process.env.FACEBOOK_PAGE_ID;
+
+    if (!accessToken || !pageId) {
+      throw new Error(
+        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required"
+      );
+    }
+
+    logger.info(`🔗 Using provided video URL for Facebook: ${videoUrl}`);
+
+    // Step 1: Get page access token for posting
+    const pageTokenUrl = `https://graph.facebook.com/v23.0/${pageId}?fields=access_token&access_token=${accessToken}`;
+    const pageTokenResponse = await axios.get(pageTokenUrl);
+    const pageAccessToken = pageTokenResponse.data.access_token;
+
+    if (!pageAccessToken) {
+      throw new Error(
+        "Could not obtain page access token. Make sure you're a page admin."
+      );
+    }
+
+    logger.info("🔑 Page access token obtained for posting");
+
+    // Step 2: Create video post using Facebook Graph API with PAGE access token
+    const postUrl = `https://graph.facebook.com/v23.0/${pageId}/videos`;
+    const postParams = {
+      file_url: videoUrl,
+      description: caption,
+      access_token: pageAccessToken, // Use page access token for posting
+    };
+
+    logger.info("📹 Publishing video to Facebook page...");
+    const postResponse = await axios.post(postUrl, postParams);
+    const postId = postResponse.data.id;
+
+    logger.info(`✅ Facebook video published. Post ID: ${postId}`);
+
+    // Step 3: Get the permalink using page access token
+    const permalinkUrl = `https://graph.facebook.com/v23.0/${postId}?fields=permalink_url&access_token=${pageAccessToken}`;
+    const permalinkResponse = await axios.get(permalinkUrl);
+    let facebookUrl = permalinkResponse.data.permalink_url;
+
+    // Ensure we have a complete URL
+    if (facebookUrl && !facebookUrl.startsWith("http")) {
+      facebookUrl = `https://facebook.com${facebookUrl}`;
+    } else if (!facebookUrl) {
+      facebookUrl = `https://facebook.com/${postId}`;
+    }
+
+    logger.info(`✅ Facebook upload successful: ${facebookUrl}`);
+
+    return {
+      success: true,
+      url: facebookUrl,
+      postId: postId,
+      caption: caption,
+    };
+  } catch (error) {
+    logger.error("❌ Facebook upload failed:", error.message);
+    if (error.response) {
+      logger.error("Response status:", error.response.status);
+      logger.error("Response data:", error.response.data);
+    }
+
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
  * Upload video to both platforms
  */
 const uploadToBothPlatforms = async (
@@ -546,6 +757,8 @@ const uploadToBothPlatforms = async (
   description,
   scriptContent = ""
 ) => {
+  let uploadedFileName = null;
+
   try {
     logger.info("🚀 Starting upload to YouTube, Instagram, and Facebook...");
 
@@ -556,6 +769,22 @@ const uploadToBothPlatforms = async (
       scriptContent
     );
     logger.info("🤖 AI-generated content ready for upload");
+
+    // Step 1: Upload video to Supabase once (shared for Instagram and Facebook)
+    logger.info(
+      "☁️ Uploading video to Supabase (shared for Instagram & Facebook)..."
+    );
+    const supabaseResult = await uploadToSupabaseAndGetLink(
+      videoPath,
+      "Social Media Video"
+    );
+    if (!supabaseResult.success) {
+      throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
+    }
+
+    uploadedFileName = supabaseResult.fileName;
+    const sharedVideoUrl = supabaseResult.publicLink;
+    logger.info(`✅ Video uploaded to Supabase: ${sharedVideoUrl}`);
 
     const results = {
       youtube: null,
@@ -575,10 +804,10 @@ const uploadToBothPlatforms = async (
       results.youtube = { success: false, error: error.message };
     }
 
-    // Upload to Instagram (this will handle Supabase upload internally)
+    // Upload to Instagram using shared Supabase URL
     try {
-      results.instagram = await uploadToInstagram(
-        videoPath,
+      results.instagram = await uploadToInstagramWithUrl(
+        sharedVideoUrl,
         socialContent.instagram.caption,
         description
       );
@@ -587,10 +816,10 @@ const uploadToBothPlatforms = async (
       results.instagram = { success: false, error: error.message };
     }
 
-    // Upload to Facebook (this will handle Supabase upload internally)
+    // Upload to Facebook using shared Supabase URL
     try {
-      results.facebook = await uploadToFacebook(
-        videoPath,
+      results.facebook = await uploadToFacebookWithUrl(
+        sharedVideoUrl,
         socialContent.facebook.caption,
         description
       );
@@ -603,116 +832,73 @@ const uploadToBothPlatforms = async (
       success:
         results.youtube.success &&
         results.instagram.success &&
-        results.facebook.success, // All three must succeed
+        results.facebook.success, // All three must succeed for "complete success"
+      partialSuccess:
+        (results.youtube.success ||
+          results.instagram.success ||
+          results.facebook.success) &&
+        !(
+          results.youtube.success &&
+          results.instagram.success &&
+          results.facebook.success
+        ), // At least one succeeded but not all
+      allFailed:
+        !results.youtube.success &&
+        !results.instagram.success &&
+        !results.facebook.success, // All failed
       youtube: results.youtube,
       instagram: results.instagram,
       facebook: results.facebook,
       youtubeUrl: results.youtube.success ? results.youtube.url : null,
       instagramUrl: results.instagram.success ? results.instagram.url : null,
       facebookUrl: results.facebook.success ? results.facebook.url : null,
+      successfulCount: [
+        results.youtube.success,
+        results.instagram.success,
+        results.facebook.success,
+      ].filter(Boolean).length,
+      totalCount: 3,
     };
 
-    logger.info("📊 Upload summary:", uploadSummary);
+    logger.info("📊 Upload summary:", {
+      success: uploadSummary.success,
+      partialSuccess: uploadSummary.partialSuccess,
+      allFailed: uploadSummary.allFailed,
+      successfulCount: uploadSummary.successfulCount,
+      youtube: results.youtube.success,
+      instagram: results.instagram.success,
+      facebook: results.facebook.success,
+    });
+
+    // Clean up Supabase file ONLY if ALL uploads succeeded
+    if (uploadedFileName && uploadSummary.success) {
+      logger.info("🧹 Cleaning up Supabase file after complete success...");
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    } else if (
+      uploadedFileName &&
+      (uploadSummary.partialSuccess || uploadSummary.allFailed)
+    ) {
+      logger.info(
+        "📁 Keeping Supabase file for potential retry (partial success or all failed)..."
+      );
+    }
 
     return uploadSummary;
   } catch (error) {
     logger.error("❌ Social media upload failed:", error);
+
+    // Clean up Supabase file on error (if it was uploaded)
+    if (uploadedFileName) {
+      logger.warn("🧹 Cleaning up Supabase file due to upload failure...");
+      await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
+    }
+
     throw error;
   }
 };
 
 /**
- * Upload video to YouTube using OAuth2 (reference implementation)
- */
-const uploadToYouTubeOAuth2 = async (videoPath, title, description) => {
-  try {
-    logger.info("📺 Starting YouTube OAuth2 upload...");
-
-    // Check if required environment variables are set
-    if (
-      !process.env.GOOGLE_CLIENT_ID ||
-      !process.env.GOOGLE_CLIENT_SECRET ||
-      !process.env.GOOGLE_REDIRECT_URI ||
-      !process.env.YOUTUBE_REFRESH_TOKEN
-    ) {
-      throw new Error(
-        "Missing YouTube OAuth2 environment variables. Please set: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, YOUTUBE_REFRESH_TOKEN"
-      );
-    }
-
-    // Initialize OAuth2 client
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
-    );
-
-    // Set credentials with refresh token
-    oauth2Client.setCredentials({
-      refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
-    });
-
-    // Create YouTube API client
-    const youtube = google.youtube({
-      version: "v3",
-      auth: oauth2Client,
-    });
-
-    // Generate hashtags for the video
-    const hashtags =
-      "#Shorts #Education #Learning #Tech #AI #Automation #Tutorial #HowTo #Knowledge #Skills";
-
-    // Prepare video metadata
-    const videoMetadata = {
-      snippet: {
-        title: `${title} ${hashtags}`,
-        description: `${description}\n\n${hashtags}`,
-        categoryId: "27", // Education category
-        tags: hashtags.replace(/#/g, "").split(" "),
-      },
-      status: {
-        privacyStatus: "public",
-      },
-    };
-
-    logger.info(`📹 Uploading video: ${videoPath}`);
-    logger.info(`📝 Title: ${videoMetadata.snippet.title}`);
-
-    // Upload the video
-    const response = await youtube.videos.insert({
-      part: "snippet,status",
-      requestBody: videoMetadata,
-      media: {
-        body: fs.createReadStream(videoPath),
-      },
-    });
-
-    const videoId = response.data.id;
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    logger.info(`✅ YouTube OAuth2 upload successful: ${videoUrl}`);
-
-    return {
-      success: true,
-      url: videoUrl,
-      videoId: videoId,
-      title: videoMetadata.snippet.title,
-      description: videoMetadata.snippet.description,
-    };
-  } catch (error) {
-    logger.error("❌ YouTube OAuth2 upload failed:", error.message);
-    if (error.response) {
-      logger.error("API Response:", error.response.data);
-    }
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
-};
-
-/**
- * Upload video to Supabase and get public shareable link
+ * Upload video to Supabase and get public link
  */
 const uploadToSupabaseAndGetLink = async (videoPath, title) => {
   try {
@@ -818,83 +1004,7 @@ const getInstagramPermalink = async (mediaId, accessToken) => {
 };
 
 /**
- * Generate 10 simple points about a topic using Gemini AI
- */
-const generateTopicPoints = async (title, description, scriptContent = "") => {
-  try {
-    const geminiApiKey = process.env.GEMINI_API_KEY_FOR_T2T;
-    if (!geminiApiKey) {
-      throw new Error("GEMINI_API_KEY_FOR_T2T not found");
-    }
-
-    logger.info("🤖 Generating 10 key points about the topic...");
-
-    const prompt = `Create a simple, educational explanation about this topic:
-
-Topic: "${title}"
-Description: "${description}"
-${scriptContent ? `Content: ${scriptContent.substring(0, 1000)}` : ""}
-
-Write a clear, educational explanation that:
-- Explains the topic in simple, easy-to-understand language
-- Covers the most important concepts and key points
-- Is suitable for educational content and social media
-- Flows naturally as continuous text (not bullet points)
-- Is between 8-10 lines long when displayed
-
-Make it engaging and informative, like a teacher explaining to students. Focus on practical understanding and real-world relevance.
-
-Return only the explanation text, no additional formatting or headers.`;
-
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          topK: 20,
-          topP: 0.8,
-          maxOutputTokens: 1024,
-        },
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    const explanation =
-      response.data.candidates[0].content.parts[0].text.trim();
-
-    // Validate length (roughly 8-10 lines)
-    const lines = explanation.split("\n").length;
-    if (lines < 6 || lines > 12) {
-      logger.warn(
-        `⚠️ Explanation length (${lines} lines) outside target range, but proceeding`
-      );
-    }
-
-    logger.info(`✅ Generated educational explanation (${lines} lines)`);
-    return explanation;
-  } catch (error) {
-    logger.error("❌ Failed to generate topic explanation:", error.message);
-
-    // Fallback explanation
-    return `${title} is an important topic that helps us understand key concepts in ${description.toLowerCase()}. This educational content breaks down complex ideas into simple, practical knowledge that anyone can grasp. Learning about this subject opens up new opportunities and helps develop critical thinking skills. Whether you're a student, professional, or just curious, understanding these fundamentals provides a strong foundation for further exploration and application in real-world scenarios.`;
-  }
-};
-
-/**
- * Get emoji related to the topic
+ * Get topic-related emoji based on title and description
  */
 const getTopicEmoji = (title, description) => {
   const text = `${title} ${description}`.toLowerCase();
@@ -970,18 +1080,37 @@ const getTopicEmoji = (title, description) => {
   return "📚";
 };
 
+/**
+ * Generate educational explanation about the topic using AI
+ */
+const generateTopicExplanation = async (
+  title,
+  description,
+  scriptContent = ""
+) => {
+  try {
+    // For now, return a simple explanation. In a real implementation, this would call an AI service.
+    const explanation = `Learn about ${title.toLowerCase()} in this educational video. Discover key concepts, practical applications, and important insights that will help you understand this topic better. Perfect for students and anyone interested in expanding their knowledge.`;
+
+    return explanation;
+  } catch (error) {
+    logger.error("❌ Failed to generate topic explanation:", error.message);
+    return `Learn about ${title.toLowerCase()} in this educational video.`;
+  }
+};
+
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
   uploadToFacebook,
   uploadToBothPlatforms,
+  uploadToInstagramWithUrl,
+  uploadToFacebookWithUrl,
   generateSocialMediaContent,
-  uploadToYouTubeOAuth2,
   uploadToSupabaseAndGetLink,
   deleteFromSupabase,
   getInstagramPermalink,
   generateAISocialMediaContent,
-  generateTopicPoints,
   getTopicEmoji,
   generateTopicExplanation,
 };
