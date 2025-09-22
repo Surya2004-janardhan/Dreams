@@ -358,14 +358,21 @@ const generateCarouselSlides = async (taskData) => {
         .replace(/['"]/g, "")
         .replace(/:/g, " ");
 
-      // Break long content into lines (max ~50 chars per line)
-      const wrapText = (text, maxLength = 50) => {
+      // Break long content into lines with dynamic length based on font size
+      const wrapText = (text, fontSize = 36) => {
+        // Adjust max characters per line based on font size (smaller value for bigger fonts)
+        const maxCharsPerLine = Math.floor(1000 / fontSize); // Dynamic calculation
+
+        logger.info(
+          `📏 Using ${maxCharsPerLine} characters per line with font size ${fontSize}`
+        );
+
         const words = text.split(" ");
         const lines = [];
         let currentLine = "";
 
         for (const word of words) {
-          if (currentLine.length + word.length + 1 <= maxLength) {
+          if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
             currentLine += (currentLine ? " " : "") + word;
           } else {
             if (currentLine) lines.push(currentLine);
@@ -376,7 +383,8 @@ const generateCarouselSlides = async (taskData) => {
         return lines;
       };
 
-      const contentLines = wrapText(cleanContent);
+      // Use font size 36 (2x original) for text wrapping calculations
+      const contentLines = wrapText(cleanContent, 36);
 
       await new Promise((resolve, reject) => {
         let ffmpegCommand = ffmpeg(baseImagePath);
@@ -384,27 +392,46 @@ const generateCarouselSlides = async (taskData) => {
         // Start with title filter
         const filters = [];
 
-        // Add title (centered at top) - 22px bold grey with Montserrat-Black
-        if (fs.existsSync(montserratBlackFont)) {
-          filters.push(
-            `drawtext=text='${cleanTitle}':fontfile='${montserratBlackFont}':fontsize=22:fontcolor=0x808080:x=(w-text_w)/2:y=40:shadowcolor=black:shadowx=1:shadowy=1`
-          );
-        } else {
-          filters.push(
-            `drawtext=text='${cleanTitle}':fontsize=22:fontcolor=0x808080:x=(w-text_w)/2:y=40:shadowcolor=black:shadowx=1:shadowy=1`
-          );
-        }
+        // Process title with wrapping
+        const titleFontSize = 44; // 2x original
+        const titleLines = wrapText(cleanTitle, titleFontSize);
+        logger.info(`📏 Title split into ${titleLines.length} lines`);
 
-        // Add content lines (each line 30px below the previous) - 18px bold black with IBM-Regular
-        contentLines.forEach((line, index) => {
-          const yPosition = 100 + index * 30;
-          if (fs.existsSync(ibmPlexFont)) {
+        // Add each title line
+        titleLines.forEach((titleLine, tIndex) => {
+          const titleYPos = 40 + tIndex * 60; // Space between title lines
+
+          if (fs.existsSync(montserratBlackFont)) {
             filters.push(
-              `drawtext=text='${line}':fontfile='${ibmPlexFont}':fontsize=18:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1`
+              `drawtext=text='${titleLine}':fontfile='${montserratBlackFont}':fontsize=${titleFontSize}:fontcolor=0x808080:x=(w-text_w)/2:y=${titleYPos}:shadowcolor=black:shadowx=1:shadowy=1:line_spacing=10`
             );
           } else {
+            // Fallback but still try to use Montserrat-Black
+            logger.warn(
+              "⚠️ Montserrat-Black font not found, using system font"
+            );
             filters.push(
-              `drawtext=text='${line}':fontsize=18:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1`
+              `drawtext=text='${titleLine}':fontsize=${titleFontSize}:fontcolor=0x808080:x=(w-text_w)/2:y=${titleYPos}:shadowcolor=black:shadowx=1:shadowy=1:line_spacing=10`
+            );
+          }
+        });
+
+        // Calculate content start position based on title lines
+        const titleHeight = 40 + titleLines.length * 60; // Title area height
+        const contentStartY = titleHeight + 60; // Start content 60px below the last title line
+
+        // Add content lines (each line 60px below the previous) - 36px bold black with IBM Plex (2x original 18px)
+        contentLines.forEach((line, index) => {
+          const yPosition = contentStartY + index * 50; // Slightly reduced spacing between content lines
+          if (fs.existsSync(ibmPlexFont)) {
+            filters.push(
+              `drawtext=text='${line}':fontfile='${ibmPlexFont}':fontsize=36:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1:line_spacing=10`
+            );
+          } else {
+            // Fallback but log warning
+            logger.warn("⚠️ IBM Plex font not found, using system font");
+            filters.push(
+              `drawtext=text='${line}':fontsize=36:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1:line_spacing=10`
             );
           }
         });

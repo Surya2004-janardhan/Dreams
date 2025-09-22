@@ -389,27 +389,18 @@ class FacebookPostMaker {
    */
   getFacebookPostUrl(postId) {
     try {
-      // Facebook post IDs are in format "page_id_post_id"
-      // We need to extract the post_id part for the URL
-      const parts = postId.split("_");
-      if (parts.length >= 2) {
-        const actualPostId = parts[1]; // Get the post ID part
-        const url = `https://www.facebook.com/${actualPostId}`;
-        logger.info(`🔗 Facebook URL constructed: ${url}`);
-        return url;
-      } else {
-        // Fallback to original format if splitting doesn't work
-        const url = `https://www.facebook.com/${this.pageId}/posts/${postId}`;
-        logger.warn(`⚠️ Using fallback Facebook URL format: ${url}`);
-        return url;
-      }
+      // Based on working format: https://www.facebook.com/61580337244098/posts/790983717429533_122105119341011241/
+      // Use pageId/posts/fullPostId format
+      const url = `https://www.facebook.com/${this.pageId}/posts/${postId}/`;
+      logger.info(`🔗 Facebook URL constructed: ${url}`);
+      return url;
     } catch (error) {
       logger.error(
         `❌ Error constructing Facebook URL for ${postId}:`,
         error.message
       );
       // Return fallback URL
-      return `https://www.facebook.com/${this.pageId}/posts/${postId}`;
+      return `https://www.facebook.com/${this.pageId}/posts/${postId}/`;
     }
   }
 }
