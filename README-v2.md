@@ -187,6 +187,110 @@ curl -X POST http://localhost:3000/workflow/run \
 - `POST /images/generate` - Generate educational images only
 - `GET /video/base` - Get base video from Drive only
 
+### 📱 Social Media Carousel Posts
+
+#### `POST /posts-workflow`
+
+Create carousel posts for Instagram and Facebook with AI-generated content and images.
+
+**Features:**
+
+- 🤖 AI-generated carousel content (3 slides with headings and descriptions)
+- 🎨 AI-generated images for each slide
+- 📸 Instagram carousel posts
+- 📘 Facebook carousel posts
+- 📊 Google Sheets integration
+- 📧 Email notifications
+
+**Basic Usage (AI-generated content):**
+
+```bash
+curl -X POST http://localhost:3000/posts-workflow \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "API Security Principles",
+    "platforms": "instagram,facebook"
+  }'
+```
+
+**With Custom Content:**
+
+```bash
+curl -X POST http://localhost:3000/posts-workflow \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customContent": "{\"slides\": [{\"heading\": \"Point 1\", \"content\": \"Content 1\"}, {\"heading\": \"Point 2\", \"content\": \"Content 2\"}, {\"heading\": \"Point 3\", \"content\": \"Content 3\"}], \"caption\": \"Check this out!\"}",
+    "platforms": "facebook",
+    "useAiContent": "false"
+  }'
+```
+
+**With Image Uploads:**
+
+```bash
+curl -X POST http://localhost:3000/posts-workflow \
+  -F "images=@slide1.jpg" \
+  -F "images=@slide2.jpg" \
+  -F "images=@slide3.jpg" \
+  -F "description=API Security Principles" \
+  -F "platforms=instagram"
+```
+
+**Parameters:**
+
+- `description` (string): Topic description for AI content generation
+- `platforms` (string): Comma-separated list of platforms ("instagram,facebook")
+- `sheetId` (string, optional): Google Sheet ID to pull tasks from
+- `customContent` (string): JSON string with custom slides and caption
+- `useAiContent` (boolean): Whether to use AI for content generation (default: true)
+- `images` (files): Up to 3 image files for carousel slides
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "message": "Carousel posts created successfully",
+  "results": {
+    "instagram": {
+      "success": true,
+      "postId": "17841400000000000",
+      "permalink": "https://www.instagram.com/p/ABC123/",
+      "platform": "instagram",
+      "type": "carousel",
+      "imageCount": 3
+    },
+    "facebook": {
+      "success": true,
+      "postId": "1234567890123456",
+      "permalink": "https://www.facebook.com/1234567890123456/posts/1234567890123456",
+      "platform": "facebook",
+      "type": "carousel",
+      "imageCount": 3
+    },
+    "content": {
+      "slides": [
+        {
+          "heading": "Understanding API Security",
+          "content": "API security protects your digital assets..."
+        }
+      ],
+      "caption": "🚀 API Security Essentials #APISecurity",
+      "platform": "instagram",
+      "generated": true
+    }
+  }
+}
+```
+
+#### `GET /posts-workflow/test`
+
+Test carousel content generation without creating posts:
+
+```bash
+curl "http://localhost:3000/posts-workflow/test?description=API Security Principles"
+```
+
 ## ⚙️ Configuration Details
 
 ### Required API Keys

@@ -2,7 +2,7 @@ const { generateScript } = require("../services/scriptService");
 const {
   generateAudioWithBatchingStrategy,
 } = require("../services/audioService");
-const { generateImages } = require("../services/imageService");
+const { generateTitleImage } = require("../services/imageService");
 const {
   getBaseVideo,
   composeVideo,
@@ -20,6 +20,7 @@ const {
   generateSocialMediaContent,
   uploadToYouTubeOAuth2,
 } = require("../services/socialMediaService");
+// const VideoPostingService = require("../services/videoPostingService");
 const {
   sendSuccessNotification,
   sendErrorNotification,
@@ -97,47 +98,50 @@ const runCompleteWorkflow = async (taskData) => {
     logger.info("🤖 Step 4: Generating image prompts");
     currentWorkflow.currentStep = "images/prompts";
 
-    // Step 5: Generate images
-    logger.info("🖼️ Step 5: Generating images");
+    // Step 5: Generate title image
+    logger.info("🖼️ Step 5: Generating title image");
     currentWorkflow.currentStep = "images/generate";
 
     let images = [];
     try {
-      images = await generateImages(subtitlesPath);
-      logger.info(`✓ ${images.length} images generated successfully`);
+      // Generate single title image from the idea/title
+      const titleImagePath = await generateTitleImage(taskData.idea);
+      logger.info(`✓ Title image generated successfully: ${titleImagePath}`);
+
+      // Create image structure for video processing (single image, stays throughout video)
+      images = [
+        {
+          index: 1,
+          filename: titleImagePath,
+          concept: taskData.idea,
+          timing: {
+            startTime: 0, // Start from beginning
+            endTime: 59, // Stay until end of video (59 seconds for Instagram limit)
+          },
+        },
+      ];
     } catch (error) {
-      logger.warn(`⚠️ Image generation failed: ${error.message}`);
+      logger.warn(`⚠️ Title image generation failed: ${error.message}`);
       logger.info("🔄 Using default image as fallback...");
 
-      // Use default image as fallback with proper timing structure
+      // Use default image as fallback
       const defaultImagePath = path.join("videos", "default-image.jpg");
       if (fs.existsSync(defaultImagePath)) {
-        // Create fallback image structure matching the expected format
         images = [
           {
             index: 1,
             filename: defaultImagePath,
-            concept: "Default educational image",
-            prompt: "Default fallback image",
+            concept: taskData.idea,
             timing: {
               startTime: 0,
-              endTime: 59, // Full video duration
-              duration: 59,
-            },
-            placement: {
-              fromTime: 0,
-              toTime: 59,
-              subtitleText: "Educational content",
-              subtitleCount: 1,
+              endTime: 59,
             },
           },
         ];
-        logger.info(`✓ Using default image: ${defaultImagePath}`);
+        logger.info("✓ Default image set as fallback");
       } else {
-        logger.error(
-          "❌ Default image not found, cannot proceed with video composition"
-        );
-        throw new Error("Image generation failed and default image not found");
+        logger.warn("⚠️ No fallback image available");
+        images = [];
       }
     }
 
@@ -175,7 +179,37 @@ const runCompleteWorkflow = async (taskData) => {
       taskData.idea,
       script
     );
-    currentWorkflow.results.uploadResult = uploadResult;
+
+    // Convert the result format to match expected structure
+    const formattedUploadResult = {
+      success:
+        uploadResult.youtube?.success ||
+        uploadResult.instagram?.success ||
+        uploadResult.facebook?.success,
+      successfulCount: [
+        uploadResult.youtube,
+        uploadResult.instagram,
+        uploadResult.facebook,
+      ].filter((r) => r?.success).length,
+      totalCount: 3,
+      youtube: uploadResult.youtube || {
+        success: false,
+        error: "Not attempted",
+      },
+      instagram: uploadResult.instagram || {
+        success: false,
+        error: "Not attempted",
+      },
+      facebook: uploadResult.facebook || {
+        success: false,
+        error: "Not attempted",
+      },
+      youtubeUrl: uploadResult.youtube?.url || "",
+      instagramUrl: uploadResult.instagram?.url || "",
+      facebookUrl: uploadResult.facebook?.url || "",
+    };
+
+    currentWorkflow.results.uploadResult = formattedUploadResult;
 
     // Check upload results and handle different scenarios
     const successfulUploads = uploadResult.successfulCount;

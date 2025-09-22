@@ -15,6 +15,7 @@ const scriptRoutes = require("./src/routes/script");
 const audioRoutes = require("./src/routes/audio");
 const imageRoutes = require("./src/routes/images");
 const videoRoutes = require("./src/routes/video");
+const postsWorkflowRoutes = require("./src/routes/postsWorkflow");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use("/script", scriptRoutes);
 app.use("/audio", audioRoutes);
 app.use("/images", imageRoutes);
 app.use("/video", videoRoutes);
+app.use("/posts-workflow", postsWorkflowRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -55,6 +57,8 @@ app.get("/", (req, res) => {
         "/workflow/auto - Pull from Google Sheets and process automatically",
       manual_workflow:
         "/workflow/run - Manual content creation with title/description",
+      posts_workflow:
+        "/posts-workflow - Create carousel posts for Instagram and Facebook",
       status: "/workflow/status - Get current workflow status",
       script: "/script/generate - Generate conversation script only",
       audio: "/audio/generate - Generate audio from script only",

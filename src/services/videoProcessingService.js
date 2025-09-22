@@ -179,7 +179,7 @@ const composeVideo = async (
         command = command.input(image.filename);
       });
 
-      // Build complex filter for multiple image overlays with timing and subtitles
+      // Build filter for single title image overlay and subtitles
       let filterParts = [];
 
       // Scale base video to 1080:1920 with black padding
@@ -187,58 +187,22 @@ const composeVideo = async (
         "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
       );
 
-      // Scale each image to fit within video width (90% of 1080 = 972px) without padding
-      validImages.forEach((image, index) => {
-        const inputIndex = index + (audioPath ? 2 : 1); // Images start from input 2 if audio, input 1 if no audio
-        // Scale to fit within 90% of video width (972px) while maintaining aspect ratio
-        filterParts.push(
-          `[${inputIndex}:v]scale=972:-1:force_original_aspect_ratio=decrease[img${index}]`
-        );
-      });
-
-      // Create overlay chain with timing (reference test video approach)
+      // Handle single title image overlay (stays throughout video)
       let currentVideo = "[base]";
       if (validImages.length > 0) {
-        if (validImages.length === 1) {
-          // Single image - use simple overlay like test video
-          const startTime = Math.max(
-            0,
-            parseFloat(validImages[0].timing.startTime) || 0
-          );
-          const endTime = Math.max(
-            startTime + 1,
-            parseFloat(validImages[0].timing.endTime) || startTime + 14
-          );
+        // Single image - scale to 9:8 aspect ratio and place at 5% from top
+        const inputIndex = audioPath ? 2 : 1; // Images start from input 2 if audio, input 1 if no audio
 
-          filterParts.push(
-            `${currentVideo}[img0]overlay=(W-w)/2:(${Math.round(
-              0.02 * 1920
-            )}):enable='between(t,${startTime},${endTime})'[video]`
-          );
-          currentVideo = "[video]";
-        } else {
-          // Multiple images - create overlay chain
-          validImages.forEach((image, index) => {
-            const startTime = Math.max(
-              0,
-              parseFloat(image.timing.startTime) || 0
-            );
-            const endTime = Math.max(
-              startTime + 1,
-              parseFloat(image.timing.endTime) || startTime + 14
-            );
-            const nextVideo =
-              index === validImages.length - 1 ? "[video]" : `[v${index}]`;
+        // Scale to 9:8 aspect ratio (810x720 for 1080x1920 video)
+        filterParts.push(
+          `[${inputIndex}:v]scale=810:720:force_original_aspect_ratio=decrease[titleImg]`
+        );
 
-            filterParts.push(
-              `${currentVideo}[img${index}]overlay=(W-w)/2:(${Math.round(
-                0.02 * 1920
-              )}):enable='between(t,${startTime},${endTime})'${nextVideo}`
-            );
-
-            currentVideo = nextVideo;
-          });
-        }
+        // Overlay title image at 5% from top (96px from top for 1920px height), stays throughout entire video
+        filterParts.push(
+          `${currentVideo}[titleImg]overlay=(W-w)/2:96[videoWithTitle]`
+        );
+        currentVideo = "[videoWithTitle]";
       }
 
       // Handle subtitles based on whether we have overlays or not
@@ -257,7 +221,7 @@ const composeVideo = async (
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
 
-        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=11,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=37,Outline=3,Spacing=0'[final]`;
+        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=11,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[final]`;
         filterParts.push(subtitleFilter);
       }
 
@@ -440,6 +404,20 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
     logger.error("❌ Platform optimization failed:", error);
     throw error;
   }
+};
+
+/**
+ * Convert HH:MM:SS.mmm time format to seconds
+ */
+const timeToSeconds = (timeString) => {
+  const [hours, minutes, seconds] = timeString.split(":");
+  const [sec, ms] = seconds.split(".");
+  return (
+    parseInt(hours) * 3600 +
+    parseInt(minutes) * 60 +
+    parseInt(sec) +
+    parseInt(ms) / 1000
+  );
 };
 
 module.exports = {

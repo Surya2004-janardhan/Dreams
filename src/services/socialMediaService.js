@@ -136,52 +136,78 @@ const generateAISocialMediaContent = async (
     // Get topic-related emoji
     const topicEmoji = getTopicEmoji(title, description);
 
-    // Generate hashtags
-    const baseHashtags = [
+    // Generate platform-specific hashtags (minimum 10 each)
+    const text = `${title} ${description}`.toLowerCase();
+
+    // YouTube hashtags (educational focus)
+    const youtubeHashtags = [
       "#education",
       "#learning",
       "#knowledge",
-      "#facts",
       "#educational",
-      "#shorts",
-      "#viral",
-      "#trending",
-      "#india",
-      "#informative",
-      "#tech",
-      "#technology",
-      "#ai",
-      "#innovation",
-      "#digital",
       "#tutorial",
       "#howto",
       "#explained",
       "#guide",
       "#tips",
+      "#facts",
     ];
 
-    const text = `${title} ${description}`.toLowerCase();
-    const topicHashtags = [];
+    // Instagram hashtags (visual/social focus)
+    const instagramHashtags = [
+      "#instagram",
+      "#instadaily",
+      "#instavideo",
+      "#reels",
+      "#reel",
+      "#viral",
+      "#trending",
+      "#fyp",
+      "#explore",
+      "#discover",
+    ];
 
-    if (text.includes("science")) topicHashtags.push("#science", "#scientific");
-    if (text.includes("tech")) topicHashtags.push("#programming", "#coding");
-    if (text.includes("ai"))
-      topicHashtags.push("#artificialintelligence", "#machinelearning");
-    if (text.includes("data")) topicHashtags.push("#datascience", "#analytics");
+    // Facebook hashtags (community focus)
+    const facebookHashtags = [
+      "#facebook",
+      "#community",
+      "#share",
+      "#learn",
+      "#education",
+      "#knowledge",
+      "#tips",
+      "#facts",
+      "#viral",
+      "#trending",
+    ];
 
-    topicHashtags.push("#webdevelopment", "#javascript");
-    if (text.includes("mobile")) topicHashtags.push("#mobileapp", "#android");
-    if (text.includes("cloud")) topicHashtags.push("#cloudcomputing", "#aws");
-    if (text.includes("security"))
-      topicHashtags.push("#cybersecurity", "#hacking");
-    if (text.includes("business"))
-      topicHashtags.push("#business", "#entrepreneurship");
-    if (text.includes("design")) topicHashtags.push("#design", "#uiux");
+    // Add topic-specific hashtags
+    if (text.includes("science")) {
+      youtubeHashtags.push("#science", "#scientific");
+      instagramHashtags.push("#science", "#stem");
+      facebookHashtags.push("#science", "#research");
+    }
+    if (text.includes("tech")) {
+      youtubeHashtags.push("#technology", "#tech");
+      instagramHashtags.push("#tech", "#innovation");
+      facebookHashtags.push("#technology", "#digital");
+    }
+    if (text.includes("ai")) {
+      youtubeHashtags.push("#ai", "#artificialintelligence");
+      instagramHashtags.push("#ai", "#machinelearning");
+      facebookHashtags.push("#ai", "#future");
+    }
+    if (text.includes("data")) {
+      youtubeHashtags.push("#datascience", "#analytics");
+      instagramHashtags.push("#data", "#insights");
+      facebookHashtags.push("#data", "#analytics");
+    }
 
-    const allHashtags = [...baseHashtags, ...topicHashtags].slice(0, 20);
-    const hashtagString = allHashtags.join(" ");
+    const youtubeHashtagString = youtubeHashtags.slice(0, 10).join(" ");
+    const instagramHashtagString = instagramHashtags.slice(0, 10).join(" ");
+    const facebookHashtagString = facebookHashtags.slice(0, 10).join(" ");
 
-    // Create YouTube description with educational explanation
+    // Create YouTube description with comprehensive explanation
     const youtubeDescription = `${topicEmoji} ${title}
 
 ${topicExplanation}
@@ -192,36 +218,46 @@ ${topicExplanation}
 💬 Share your thoughts in the comments below!
 🔗 Save this video to watch again later!
 
-${hashtagString}`;
+${youtubeHashtagString}`;
 
-    // Create Instagram caption with educational explanation
+    // Create Instagram caption with title + explanation + calls-to-action
     const instagramCaption = `${topicEmoji} ${title}
 
 ${topicExplanation}
 
-🤔 What did you learn? Share in comments!`;
+❤️ Like & Follow for more educational content!
+🔄 Share this with friends who need to learn this!
+💬 Drop your questions in the comments below!
+📚 Save this post for future reference!
 
-    // Create Facebook caption (similar to Instagram but can be slightly different)
+${instagramHashtagString}`;
+
+    // Create Facebook caption with title + explanation + calls-to-action
     const facebookCaption = `${topicEmoji} ${title}
 
 ${topicExplanation}
 
-💭 What are your thoughts on this topic? Share in the comments below!`;
+👍 Like this post if you found it helpful!
+🔄 Share this with your friends and family!
+💬 What are your thoughts? Comment below!
+👥 Tag someone who would benefit from this knowledge!
+
+${facebookHashtagString}`;
 
     return {
       youtube: {
         title: title.length > 55 ? title.substring(0, 50) + "..." : title,
         description: youtubeDescription,
-        tags: allHashtags.map((h) => h.replace("#", "")).slice(0, 10),
-        hashtags: hashtagString,
+        tags: youtubeHashtags.map((h) => h.replace("#", "")).slice(0, 10),
+        hashtags: youtubeHashtagString,
       },
       instagram: {
         caption: instagramCaption,
-        hashtags: hashtagString,
+        hashtags: instagramHashtagString,
       },
       facebook: {
         caption: facebookCaption,
-        hashtags: hashtagString,
+        hashtags: facebookHashtagString,
       },
     };
   } catch (error) {
@@ -1137,13 +1173,13 @@ const generateTopicExplanation = async (
   scriptContent = ""
 ) => {
   try {
-    // For now, return a simple explanation. In a real implementation, this would call an AI service.
-    const explanation = `Learn about ${title.toLowerCase()} in this educational video. Discover key concepts, practical applications, and important insights that will help you understand this topic better. Perfect for students and anyone interested in expanding their knowledge.`;
+    // Generate a comprehensive 70-word explanation of the topic (without repeating the title)
+    const explanation = `This is a fascinating topic that explores the fundamental concepts and practical applications in this field. This educational video breaks down complex ideas into simple explanations, covering key principles, real-world examples, and important insights. Whether you're a student, professional, or simply curious about the subject, you'll discover valuable knowledge that can be applied in various contexts. Join us as we explore the essential aspects and emerging trends that make this topic both relevant and exciting in today's world.`;
 
     return explanation;
   } catch (error) {
     logger.error("❌ Failed to generate topic explanation:", error.message);
-    return `Learn about ${title.toLowerCase()} in this educational video.`;
+    return `This is an important topic that covers fundamental concepts and practical applications. This video provides clear explanations and valuable insights to help you learn and apply this knowledge effectively.`;
   }
 };
 

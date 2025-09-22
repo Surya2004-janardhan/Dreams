@@ -955,6 +955,49 @@ const generateImages = async (subtitlesPath, scriptContent = null) => {
   }
 };
 
+/**
+ * Generate a single title-based image for video overlay
+ * Creates a 9:8 aspect ratio image with white background and minimal title text
+ */
+const generateTitleImage = async (title) => {
+  try {
+    logger.info(`🎨 Generating title image for: "${title}"`);
+
+    // Create prompt for minimal title image
+    const prompt = `Create a clean, minimal image with white background. The image should be 9:8 aspect ratio. Display only the title text: "${title}". Use simple, bold typography. No diagrams, no structures, no logos - just the text on white background. Make it look like a clean title card for educational content.`;
+
+    // Get API key for images
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY not found in environment variables");
+    }
+
+    const imagePath = await generateImageWithGemini(prompt, 1, apiKey);
+
+    logger.info(`✅ Title image generated: ${imagePath}`);
+    return imagePath;
+  } catch (error) {
+    logger.error(`❌ Failed to generate title image:`, error.message);
+
+    // Fallback: create a simple text-based image
+    try {
+      const fallbackPath = path.resolve("images/title_fallback.png");
+
+      // For now, use the default image as fallback
+      const defaultImagePath = path.resolve("videos/default-image.jpg");
+      if (fs.existsSync(defaultImagePath)) {
+        fs.copyFileSync(defaultImagePath, fallbackPath);
+        logger.info(`✅ Fallback title image created: ${fallbackPath}`);
+        return fallbackPath;
+      }
+    } catch (fallbackError) {
+      logger.error(`❌ Fallback image creation failed:`, fallbackError.message);
+    }
+
+    throw error;
+  }
+};
+
 module.exports = {
   generateImages,
   parseSRTFile,
@@ -964,4 +1007,5 @@ module.exports = {
   generateSimpleImagePrompts,
   generateImageWithGemini,
   generateImagePromptsWithGemini,
+  generateTitleImage,
 };
