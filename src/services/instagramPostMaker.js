@@ -97,10 +97,14 @@ class InstagramPostMaker {
       );
       logger.info(`✅ Carousel published successfully: ${publishResult.id}`);
 
+      // Step 4: Get the proper permalink URL using the media ID
+      logger.info("🔗 Getting Instagram permalink...");
+      const permalink = await this.getInstagramPermalink(publishResult.id);
+
       return {
         success: true,
         postId: publishResult.id,
-        url: `https://www.instagram.com/p/${publishResult.id}/`,
+        url: permalink,
         platform: "instagram",
         type: "carousel",
         imageCount: imageUrls.length,
@@ -431,6 +435,36 @@ class InstagramPostMaker {
         platform: "instagram",
         type: "single",
       };
+    }
+  }
+
+  async getInstagramPermalink(mediaId) {
+    try {
+      logger.info(`🔗 Getting Instagram permalink for media: ${mediaId}`);
+
+      const url = `${this.baseUrl}/${this.apiVersion}/${mediaId}`;
+      const response = await axios.get(url, {
+        params: {
+          fields: "permalink",
+          access_token: this.accessToken,
+        },
+      });
+
+      if (response.data && response.data.permalink) {
+        logger.info(
+          `✅ Instagram permalink retrieved: ${response.data.permalink}`
+        );
+        return response.data.permalink;
+      } else {
+        throw new Error("No permalink found in response");
+      }
+    } catch (error) {
+      logger.error(
+        `❌ Failed to get Instagram permalink for ${mediaId}:`,
+        error.message
+      );
+      // Return null so the calling code can handle the fallback
+      return null;
     }
   }
 }

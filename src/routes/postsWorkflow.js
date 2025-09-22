@@ -384,27 +384,27 @@ const generateCarouselSlides = async (taskData) => {
         // Start with title filter
         const filters = [];
 
-        // Add title (centered at top) - 16px solid grey with Montserrat-Black
+        // Add title (centered at top) - 22px bold grey with Montserrat-Black
         if (fs.existsSync(montserratBlackFont)) {
           filters.push(
-            `drawtext=text='${cleanTitle}':fontfile='${montserratBlackFont}':fontsize=16:fontcolor=0x808080:x=(w-text_w)/2:y=40`
+            `drawtext=text='${cleanTitle}':fontfile='${montserratBlackFont}':fontsize=22:fontcolor=0x808080:x=(w-text_w)/2:y=40:shadowcolor=black:shadowx=1:shadowy=1`
           );
         } else {
           filters.push(
-            `drawtext=text='${cleanTitle}':fontsize=16:fontcolor=0x808080:x=(w-text_w)/2:y=40`
+            `drawtext=text='${cleanTitle}':fontsize=22:fontcolor=0x808080:x=(w-text_w)/2:y=40:shadowcolor=black:shadowx=1:shadowy=1`
           );
         }
 
-        // Add content lines (each line 25px below the previous) - 14px solid black with IBM-Regular
+        // Add content lines (each line 30px below the previous) - 18px bold black with IBM-Regular
         contentLines.forEach((line, index) => {
-          const yPosition = 90 + index * 25;
+          const yPosition = 100 + index * 30;
           if (fs.existsSync(ibmPlexFont)) {
             filters.push(
-              `drawtext=text='${line}':fontfile='${ibmPlexFont}':fontsize=14:fontcolor=0x000000:x=50:y=${yPosition}`
+              `drawtext=text='${line}':fontfile='${ibmPlexFont}':fontsize=18:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1`
             );
           } else {
             filters.push(
-              `drawtext=text='${line}':fontsize=14:fontcolor=0x000000:x=50:y=${yPosition}`
+              `drawtext=text='${line}':fontsize=18:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1`
             );
           }
         });

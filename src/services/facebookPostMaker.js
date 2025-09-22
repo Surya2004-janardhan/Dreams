@@ -71,10 +71,14 @@ class FacebookPostMaker {
       );
       logger.info(`✅ Facebook carousel posted successfully: ${postResult.id}`);
 
+      // Get proper Facebook URL using post ID extraction
+      logger.info("🔗 Getting Facebook post URL...");
+      const facebookUrl = this.getFacebookPostUrl(postResult.id);
+
       return {
         success: true,
         postId: postResult.id,
-        url: `https://www.facebook.com/${this.pageId}/posts/${postResult.id}`,
+        url: facebookUrl,
         platform: "facebook",
         type: "carousel",
         imageCount: imageUrls.length,
@@ -202,12 +206,13 @@ class FacebookPostMaker {
       });
 
       logger.info("✅ Facebook single post created successfully!");
+      const facebookUrl = this.getFacebookPostUrl(
+        response.data.post_id || response.data.id
+      );
       return {
         success: true,
         postId: response.data.post_id || response.data.id,
-        permalink: `https://www.facebook.com/${this.pageId}/posts/${
-          response.data.post_id || response.data.id
-        }`,
+        permalink: facebookUrl,
         platform: "facebook",
         type: "single",
       };
@@ -239,10 +244,11 @@ class FacebookPostMaker {
       });
 
       logger.info("✅ Facebook text post created successfully!");
+      const facebookUrl = this.getFacebookPostUrl(response.data.id);
       return {
         success: true,
         postId: response.data.id,
-        permalink: `https://www.facebook.com/${this.pageId}/posts/${response.data.id}`,
+        permalink: facebookUrl,
         platform: "facebook",
         type: "text",
       };
@@ -372,6 +378,38 @@ class FacebookPostMaker {
         photoIds: photoIds,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Extract Facebook post URL from post ID
+   * Facebook returns compound IDs in format {page-id}_{post-id}
+   * @param {string} postId - Full post ID from Facebook API
+   * @returns {string} - Proper Facebook post URL
+   */
+  getFacebookPostUrl(postId) {
+    try {
+      // Facebook post IDs are in format "page_id_post_id"
+      // We need to extract the post_id part for the URL
+      const parts = postId.split("_");
+      if (parts.length >= 2) {
+        const actualPostId = parts[1]; // Get the post ID part
+        const url = `https://www.facebook.com/${actualPostId}`;
+        logger.info(`🔗 Facebook URL constructed: ${url}`);
+        return url;
+      } else {
+        // Fallback to original format if splitting doesn't work
+        const url = `https://www.facebook.com/${this.pageId}/posts/${postId}`;
+        logger.warn(`⚠️ Using fallback Facebook URL format: ${url}`);
+        return url;
+      }
+    } catch (error) {
+      logger.error(
+        `❌ Error constructing Facebook URL for ${postId}:`,
+        error.message
+      );
+      // Return fallback URL
+      return `https://www.facebook.com/${this.pageId}/posts/${postId}`;
     }
   }
 }
