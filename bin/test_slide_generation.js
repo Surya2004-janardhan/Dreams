@@ -76,11 +76,9 @@ function wrapText(text, fontSize, hasMargins = false) {
   // More precise character width calculation for exact margin usage
   const avgCharWidth = fontSize * 0.42; // Slightly adjusted for better justification
 
-  // Calculate available width considering 9% margins
+  // Calculate available width considering 3% left/right margins for both title and content
   const baseWidth = 1080; // Typical slide width
-  const availableWidth = hasMargins
-    ? baseWidth * 0.88 // 88% width (9% left + 3% right effective margin) - 1% less space on right
-    : baseWidth * 0.82; // 82% width for title (9% left + 9% right margins) - same margins
+  const availableWidth = baseWidth * 0.94; // 94% width (3% left + 3% right margins)
 
   const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
   const words = text.split(" ");
@@ -129,9 +127,8 @@ async function generateSlide(title, content, slideNumber) {
   );
   const contentFont = path.join(__dirname, "../fonts/IBMPlexSerif-Regular.ttf");
 
-  // Calculate text wrapping based on content area with borders
-  // Title has 9% left/right margins, content has 9% left/right margins
-  const titleLines = wrapText(title, 57, false);
+  // Calculate text wrapping based on 3% left/right margins for both title and content
+  const titleLines = wrapText(title, 57, true);
   const contentLines = wrapText(content, 54, true);
 
   logger.info(`Title lines: ${JSON.stringify(titleLines)}`);
@@ -140,28 +137,38 @@ async function generateSlide(title, content, slideNumber) {
 
   let filters = [];
 
-  // Title positioning (with 5% left/right margins, centered) - using FFmpeg built-in extra bold font
+  // Helper to sanitize text for FFmpeg drawtext (escape single quotes)
+  function sanitizeFFmpegText(str) {
+    return str.replace(/'/g, "\\'");
+  }
+
+  // Title positioning (with 3% left margin, left-aligned) - use fontfile for reliability
   let yPosition = 100;
-  // line spacing
   titleLines.forEach((line, index) => {
-    filters.push(
-      `drawtext=text='${line}':fontsize=57:fontcolor=#808080:x=(w-text_w)/2:y=${
-        yPosition + index * 71
-      }:font='Arial Black'`
-    );
+    if (line && line.trim()) {
+      filters.push(
+        `drawtext=fontfile='${contentFont}':text='${sanitizeFFmpegText(
+          line
+        )}':fontsize=57:fontcolor=#808080:x=(w*0.03):y=${
+          yPosition + index * 71
+        }`
+      );
+    }
   });
 
-  // Content positioning with increased 9% margins (9% left/right/bottom, 17% top)
-  // Start content after title with increased 5% top margin
-  yPosition = titleLines.length * 71 + 204; // Increased spacing after title (+54px for 5% more top margin)
+  // Content positioning with 3% left margin
+  yPosition = titleLines.length * 71 + 204; // Spacing after title
 
   contentLines.forEach((line, index) => {
-    // Position content with 9% left margin - justified appearance through better wrapping
-    filters.push(
-      `drawtext=fontfile='${contentFont}':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
-        yPosition + index * 67
-      }`
-    );
+    if (line && line.trim()) {
+      filters.push(
+        `drawtext=fontfile='${contentFont}':text='${sanitizeFFmpegText(
+          line
+        )}':fontsize=54:fontcolor=#000000:x=(w*0.03):y=${
+          yPosition + index * 67
+        }`
+      );
+    }
   });
 
   const filterString = filters.join(",");
