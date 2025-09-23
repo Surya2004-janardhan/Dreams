@@ -74,12 +74,12 @@ async function fetchNotPostedRow() {
 
 function wrapText(text, fontSize, hasMargins = false) {
   // More precise character width calculation for exact margin usage
-  const avgCharWidth = fontSize * 0.45; // Fine-tuned for precise width calculation
+  const avgCharWidth = fontSize * 0.42; // Slightly adjusted for better justification
 
   // Calculate available width considering 9% margins
   const baseWidth = 1080; // Typical slide width
   const availableWidth = hasMargins
-    ? baseWidth * 0.89 // 89% width (9% left + 2% right effective margin) - 2% more space on right
+    ? baseWidth * 0.88 // 88% width (9% left + 3% right effective margin) - 1% less space on right
     : baseWidth * 0.82; // 82% width for title (9% left + 9% right margins) - same margins
 
   const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
@@ -96,6 +96,17 @@ function wrapText(text, fontSize, hasMargins = false) {
     } else {
       // Line would be too long, start a new line
       if (currentLine) {
+        // For justification effect, try to balance the line length
+        const targetLength = Math.floor(maxCharsPerLine * 0.85); // Target 85% of max length
+        if (currentLine.length < targetLength && words.length > 0) {
+          // Try to add one more word if line is too short
+          const nextWord = word;
+          if ((currentLine + " " + nextWord).length <= maxCharsPerLine) {
+            currentLine = currentLine + " " + nextWord;
+            // Skip this word in next iteration
+            continue;
+          }
+        }
         lines.push(currentLine);
       }
       currentLine = word;
@@ -116,12 +127,11 @@ async function generateSlide(title, content, slideNumber) {
     __dirname,
     "../slides/slide_" + slideNumber + ".png"
   );
-  const titleFont = path.join(__dirname, "../fonts/Montserrat-Bold.ttf");
   const contentFont = path.join(__dirname, "../fonts/IBMPlexSerif-Regular.ttf");
 
   // Calculate text wrapping based on content area with borders
   // Title has 9% left/right margins, content has 9% left/right margins
-  const titleLines = wrapText(title, 68, false);
+  const titleLines = wrapText(title, 57, false);
   const contentLines = wrapText(content, 54, true);
 
   logger.info(`Title lines: ${JSON.stringify(titleLines)}`);
@@ -130,14 +140,14 @@ async function generateSlide(title, content, slideNumber) {
 
   let filters = [];
 
-  // Title positioning (with 5% left/right margins, centered)
+  // Title positioning (with 5% left/right margins, centered) - using FFmpeg built-in extra bold font
   let yPosition = 100;
   // line spacing
   titleLines.forEach((line, index) => {
     filters.push(
-      `drawtext=fontfile='${titleFont}':text='${line}':fontsize=68:fontcolor=#808080:x=(w-text_w)/2:y=${
+      `drawtext=text='${line}':fontsize=57:fontcolor=#808080:x=(w-text_w)/2:y=${
         yPosition + index * 71
-      }`
+      }:font='Arial Black'`
     );
   });
 
@@ -146,7 +156,7 @@ async function generateSlide(title, content, slideNumber) {
   yPosition = titleLines.length * 71 + 204; // Increased spacing after title (+54px for 5% more top margin)
 
   contentLines.forEach((line, index) => {
-    // Position content with 9% left margin (balanced with 9% right margin)
+    // Position content with 9% left margin - justified appearance through better wrapping
     filters.push(
       `drawtext=fontfile='${contentFont}':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
         yPosition + index * 67

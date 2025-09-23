@@ -285,17 +285,19 @@ Timestamp: ${new Date().toISOString()}
 });
 
 /**
- * Generate 3 carousel slides with text overlays on Post-Base-Image.jpg
+ * Generate 3 carousel slides with optimized text overlays using exact test_slide_generation.js logic
  * @param {Object} taskData - Task data with title, slide1, slide2, slide3
  * @returns {Promise<Array>} - Array of generated image paths
  */
 const generateCarouselSlides = async (taskData) => {
   const slidesDir = path.join(__dirname, "../../slides");
 
-  logger.info(`🎨 Starting slide generation for: ${taskData.title}`);
+  logger.info(`🎨 Starting optimized slide generation for: ${taskData.title}`);
   logger.info(`📄 Using base image: Post-Base-Image.png from videos folder`);
-  logger.info(`🎨 Title style: 16px solid grey with Montserrat-Black font`);
-  logger.info(`📝 Content style: 14px solid black with IBM-Regular font`);
+  logger.info(`🎨 Title style: 57px Arial Black grey with 9% margins`);
+  logger.info(
+    `📝 Content style: 54px IBM Plex black with 9% margins and justification`
+  );
 
   // Ensure slides directory exists
   if (!fs.existsSync(slidesDir)) {
@@ -316,25 +318,66 @@ const generateCarouselSlides = async (taskData) => {
   const timestamp = Date.now();
 
   // Font paths
-  const montserratBlackFont = path.join(
-    __dirname,
-    "../../fonts/Montserrat-Black.ttf"
-  );
   const ibmPlexFont = path.join(
     __dirname,
     "../../fonts/IBMPlexSerif-Regular.ttf"
   );
 
   // Check if fonts exist
-  if (!fs.existsSync(montserratBlackFont)) {
-    logger.warn(
-      `⚠️ Montserrat Black font not found: ${montserratBlackFont}, using default font`
-    );
-  }
   if (!fs.existsSync(ibmPlexFont)) {
     logger.warn(
       `⚠️ IBM Plex font not found: ${ibmPlexFont}, using default font`
     );
+  }
+
+  // Optimized text wrapping function from test_slide_generation.js
+  function wrapText(text, fontSize, hasMargins = false) {
+    // More precise character width calculation for exact margin usage
+    const avgCharWidth = fontSize * 0.42; // Slightly adjusted for better justification
+
+    // Calculate available width considering 9% margins
+    const baseWidth = 1080; // Typical slide width
+    const availableWidth = hasMargins
+      ? baseWidth * 0.88 // 88% width (9% left + 3% right effective margin) - 1% less space on right
+      : baseWidth * 0.82; // 82% width for title (9% left + 9% right margins) - same margins
+
+    const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
+    const words = text.split(" ");
+    const lines = [];
+    let currentLine = "";
+
+    for (const word of words) {
+      const testLine = currentLine ? currentLine + " " + word : word;
+
+      // Check if adding this word would exceed the line width
+      if (testLine.length <= maxCharsPerLine) {
+        currentLine = testLine;
+      } else {
+        // Line would be too long, start a new line
+        if (currentLine) {
+          // For justification effect, try to balance the line length
+          const targetLength = Math.floor(maxCharsPerLine * 0.85); // Target 85% of max length
+          if (currentLine.length < targetLength && words.length > 0) {
+            // Try to add one more word if line is too short
+            const nextWord = word;
+            if ((currentLine + " " + nextWord).length <= maxCharsPerLine) {
+              currentLine = currentLine + " " + nextWord;
+              // Skip this word in next iteration
+              continue;
+            }
+          }
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      }
+    }
+
+    // Add the last line if it exists
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
   }
 
   // Generate 3 slides
@@ -358,89 +401,57 @@ const generateCarouselSlides = async (taskData) => {
         .replace(/['"]/g, "")
         .replace(/:/g, " ");
 
-      // Break long content into lines with dynamic length based on font size
-      const wrapText = (text, fontSize = 36) => {
-        // Adjust max characters per line based on font size (smaller value for bigger fonts)
-        const maxCharsPerLine = Math.floor(1000 / fontSize); // Dynamic calculation
+      // Calculate text wrapping based on content area with borders
+      // Title has 9% left/right margins, content has 9% left/right margins
+      const titleLines = wrapText(cleanTitle, 57, false);
+      const contentLines = wrapText(cleanContent, 54, true);
 
-        logger.info(
-          `📏 Using ${maxCharsPerLine} characters per line with font size ${fontSize}`
+      logger.info(`Title lines: ${JSON.stringify(titleLines)}`);
+      logger.info(`Content lines: ${JSON.stringify(contentLines)}`);
+      logger.info(`Content length: ${cleanContent.length}`);
+
+      let filters = [];
+
+      // Title positioning (with 9% left/right margins, centered) - using FFmpeg built-in Arial Black font
+      let yPosition = 100;
+      titleLines.forEach((line, index) => {
+        filters.push(
+          `drawtext=text='${line}':fontsize=57:fontcolor=#808080:x=(w-text_w)/2:y=${
+            yPosition + index * 71
+          }:font='Arial Black'`
         );
+      });
 
-        const words = text.split(" ");
-        const lines = [];
-        let currentLine = "";
+      // Content positioning with 9% margins (9% left/right/bottom, 17% top)
+      // Start content after title with increased 5% top margin
+      yPosition = titleLines.length * 71 + 204; // Increased spacing after title (+54px for 5% more top margin)
 
-        for (const word of words) {
-          if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
-            currentLine += (currentLine ? " " : "") + word;
-          } else {
-            if (currentLine) lines.push(currentLine);
-            currentLine = word;
-          }
+      contentLines.forEach((line, index) => {
+        // Position content with 9% left margin - justified appearance through better wrapping
+        if (fs.existsSync(ibmPlexFont)) {
+          filters.push(
+            `drawtext=fontfile='${ibmPlexFont}':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
+              yPosition + index * 67
+            }`
+          );
+        } else {
+          // Fallback but log warning
+          logger.warn("⚠️ IBM Plex font not found, using system font");
+          filters.push(
+            `drawtext=text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
+              yPosition + index * 67
+            }`
+          );
         }
-        if (currentLine) lines.push(currentLine);
-        return lines;
-      };
+      });
 
-      // Use font size 36 (2x original) for text wrapping calculations
-      const contentLines = wrapText(cleanContent, 36);
+      const filterString = filters.join(",");
 
       await new Promise((resolve, reject) => {
-        let ffmpegCommand = ffmpeg(baseImagePath);
-
-        // Start with title filter
-        const filters = [];
-
-        // Process title with wrapping
-        const titleFontSize = 44; // 2x original
-        const titleLines = wrapText(cleanTitle, titleFontSize);
-        logger.info(`📏 Title split into ${titleLines.length} lines`);
-
-        // Add each title line
-        titleLines.forEach((titleLine, tIndex) => {
-          const titleYPos = 40 + tIndex * 60; // Space between title lines
-
-          if (fs.existsSync(montserratBlackFont)) {
-            filters.push(
-              `drawtext=text='${titleLine}':fontfile='${montserratBlackFont}':fontsize=${titleFontSize}:fontcolor=0x808080:x=(w-text_w)/2:y=${titleYPos}:shadowcolor=black:shadowx=1:shadowy=1:line_spacing=10`
-            );
-          } else {
-            // Fallback but still try to use Montserrat-Black
-            logger.warn(
-              "⚠️ Montserrat-Black font not found, using system font"
-            );
-            filters.push(
-              `drawtext=text='${titleLine}':fontsize=${titleFontSize}:fontcolor=0x808080:x=(w-text_w)/2:y=${titleYPos}:shadowcolor=black:shadowx=1:shadowy=1:line_spacing=10`
-            );
-          }
-        });
-
-        // Calculate content start position based on title lines
-        const titleHeight = 40 + titleLines.length * 60; // Title area height
-        const contentStartY = titleHeight + 60; // Start content 60px below the last title line
-
-        // Add content lines (each line 60px below the previous) - 36px bold black with IBM Plex (2x original 18px)
-        contentLines.forEach((line, index) => {
-          const yPosition = contentStartY + index * 50; // Slightly reduced spacing between content lines
-          if (fs.existsSync(ibmPlexFont)) {
-            filters.push(
-              `drawtext=text='${line}':fontfile='${ibmPlexFont}':fontsize=36:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1:line_spacing=10`
-            );
-          } else {
-            // Fallback but log warning
-            logger.warn("⚠️ IBM Plex font not found, using system font");
-            filters.push(
-              `drawtext=text='${line}':fontsize=36:fontcolor=0x000000:x=50:y=${yPosition}:shadowcolor=0x808080:shadowx=1:shadowy=1:line_spacing=10`
-            );
-          }
-        });
-
-        ffmpegCommand.videoFilters(filters);
-
-        ffmpegCommand
-          .outputOptions(["-q:v", "2"])
-          .output(outputPath)
+        ffmpeg(baseImagePath)
+          .videoFilters(filterString)
+          .outputOptions("-frames:v 1")
+          .save(outputPath)
           .on("end", () => {
             logger.info(
               `✅ Slide ${i} generated: ${path.basename(outputPath)}`
@@ -451,8 +462,7 @@ const generateCarouselSlides = async (taskData) => {
           .on("error", (err) => {
             logger.error(`❌ Slide ${i} generation failed:`, err.message);
             reject(new Error(`Slide ${i} generation failed: ${err.message}`));
-          })
-          .run();
+          });
       });
     } catch (slideGenError) {
       logger.error(`❌ Error generating slide ${i}:`, slideGenError.message);

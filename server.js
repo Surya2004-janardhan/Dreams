@@ -16,6 +16,7 @@ const audioRoutes = require("./src/routes/audio");
 const imageRoutes = require("./src/routes/images");
 const videoRoutes = require("./src/routes/video");
 const postsWorkflowRoutes = require("./src/routes/postsWorkflow");
+const carouselRoutes = require("./src/routes/carousel");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,6 +39,7 @@ app.use("/audio", audioRoutes);
 app.use("/images", imageRoutes);
 app.use("/video", videoRoutes);
 app.use("/posts-workflow", postsWorkflowRoutes);
+app.use("/api/carousel", carouselRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
@@ -59,6 +61,9 @@ app.get("/", (req, res) => {
         "/workflow/run - Manual content creation with title/description",
       posts_workflow:
         "/posts-workflow - Create carousel posts for Instagram and Facebook",
+      carousel_workflow:
+        "/api/carousel/generate-and-post - Generate slides and post carousel to social media",
+      carousel_status: "/api/carousel/status - Check carousel system status",
       status: "/workflow/status - Get current workflow status",
       script: "/script/generate - Generate conversation script only",
       audio: "/audio/generate - Generate audio from script only",
