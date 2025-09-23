@@ -4,10 +4,7 @@
   "description": "AI Content Automation Workflow v2.0 - Clean Architecture with Routes, Controllers, and Services",
   "main": "server.js",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "setup": "node setup.js",
+    "start": "node server.js",
     "test-setup": "node test-setup.js",
     "logs": "tail -f combined.log",
     "old": "node server-old.js"
