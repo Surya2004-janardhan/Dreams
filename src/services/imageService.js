@@ -30,7 +30,7 @@ const generateImagePrompt = async (title) => {
 
     logger.info(`🤖 Generating enhanced prompt for title: "${title}"`);
 
-    const prompt = `Create a detailed image generation prompt for a professional educational title card.
+    const prompt = `Create a detailed image generation prompt for a professional educational title card with relevant visual elements.
 
 TITLE: "${title}"
 
@@ -40,11 +40,23 @@ REQUIREMENTS:
 - Bold, readable typography (equivalent to 57px Arial Black style)
 - Professional educational appearance
 - Centered text layout for optimal video overlay positioning
-- Minimal design - no complex graphics, logos, or decorative elements
-- Perfect for 59-second educational video content
-- Text should be clearly readable when overlaid on video
 
-Generate a precise prompt for AI image generation:`;
+VISUAL ENHANCEMENT:
+- Add minimal, relevant visual elements that relate to the video topic/keywords
+- Include subtle icons, symbols, or simple graphics that represent the main theme
+- Keep visual elements small and positioned around the title text (not blocking it)
+- Use modern, clean design with professional color scheme
+- Visual elements should be educational and topic-appropriate
+- Maximum 2-3 small visual elements to avoid clutter
+
+DESIGN GUIDELINES:
+- Title text remains the primary focus (70% of the design)
+- Visual elements complement but don't compete with text
+- Maintain high readability when overlaid on video
+- Perfect for 59-second educational video content
+- Professional appearance suitable for social media platforms
+
+Analyze the title to identify key themes and suggest appropriate minimal visual elements, then generate a precise prompt for AI image generation:`;
 
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -61,9 +73,21 @@ Generate a precise prompt for AI image generation:`;
   } catch (error) {
     logger.warn(`⚠️ Prompt enhancement failed: ${error.message}`);
 
-    // Fallback to optimized prompt matching our 57px font standards
-    const fallbackPrompt = `Create a clean, minimal image with white background. The image should be 9:8 aspect ratio. Display only the title text: "${title}". Use bold, professional typography equivalent to 57px Arial Black font for maximum readability. Center the text for optimal video overlay positioning. No diagrams, no logos, no decorative elements - just clean, bold text on white background. Perfect for educational video title card.`;
-    logger.info(`🔄 Using optimized fallback prompt`);
+    // Fallback to optimized prompt with topic-relevant visual elements
+    const fallbackPrompt = `Create a professional title card image with 9:8 aspect ratio and clean white background. 
+
+MAIN ELEMENT: Display the title text "${title}" in bold, professional typography equivalent to 57px Arial Black font, centered for optimal readability.
+
+VISUAL ENHANCEMENT: Add 1-2 small, relevant visual elements based on the title's topic:
+- If tech/AI related: subtle geometric patterns, circuit elements, or digital icons
+- If business/finance: clean graphs, charts, or professional symbols  
+- If health/fitness: simple wellness icons or organic shapes
+- If education/learning: book icons, lightbulb, or academic elements
+- If lifestyle/personal: minimalist lifestyle symbols or clean patterns
+
+DESIGN: Keep visual elements small (10-15% of image), positioned around title without blocking text. Use modern color palette with professional appearance. Perfect for educational video overlay and social media platforms.`;
+
+    logger.info(`🔄 Using enhanced fallback prompt with visual elements`);
     return fallbackPrompt;
   }
 };
@@ -138,31 +162,15 @@ const generateImageWithGemini = async (prompt, outputDir = null) => {
  * @returns {Promise<string>} - Path to fallback image
  */
 const createFallbackImage = async (title, outputDir = null) => {
-  try {
-    logger.info("🔄 Creating fallback image...");
-
-    const timestamp = Date.now();
-    const baseDir = outputDir || "images";
-    const fallbackPath = path.resolve(`${baseDir}/fallback_${timestamp}.jpg`);
-
-    // Ensure output directory exists
-    const imageDir = path.dirname(fallbackPath);
-    if (!fs.existsSync(imageDir)) {
-      fs.mkdirSync(imageDir, { recursive: true });
-    }
-
-    // Copy from default image
-    const defaultImagePath = path.resolve("videos/default-image.jpg");
-    if (fs.existsSync(defaultImagePath)) {
-      fs.copyFileSync(defaultImagePath, fallbackPath);
-      logger.info(`✅ Fallback image created: ${fallbackPath}`);
-      return fallbackPath;
-    }
-
+  // Always use the default image in videos folder as fallback
+  logger.info("🔄 Using default image from videos folder as fallback...");
+  const defaultImagePath = path.resolve("videos/default-image.jpg");
+  if (fs.existsSync(defaultImagePath)) {
+    logger.info(`✅ Using default image: ${defaultImagePath}`);
+    return defaultImagePath;
+  } else {
+    logger.error("❌ Default image not found in videos folder");
     throw new Error("Default image not found");
-  } catch (error) {
-    logger.error(`❌ Fallback creation failed: ${error.message}`);
-    throw error;
   }
 };
 

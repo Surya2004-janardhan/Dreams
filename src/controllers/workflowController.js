@@ -105,32 +105,59 @@ const runCompleteWorkflow = async (taskData) => {
     let images = [];
     try {
       // Generate single title image from the idea/title
-      const titleImagePath = await generateTitleImage(taskData.idea);
-      logger.info(`✓ Title image generated successfully: ${titleImagePath}`);
+      const titleImageResult = await generateTitleImage(taskData.idea);
 
-      // Create image structure for video processing (single image, stays throughout video)
-      images = [
-        {
-          index: 1,
-          filename: titleImagePath,
-          concept: taskData.idea,
-          timing: {
-            startTime: 0, // Start from beginning
-            endTime: 59, // Stay until end of video (59 seconds for Instagram limit)
-          },
-        },
-      ];
-    } catch (error) {
-      logger.warn(`⚠️ Title image generation failed: ${error.message}`);
-      logger.info("🔄 Using default image as fallback...");
+      if (titleImageResult.success && titleImageResult.imagePath) {
+        logger.info(
+          `✓ Title image generated successfully: ${titleImageResult.imagePath}`
+        );
+        logger.info(`📝 Used fallback: ${titleImageResult.usedDefault}`);
 
-      // Use default image as fallback
-      const defaultImagePath = path.join("videos", "default-image.jpg");
-      if (fs.existsSync(defaultImagePath)) {
+        // Create image structure for video processing (single image, stays throughout video)
         images = [
           {
             index: 1,
-            filename: defaultImagePath,
+            filename: titleImageResult.imagePath,
+            concept: taskData.idea,
+            timing: {
+              startTime: 0, // Start from beginning
+              endTime: 59, // Stay until end of video (59 seconds for Instagram limit)
+            },
+          },
+        ];
+      } else {
+        throw new Error(titleImageResult.error || "Image generation failed");
+      }
+    } catch (error) {
+      logger.warn(`⚠️ Title image generation failed: ${error.message}`);
+      logger.info(
+        "🔄 Trying to use an image from images folder as fallback..."
+      );
+
+      // Try to use any image from images folder
+      const imagesDir = path.join(__dirname, "../../images");
+      let fallbackImagePath = null;
+      if (fs.existsSync(imagesDir)) {
+        const imageFiles = fs
+          .readdirSync(imagesDir)
+          .filter((f) => f.match(/\.(jpg|jpeg|png)$/i));
+        if (imageFiles.length > 0) {
+          // Use the most recent image (by mtime)
+          const sorted = imageFiles
+            .map((f) => ({
+              file: f,
+              mtime: fs.statSync(path.join(imagesDir, f)).mtime.getTime(),
+            }))
+            .sort((a, b) => b.mtime - a.mtime);
+          fallbackImagePath = path.join(imagesDir, sorted[0].file);
+          logger.info(`✓ Using image from images folder: ${fallbackImagePath}`);
+        }
+      }
+      if (fallbackImagePath && fs.existsSync(fallbackImagePath)) {
+        images = [
+          {
+            index: 1,
+            filename: fallbackImagePath,
             concept: taskData.idea,
             timing: {
               startTime: 0,
@@ -138,10 +165,27 @@ const runCompleteWorkflow = async (taskData) => {
             },
           },
         ];
-        logger.info("✓ Default image set as fallback");
+        logger.info("✓ Fallback image from images folder set");
       } else {
-        logger.warn("⚠️ No fallback image available");
-        images = [];
+        // Use default image as last resort
+        const defaultImagePath = path.join("videos", "default-image.jpg");
+        if (fs.existsSync(defaultImagePath)) {
+          images = [
+            {
+              index: 1,
+              filename: defaultImagePath,
+              concept: taskData.idea,
+              timing: {
+                startTime: 0,
+                endTime: 59,
+              },
+            },
+          ];
+          logger.info("✓ Default image set as fallback");
+        } else {
+          logger.warn("⚠️ No fallback image available");
+          images = [];
+        }
       }
     }
 
