@@ -13,10 +13,7 @@ yarn-error.log*
 
 # Generated files
 temp/
-audio/
-images/
-videos/
-subtitles/
+
 
 test-setup.js
 z_backup.js
@@ -24,8 +21,7 @@ setup.js
 # Logs
 *.log
 logs/
-error.log
-combined.log
+=
 
 # Operating System
 .DS_Store

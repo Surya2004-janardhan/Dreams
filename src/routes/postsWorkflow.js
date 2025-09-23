@@ -24,7 +24,16 @@ const logger = require("../config/logger");
  * POST /posts-workflow
  * Automated carousel posting workflow - reads from sheet and posts to all platforms
  */
+const ensureDirs = (dirs) => {
+  dirs.forEach((dir) => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+};
+
 router.post("/", async (req, res) => {
+  ensureDirs([path.join(__dirname, "../../slides")]);
   const startTime = Date.now();
   let taskData = null;
   let slideImages = [];
