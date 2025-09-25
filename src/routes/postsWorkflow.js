@@ -24,16 +24,8 @@ const logger = require("../config/logger");
  * POST /posts-workflow
  * Automated carousel posting workflow - reads from sheet and posts to all platforms
  */
-const ensureDirs = (dirs) => {
-  dirs.forEach((dir) => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  });
-};
-
+// ...existing code...
 router.post("/", async (req, res) => {
-  ensureDirs([path.join(__dirname, "../../slides")]);
   const startTime = Date.now();
   let taskData = null;
   let slideImages = [];
@@ -308,11 +300,7 @@ const generateCarouselSlides = async (taskData) => {
     `📝 Content style: 54px IBM Plex black with 9% margins and justification`
   );
 
-  // Ensure slides directory exists
-  if (!fs.existsSync(slidesDir)) {
-    fs.mkdirSync(slidesDir, { recursive: true });
-    logger.info("📁 Created slides directory");
-  }
+  // ...existing code...
 
   const baseImagePath = path.join(
     __dirname,
