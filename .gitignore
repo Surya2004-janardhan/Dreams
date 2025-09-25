@@ -12,7 +12,6 @@ yarn-error.log*
 .env.production.local
 
 # Generated files
-temp/
 
 
 test-setup.js
@@ -39,7 +38,7 @@ dist/
 build/
 
 # Service account keys
-*.json
+
 !package*.json
 
 # Temporary files

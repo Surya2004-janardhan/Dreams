@@ -5,35 +5,27 @@ const logger = require("../config/logger");
 /**
  * Clean up files in a directory while preserving certain files
  */
-const cleanDirectory = async (dirPath, preserveFiles = []) => {
+const cleanDirectory = async (dirPath) => {
   try {
-    if (!fs.existsSync(dirPath)) {
-      logger.info(`Directory ${dirPath} does not exist, skipping cleanup`);
-      return { success: true, filesDeleted: 0 };
-    }
-
-    const files = fs.readdirSync(dirPath);
+    const files = fs.existsSync(dirPath) ? fs.readdirSync(dirPath) : [];
     let deletedCount = 0;
 
     for (const file of files) {
       const filePath = path.join(dirPath, file);
-      const shouldPreserve = preserveFiles.some((preserveFile) =>
-        file.toLowerCase().includes(preserveFile.toLowerCase())
-      );
-
-      if (!shouldPreserve) {
-        try {
-          const stat = fs.statSync(filePath);
-          if (stat.isFile()) {
-            fs.unlinkSync(filePath);
-            deletedCount++;
-            logger.info(`🗑️ Deleted: ${filePath}`);
-          }
-        } catch (error) {
-          logger.error(`Failed to delete ${filePath}:`, error.message);
-        }
-      } else {
+      // Always preserve 'z' file
+      if (file === "z" || file === "z.json") {
         logger.info(`📁 Preserved: ${filePath}`);
+        continue;
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.isFile()) {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+          logger.info(`🗑️ Deleted: ${filePath}`);
+        }
+      } catch (error) {
+        logger.error(`Failed to delete ${filePath}:`, error.message);
       }
     }
 
@@ -61,29 +53,12 @@ const cleanupAllMediaFolders = async () => {
     };
 
     // Clean audio folder (remove all generated audio files)
-    cleanupResults.audio = await cleanDirectory("audio", []);
-
-    // Clean images folder (remove all generated images)
-    cleanupResults.images = await cleanDirectory("images", []);
-
-    // Clean temp folder (remove all temporary files but preserve checkpoints)
-    cleanupResults.temp = await cleanDirectory("temp", ["checkpoint"]);
-
-    // Clean subtitles folder (remove all subtitle files)
-    cleanupResults.subtitles = await cleanDirectory("subtitles", []);
-
-    // Clean scripts folder (remove all generated script files)
-    cleanupResults.scripts = await cleanDirectory("scripts", []);
-
-    // Clean videos folder but preserve ALL essential files
-    cleanupResults.videos = await cleanDirectory("videos", [
-      "base",
-      "background",
-      "template",
-      "default-image",
-      "Base-vedio", // Preserve the actual base video file
-      "default-image.jpg", // Preserve the actual default image file
-    ]);
+    cleanupResults.audio = await cleanDirectory("audio");
+    cleanupResults.images = await cleanDirectory("images");
+    cleanupResults.temp = await cleanDirectory("temp");
+    cleanupResults.subtitles = await cleanDirectory("subtitles");
+    cleanupResults.scripts = await cleanDirectory("scripts");
+    cleanupResults.videos = await cleanDirectory("videos");
 
     // Clean root directory but preserve final video copies
     cleanupResults.root = await cleanupRootDirectory();
