@@ -25,8 +25,28 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Run server with environment variables
-        run: node server.js
+      - name: Run server and trigger endpoints
+        run: |
+          # Start server in the background
+          node server.js &
+          SERVER_PID=$!
+          echo "Server started with PID $SERVER_PID"
+
+          # Give server some time to start
+          sleep 5
+
+          # Hit the root route
+          curl -X GET http://localhost:${PORT:-3000}/
+
+          # Trigger POST request to /posts-workflow
+          curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+          # Wait for 5 minutes (300 seconds)
+          echo "Waiting 5 minutes..."
+          sleep 300
+
+          # Stop the server
+          kill $SERVER_PID
+          echo "Server stopped"
         env:
           PORT: ${{ secrets.PORT }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
@@ -47,6 +67,7 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+          TTS_ENABLED: ${{ secrets.TTS_ENABLED }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
