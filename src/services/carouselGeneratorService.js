@@ -185,12 +185,11 @@ class CarouselGeneratorService {
 
     let filters = [];
 
-    // Title positioning (with 5% left/right margins, centered) - using FFmpeg built-in extra bold font
+    // Title positioning (with 9% left/right margins, left aligned)
     let yPosition = 100;
-    // line spacing
     titleLines.forEach((line, index) => {
       filters.push(
-        `drawtext=text='${line}':fontsize=68:fontcolor=#808080:x=(w-text_w)/2:y=${
+        `drawtext=text='${line}':fontsize=68:fontcolor=#808080:x=(w*0.09):y=${
           yPosition + index * 71
         }:font='Arial Black'`
       );

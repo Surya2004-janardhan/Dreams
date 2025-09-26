@@ -8,6 +8,8 @@ const fs = require("fs");
 const path = require("path");
 
 const router = express.Router();
+// FFmpeg test route for debugging
+router.use(require("./testFFmpeg"));
 
 // function ensureDirs(dirs) {
 //   dirs.forEach((dir) => {

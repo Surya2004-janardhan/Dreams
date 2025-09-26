@@ -17,6 +17,7 @@ const imageRoutes = require("./src/routes/images");
 const videoRoutes = require("./src/routes/video");
 const postsWorkflowRoutes = require("./src/routes/postsWorkflow");
 const carouselRoutes = require("./src/routes/carousel");
+const testFFmpegRouter = require("./src/routes/testFFmpeg");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +41,7 @@ app.use("/images", imageRoutes);
 app.use("/video", videoRoutes);
 app.use("/posts-workflow", postsWorkflowRoutes);
 app.use("/api/carousel", carouselRoutes);
+app.use(testFFmpegRouter);
 
 // Health check endpoint
 app.get("/health", (req, res) => {
