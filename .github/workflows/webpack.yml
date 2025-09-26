@@ -37,7 +37,7 @@ jobs:
           # Trigger auto workflow at scheduled times
           if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
             echo "Triggering /workflow/auto"
-            curl -X GET http://localhost:${PORT:-3000}/workflow/auto
+            curl -X POST http://localhost:${PORT:-3000}/workflow/auto
           fi
 
           # Trigger posts workflow at scheduled times
