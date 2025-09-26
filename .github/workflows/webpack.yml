@@ -1,16 +1,18 @@
-name: NodeJS with FFmpeg
+name: NodeJS with FFmpeg - Scheduled Workflows
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  schedule:
+    # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
+    - cron: '30 2 * * *'
+    - cron: '30 14 * * *'
+    # workflow/posts-workflow timings (7:30 AM & 7:30 PM IST → 2:00 AM & 2:00 PM UTC)
+    - cron: '0 2 * * *'
+    - cron: '0 14 * * *'
   workflow_dispatch:
 
 jobs:
-  run-server:
+  run-workflows:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -27,26 +29,28 @@ jobs:
 
       - name: Run server and trigger endpoints
         run: |
-          # Start server in the background
           node server.js &
           SERVER_PID=$!
           echo "Server started with PID $SERVER_PID"
-
-          # Give server some time to start
           sleep 5
 
-          # Hit the root route
-          curl -X GET http://localhost:${PORT:-3000}/
+          # Trigger auto workflow at scheduled times
+          if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
+            echo "Triggering /workflow/auto"
+            curl -X GET http://localhost:${PORT:-3000}/workflow/auto
+          fi
 
-          # Trigger POST request to /posts-workflow
-          curl -X POST http://localhost:${PORT:-3000}/posts-workflow
-          # Wait for 5 minutes (300 seconds)
+          # Trigger posts workflow at scheduled times
+          if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
+            echo "Triggering /posts-workflow"
+            curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+          fi
+
           echo "Waiting 5 minutes..."
           sleep 300
-
-          # Stop the server
           kill $SERVER_PID
           echo "Server stopped"
+
         env:
           PORT: ${{ secrets.PORT }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
@@ -67,7 +71,6 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          TTS_ENABLED: ${{ secrets.TTS_ENABLED }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
