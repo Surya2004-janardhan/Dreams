@@ -121,9 +121,7 @@ class CarouselGeneratorService {
 
     // Calculate available width considering 9% margins
     const baseWidth = 1080; // Typical slide width
-    const availableWidth = hasMargins
-      ? baseWidth * 0.88 // 88% width (9% left + 3% right effective margin) - 1% less space on right
-      : baseWidth * 0.82; // 82% width for title (9% left + 9% right margins) - same margins
+    const availableWidth = baseWidth * 0.8; // 80% width for both title and content (strict equal margins)
 
     const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
     const words = text.split(" ");
@@ -185,27 +183,28 @@ class CarouselGeneratorService {
 
     let filters = [];
 
-    // Title positioning (with 9% left/right margins, left aligned)
+    // Title positioning (strict 9% left/right margins, centered in 75% width, with visible red box for debugging)
     let yPosition = 100;
+    const titleLineHeight = 71 * 1.02; // Increase by 2%
     titleLines.forEach((line, index) => {
       filters.push(
-        `drawtext=text='${line}':fontsize=68:fontcolor=#808080:x=(w*0.09):y=${
-          yPosition + index * 71
-        }:font='Arial Black'`
+        `drawtext=text='${line}':fontsize=70:fontcolor=#808080:x=(w*0.09)+((w*0.75)-text_w)/2:y=${
+          yPosition + index * titleLineHeight
+        }:font='Arial Black':box=1:boxcolor=red@0.5:boxborderw=0`
       );
     });
 
     // Content positioning with increased 9% margins (9% left/right/bottom, 17% top)
     // Start content after title with increased 5% top margin
-    yPosition = titleLines.length * 71 + 204; // Increased spacing after title (+54px for 5% more top margin)
-
+    yPosition = titleLines.length * titleLineHeight + 204; // Increased spacing after title (+54px for 5% more top margin)
+    const contentLineHeight = 67 * 1.02; // Increase by 2%
     contentLines.forEach((line, index) => {
       // Position content with 9% left margin - justified appearance through better wrapping
       filters.push(
         `drawtext=fontfile='${
           this.contentFont
         }':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
-          yPosition + index * 67
+          yPosition + index * contentLineHeight
         }`
       );
     });
