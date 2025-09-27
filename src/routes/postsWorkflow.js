@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const path = require("path");
 const fs = require("fs");
-const ffmpeg = require("fluent-ffmpeg");
 
 const SocialMediaPostingService = require("../services/socialMediaPostingService");
 const {
@@ -24,7 +23,6 @@ const logger = require("../config/logger");
  * POST /posts-workflow
  * Automated carousel posting workflow - reads from sheet and posts to all platforms
  */
-// ...existing code...
 router.post("/", async (req, res) => {
   const startTime = Date.now();
   let taskData = null;
@@ -291,185 +289,17 @@ Timestamp: ${new Date().toISOString()}
  * @returns {Promise<Array>} - Array of generated image paths
  */
 const generateCarouselSlides = async (taskData) => {
-  const slidesDir = path.join(__dirname, "../../slides");
+  const CarouselGeneratorService = require("../services/carouselGeneratorService");
+  const generator = new CarouselGeneratorService();
 
-  logger.info(`🎨 Starting optimized slide generation for: ${taskData.title}`);
-  logger.info(`📄 Using base image: Post-Base-Image.png from videos folder`);
-  logger.info(`🎨 Title style: 57px Arial Black grey with 9% margins`);
   logger.info(
-    `📝 Content style: 54px IBM Plex black with 9% margins and justification`
+    `🎨 Starting slide generation via external API for: ${taskData.title}`
   );
 
-  // ...existing code...
+  // Generate all 3 slides using the external API
+  const slidePaths = await generator.generateAllSlides(taskData);
 
-  const baseImagePath = path.join(
-    __dirname,
-    "../../videos/Post-Base-Image.png"
-  );
-
-  if (!fs.existsSync(baseImagePath)) {
-    throw new Error(`Base image not found: ${baseImagePath}`);
-  }
-
-  const slidePaths = [];
-  const timestamp = Date.now();
-
-  // Font paths
-  const ibmPlexFont = path.join(
-    __dirname,
-    "../../fonts/IBMPlexSerif-Regular.ttf"
-  );
-
-  // Check if fonts exist
-  if (!fs.existsSync(ibmPlexFont)) {
-    logger.warn(
-      `⚠️ IBM Plex font not found: ${ibmPlexFont}, using default font`
-    );
-  }
-
-  // Optimized text wrapping function from test_slide_generation.js
-  function wrapText(text, fontSize, hasMargins = false) {
-    // More precise character width calculation for exact margin usage
-    const avgCharWidth = fontSize * 0.42; // Slightly adjusted for better justification
-
-    // Calculate available width considering 9% margins
-    const baseWidth = 1080; // Typical slide width
-    const availableWidth = hasMargins
-      ? baseWidth * 0.88 // 88% width (9% left + 3% right effective margin) - 1% less space on right
-      : baseWidth * 0.82; // 82% width for title (9% left + 9% right margins) - same margins
-
-    const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
-    const words = text.split(" ");
-    const lines = [];
-    let currentLine = "";
-
-    for (const word of words) {
-      const testLine = currentLine ? currentLine + " " + word : word;
-
-      // Check if adding this word would exceed the line width
-      if (testLine.length <= maxCharsPerLine) {
-        currentLine = testLine;
-      } else {
-        // Line would be too long, start a new line
-        if (currentLine) {
-          // For justification effect, try to balance the line length
-          const targetLength = Math.floor(maxCharsPerLine * 0.85); // Target 85% of max length
-          if (currentLine.length < targetLength && words.length > 0) {
-            // Try to add one more word if line is too short
-            const nextWord = word;
-            if ((currentLine + " " + nextWord).length <= maxCharsPerLine) {
-              currentLine = currentLine + " " + nextWord;
-              // Skip this word in next iteration
-              continue;
-            }
-          }
-          lines.push(currentLine);
-        }
-        currentLine = word;
-      }
-    }
-
-    // Add the last line if it exists
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    return lines;
-  }
-
-  // Generate 3 slides
-  for (let i = 1; i <= 3; i++) {
-    try {
-      const slideContent = taskData[`slide${i}`] || "";
-      const outputPath = path.join(slidesDir, `slide_${timestamp}_${i}.jpg`);
-
-      logger.info(`🎨 Generating slide ${i}/3...`);
-      logger.info(
-        `📝 Slide ${i} content: "${slideContent.substring(0, 50)}${
-          slideContent.length > 50 ? "..." : ""
-        }"`
-      );
-
-      // Clean and escape text for FFmpeg
-      const cleanTitle = (taskData.title || "")
-        .replace(/['"]/g, "")
-        .replace(/:/g, " ");
-      const cleanContent = (slideContent || "")
-        .replace(/['"]/g, "")
-        .replace(/:/g, " ");
-
-      // Calculate text wrapping based on content area with borders
-      // Title has 9% left/right margins, content has 9% left/right margins
-      const titleLines = wrapText(cleanTitle, 57, false);
-      const contentLines = wrapText(cleanContent, 54, true);
-
-      logger.info(`Title lines: ${JSON.stringify(titleLines)}`);
-      logger.info(`Content lines: ${JSON.stringify(contentLines)}`);
-      logger.info(`Content length: ${cleanContent.length}`);
-
-      let filters = [];
-
-      // Title positioning (with 9% left/right margins, centered) - using FFmpeg built-in Arial Black font
-      let yPosition = 100;
-      titleLines.forEach((line, index) => {
-        filters.push(
-          `drawtext=text='${line}':fontsize=57:fontcolor=#808080:x=(w-text_w)/2:y=${
-            yPosition + index * 71
-          }:font='Arial Black'`
-        );
-      });
-
-      // Content positioning with 9% margins (9% left/right/bottom, 17% top)
-      // Start content after title with increased 5% top margin
-      yPosition = titleLines.length * 71 + 204; // Increased spacing after title (+54px for 5% more top margin)
-
-      contentLines.forEach((line, index) => {
-        // Position content with 9% left margin - justified appearance through better wrapping
-        if (fs.existsSync(ibmPlexFont)) {
-          filters.push(
-            `drawtext=fontfile='${ibmPlexFont}':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
-              yPosition + index * 67
-            }`
-          );
-        } else {
-          // Fallback but log warning
-          logger.warn("⚠️ IBM Plex font not found, using system font");
-          filters.push(
-            `drawtext=text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
-              yPosition + index * 67
-            }`
-          );
-        }
-      });
-
-      const filterString = filters.join(",");
-
-      await new Promise((resolve, reject) => {
-        ffmpeg(baseImagePath)
-          .videoFilters(filterString)
-          .outputOptions("-frames:v 1")
-          .save(outputPath)
-          .on("end", () => {
-            logger.info(
-              `✅ Slide ${i} generated: ${path.basename(outputPath)}`
-            );
-            slidePaths.push(outputPath);
-            resolve();
-          })
-          .on("error", (err) => {
-            logger.error(`❌ Slide ${i} generation failed:`, err.message);
-            reject(new Error(`Slide ${i} generation failed: ${err.message}`));
-          });
-      });
-    } catch (slideGenError) {
-      logger.error(`❌ Error generating slide ${i}:`, slideGenError.message);
-      throw new Error(
-        `Failed to generate slide ${i}: ${slideGenError.message}`
-      );
-    }
-  }
-
-  logger.info(`📸 Generated ${slidePaths.length} carousel slides successfully`);
+  logger.info(`✅ All slides generated successfully via external API`);
   return slidePaths;
 };
 

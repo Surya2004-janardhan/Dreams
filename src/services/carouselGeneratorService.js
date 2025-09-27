@@ -1,7 +1,7 @@
 require("dotenv").config();
 const { google } = require("googleapis");
 const logger = require("../config/logger");
-const ffmpeg = require("fluent-ffmpeg");
+const axios = require("axios");
 const path = require("path");
 const fs = require("fs");
 const SocialMediaPostingService = require("./socialMediaPostingService");
@@ -9,15 +9,6 @@ const {
   uploadCarouselImages,
   cleanupCarouselImages,
 } = require("./supabaseCarouselService");
-
-// Configure FFmpeg
-const ffmpegPath = require("ffmpeg-static");
-if (ffmpegPath) {
-  ffmpeg.setFfmpegPath(ffmpegPath);
-  logger.info("✅ FFmpeg configured successfully");
-} else {
-  logger.warn("⚠️ ffmpeg-static not found, using system FFmpeg");
-}
 
 /**
  * Carousel Generator Service
@@ -27,10 +18,6 @@ class CarouselGeneratorService {
   constructor() {
     this.socialMediaService = new SocialMediaPostingService();
     this.slidesDir = path.join(__dirname, "../../slides");
-    this.baseImagePath = path.join(
-      __dirname,
-      "../../videos/Post-Base-Image.png"
-    );
 
     // Ensure slides directory exists
     if (!fs.existsSync(this.slidesDir)) {
@@ -105,60 +92,6 @@ class CarouselGeneratorService {
   }
 
   /**
-   * Wrap text with exact logic from test_slide_generation.js
-   * @param {string} text - Text to wrap
-   * @param {number} fontSize - Font size
-   * @param {boolean} hasMargins - Whether to account for margins
-   * @returns {Array} Array of text lines
-   */
-  wrapText(text, fontSize, hasMargins = false) {
-    // More precise character width calculation for exact margin usage
-    const avgCharWidth = fontSize * 0.42; // Slightly adjusted for better justification
-
-    // Calculate available width considering 9% margins
-    const baseWidth = 1080; // Typical slide width
-    const availableWidth = baseWidth * 0.8; // 80% width for both title and content (strict equal margins)
-
-    const maxCharsPerLine = Math.floor(availableWidth / avgCharWidth);
-    const words = text.split(" ");
-    const lines = [];
-    let currentLine = "";
-
-    for (const word of words) {
-      const testLine = currentLine ? currentLine + " " + word : word;
-
-      // Check if adding this word would exceed the line width
-      if (testLine.length <= maxCharsPerLine) {
-        currentLine = testLine;
-      } else {
-        // Line would be too long, start a new line
-        if (currentLine) {
-          // For justification effect, try to balance the line length
-          const targetLength = Math.floor(maxCharsPerLine * 0.85); // Target 85% of max length
-          if (currentLine.length < targetLength && words.length > 0) {
-            // Try to add one more word if line is too short
-            const nextWord = word;
-            if ((currentLine + " " + nextWord).length <= maxCharsPerLine) {
-              currentLine = currentLine + " " + nextWord;
-              // Skip this word in next iteration
-              continue;
-            }
-          }
-          lines.push(currentLine);
-        }
-        currentLine = word;
-      }
-    }
-
-    // Add the last line if it exists
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    return lines;
-  }
-
-  /**
    * Generate slide with exact logic from test_slide_generation.js
    * @param {string} title - Slide title
    * @param {string} content - Slide content
@@ -168,57 +101,42 @@ class CarouselGeneratorService {
   async generateSlide(title, content, slideNumber) {
     const outputPath = path.join(this.slidesDir, `slide_${slideNumber}.png`);
 
-    // Calculate text wrapping based on content area with borders
-    // Title has 9% left/right margins, content has 9% left/right margins
-    const titleLines = this.wrapText(title, 68, false);
-    const contentLines = this.wrapText(content, 54, true);
+    try {
+      logger.info(`Generating slide ${slideNumber} via API...`);
+      logger.info(`Title: ${title}`);
+      logger.info(`Content: ${content.substring(0, 100)}...`);
 
-    logger.info(`Title lines: ${JSON.stringify(titleLines)}`);
-    logger.info(`Content lines: ${JSON.stringify(contentLines)}`);
-    logger.info(`Content length: ${content.length}`);
-
-    let filters = [];
-
-    // Title positioning (strict 9% left/right margins, centered in 82% width)
-    let yPosition = 100;
-    const titleLineHeight = 71 * 1.02; // Increase by 2%
-    titleLines.forEach((line, index) => {
-      filters.push(
-        `drawtext=text='${line}':fontsize=70:fontcolor=#808080:x=(w*0.09)+((w*0.82)-text_w)/2:y=${
-          yPosition + index * titleLineHeight
-        }:font='Arial Bold':box=1:boxcolor=red@0.5:boxborderw=0`
+      // Call the external slide generation API
+      const response = await axios.post(
+        "https://slide-microservice.onrender.com/generate", // Replace with correct endpoint
+        {
+          title: title,
+          content: content,
+        },
+        {
+          responseType: "arraybuffer", // To handle binary image data
+          timeout: 30000, // 30 second timeout
+        }
       );
-    });
 
-    // Content positioning with strict 9% margins (9% left/right, centered in 82% width)
-    // Start content after title with increased 5% top margin
-    yPosition = titleLines.length * titleLineHeight + 204; // Increased spacing after title (+54px for 5% more top margin)
-    const contentLineHeight = 67 * 1.02; // Increase by 2%
-    contentLines.forEach((line, index) => {
-      // Position content with 9% left/right margins - centered in 82% width
-      filters.push(
-        `drawtext=font='Times New Roman':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09)+((w*0.82)-text_w)/2:y=${
-          yPosition + index * contentLineHeight
-        }`
+      // Save the image bytes to file
+      fs.writeFileSync(outputPath, response.data);
+
+      logger.info(`✅ Generated slide ${slideNumber}: ${outputPath}`);
+      return outputPath;
+    } catch (error) {
+      logger.error(
+        `❌ Error generating slide ${slideNumber} via API:`,
+        error.message
       );
-    });
-
-    const filterString = filters.join(",");
-
-    return new Promise((resolve, reject) => {
-      ffmpeg(this.baseImagePath)
-        .videoFilters(filterString)
-        .outputOptions("-frames:v 1")
-        .save(outputPath)
-        .on("end", () => {
-          logger.info(`Generated slide ${slideNumber}: ${outputPath}`);
-          resolve(outputPath);
-        })
-        .on("error", (err) => {
-          logger.error(`Error generating slide ${slideNumber}: ${err.message}`);
-          reject(err);
-        });
-    });
+      if (error.response) {
+        logger.error(`API Response Status: ${error.response.status}`);
+        logger.error(`API Response Data:`, error.response.data);
+      }
+      throw new Error(
+        `Failed to generate slide ${slideNumber}: ${error.message}`
+      );
+    }
   }
 
   /**

@@ -3,12 +3,77 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 import textwrap
+import logging
+import shutil
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def setup_fonts():
+    """Copy Times New Roman fonts to assets directory if available"""
+    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+    os.makedirs(assets_dir, exist_ok=True)
+    
+    # Possible system font locations
+    system_font_paths = [
+        "C:/Windows/Fonts/timesbd.ttf",  # Windows
+        "C:/Windows/Fonts/times.ttf",    # Windows
+        "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf",  # Linux
+        "/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf",       # Linux
+        "/System/Library/Fonts/Times New Roman Bold.ttf",  # macOS
+        "/System/Library/Fonts/Times New Roman.ttf",       # macOS
+    ]
+    
+    font_copies = [
+        ("timesbd.ttf", "times_new_roman_bold.ttf"),
+        ("times.ttf", "times_new_roman.ttf"),
+        ("Times_New_Roman_Bold.ttf", "times_new_roman_bold.ttf"),
+        ("Times_New_Roman.ttf", "times_new_roman.ttf"),
+    ]
+    
+    for system_path in system_font_paths:
+        if os.path.exists(system_path):
+            # Determine destination filename
+            basename = os.path.basename(system_path).lower()
+            dest_name = "times_new_roman_bold.ttf" if "bold" in basename or "bd" in basename else "times_new_roman.ttf"
+            dest_path = os.path.join(assets_dir, dest_name)
+            
+            if not os.path.exists(dest_path):
+                try:
+                    shutil.copy2(system_path, dest_path)
+                    logger.info(f"Copied font from {system_path} to {dest_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to copy font {system_path}: {e}")
+            else:
+                logger.info(f"Font already exists: {dest_path}")
+
+# Setup fonts on startup
+setup_fonts()
 
 @app.route('/')
 def home():
     return "Slide Generation API is running!"
+
+@app.route('/font-status')
+def font_status():
+    """Check font loading status"""
+    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+    fonts_status = {
+        "assets_dir": assets_dir,
+        "fonts_found": []
+    }
+    
+    font_files = ["times_new_roman_bold.ttf", "times_new_roman.ttf"]
+    for font_file in font_files:
+        font_path = os.path.join(assets_dir, font_file)
+        fonts_status["fonts_found"].append({
+            "name": font_file,
+            "path": font_path,
+            "exists": os.path.exists(font_path)
+        })
+    
+    return fonts_status
 
 @app.route('/generate', methods=['POST'])
 def generate():
@@ -21,13 +86,57 @@ def generate():
     draw = ImageDraw.Draw(img)
     width, height = img.size
     
-    # Fonts
-    try:
-        font_title = ImageFont.truetype("timesbd.ttf", 61)  # Serif bold
-        font_content = ImageFont.truetype("times.ttf", 57)  # Classic serif
-    except:
+    # Fonts - Use Times New Roman fonts with multiple fallback options
+    font_title = None
+    font_content = None
+    
+    # First try fonts in assets directory (copied on startup)
+    assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+    local_font_options = [
+        (os.path.join(assets_dir, "times_new_roman_bold.ttf"), 61),
+        (os.path.join(assets_dir, "times_new_roman.ttf"), 57),
+    ]
+    
+    # Try different Times New Roman font paths and names
+    system_font_options = [
+        ("timesbd.ttf", 61),           # Windows standard
+        ("times.ttf", 57),             # Windows standard  
+        ("Times New Roman Bold.ttf", 61),  # Alternative name
+        ("Times New Roman.ttf", 57),       # Alternative name
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 61),  # Linux
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 57),       # Linux
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 61),  # macOS
+        ("/System/Library/Fonts/Times New Roman.ttf", 57),       # macOS
+    ]
+    
+    all_font_options = local_font_options + system_font_options
+    
+    # Load title font
+    for font_path, size in [(all_font_options[i][0], all_font_options[i][1]) for i in [0,2,4,6,8,10,12,14]]:
+        try:
+            font_title = ImageFont.truetype(font_path, size)
+            logger.info(f"Successfully loaded title font: {font_path}")
+            break
+        except OSError:
+            continue
+    
+    # Load content font  
+    for font_path, size in [(all_font_options[i][0], all_font_options[i][1]) for i in [1,3,5,7,9,11,13,15]]:
+        try:
+            font_content = ImageFont.truetype(font_path, size)
+            logger.info(f"Successfully loaded content font: {font_path}")
+            break
+        except OSError:
+            continue
+    
+    # Final fallback to default fonts
+    if font_title is None:
         font_title = ImageFont.load_default()
+        logger.warning("Times New Roman Bold font not found, using default font for title")
+    
+    if font_content is None:
         font_content = ImageFont.load_default()
+        logger.warning("Times New Roman font not found, using default font for content")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
