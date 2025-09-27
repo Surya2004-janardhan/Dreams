@@ -11,14 +11,11 @@ const createTransporter = () => {
     service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_APP_PASSWORD,
+      pass: process.env.EMAIL_PASS,
     },
   });
 };
 
-/**
- * Send success notification email
- */
 const sendSuccessNotification = async (taskData, results) => {
   try {
     const transporter = createTransporter();
@@ -124,19 +121,54 @@ const sendSuccessNotification = async (taskData, results) => {
  */
 const sendErrorNotification = async (taskData, error, step) => {
   try {
+    // Partial success links
+    let hasPartial = false;
+    let partialLinksHtml = "";
+    let youtubeUrl =
+      error?.youtubeUrl ||
+      error?.results?.youtubeUrl ||
+      (error?.details?.youtubeUrl ?? null);
+    let instagramUrl =
+      error?.instagramUrl ||
+      error?.results?.instagramUrl ||
+      (error?.details?.instagramUrl ?? null);
+    let facebookUrl =
+      error?.facebookUrl ||
+      error?.results?.facebookUrl ||
+      (error?.details?.facebookUrl ?? null);
+
+    if (youtubeUrl || instagramUrl || facebookUrl) {
+      hasPartial = true;
+      partialLinksHtml = `<div style="background: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
+        <h3>⚠️ Partial Success: Uploaded Platform Links</h3>
+        ${
+          youtubeUrl
+            ? `<p><strong>YouTube:</strong> <a href='${youtubeUrl}' target='_blank' style='color: #dc3545;'>${youtubeUrl}</a></p>`
+            : "<p><strong>YouTube:</strong> Upload failed</p>"
+        }
+        ${
+          instagramUrl
+            ? `<p><strong>Instagram:</strong> <a href='${instagramUrl}' target='_blank' style='color: #e4405f;'>${instagramUrl}</a></p>`
+            : "<p><strong>Instagram:</strong> Upload failed</p>"
+        }
+        ${
+          facebookUrl
+            ? `<p><strong>Facebook:</strong> <a href='${facebookUrl}' target='_blank' style='color: #1877f2;'>${facebookUrl}</a></p>`
+            : "<p><strong>Facebook:</strong> Upload failed</p>"
+        }
+      </div>`;
+    }
+
     const transporter = createTransporter();
-
-    // Get AI-powered error analysis
     const errorAnalysis = analyzeError(error, step);
-
     const subject = `❌ Content Creation Failed: ${
       taskData?.idea || "Unknown Task"
     }`;
 
-    const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #dc3545;">❌ Content Creation Failed</h2>
-      
+    const htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #dc3545;">❌ Content Creation Failed${
+        hasPartial ? " (Partial Success)" : ""
+      }</h2>
       <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>Task Details:</h3>
         <p><strong>Title:</strong> ${taskData?.idea || "Unknown"}</p>
@@ -144,38 +176,28 @@ const sendErrorNotification = async (taskData, error, step) => {
         <p><strong>Serial Number:</strong> ${taskData?.sno || "N/A"}</p>
         <p><strong>Failed Step:</strong> ${step || "Unknown"}</p>
       </div>
-      
+  ${hasPartial ? partialLinksHtml : ""}
       <div style="background: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; color: #856404;">
         <h3>🤖 AI Error Analysis:</h3>
         <p><strong>Summary:</strong> ${errorAnalysis.summary}</p>
         <p><strong>Suggested Solutions:</strong></p>
         <ul style="margin: 10px 0; padding-left: 20px;">
           ${errorAnalysis.solutions
-            .map((solution) => `<li style="margin: 5px 0;">${solution}</li>`)
+            .map((solution) => `<li style='margin: 5px 0;'>${solution}</li>`)
             .join("")}
         </ul>
       </div>
-      
       <div style="background: #f8d7da; padding: 20px; border-radius: 5px; margin: 20px 0; color: #721c24;">
         <h3>Error Details:</h3>
-        <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 3px; overflow-x: auto;">
-${error.message || error.toString()}
-        </pre>
-        
-        ${
-          error.stack
-            ? `
-        <details style="margin-top: 15px;">
-          <summary style="cursor: pointer; font-weight: bold;">Stack Trace</summary>
-          <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 3px; margin-top: 10px; font-size: 12px; overflow-x: auto;">
-${error.stack}
-          </pre>
-        </details>
-        `
-            : ""
-        }
+  <pre style="white-space: pre-wrap; background: white; padding: 15px; border-radius: 3px; overflow-x: auto;">${
+    error.message || error.toString()
+  }</pre>
+  ${
+    error.stack
+      ? `<details style='margin-top: 15px;'><summary style='cursor: pointer; font-weight: bold;'>Stack Trace</summary><pre style='white-space: pre-wrap; background: white; padding: 15px; border-radius: 3px; margin-top: 10px; font-size: 12px; overflow-x: auto;'>${error.stack}</pre></details>`
+      : ""
+  }
       </div>
-      
       <div style="background: #d1ecf1; padding: 20px; border-radius: 5px; margin: 20px 0; color: #0c5460;">
         <h3>🔧 Additional Troubleshooting:</h3>
         <ol>
@@ -186,14 +208,12 @@ ${error.stack}
           <li>Restart the workflow manually if needed</li>
         </ol>
       </div>
-      
       <div style="text-align: center; margin: 30px 0;">
         <p style="color: #6c757d;">
           <em>Automated notification from AI Content Automation System</em>
         </p>
       </div>
-    </div>
-    `;
+    </div>`;
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -204,8 +224,6 @@ ${error.stack}
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Error notification email sent for failed task`);
-
-    // Clear log files after error notification is sent
     await clearLogFiles();
   } catch (emailError) {
     logger.error("Failed to send error notification:", emailError);
@@ -213,31 +231,13 @@ ${error.stack}
 };
 
 /**
- * Send workflow status update email
+ * Send status update email
  */
-const sendStatusUpdate = async (status, message, details = {}) => {
+const sendStatusUpdate = async (status, details, aiSuggestions) => {
   try {
     const transporter = createTransporter();
 
-    // Add AI suggestions for status updates
-    let aiSuggestions = [];
-    if (status === "No Tasks Available") {
-      aiSuggestions = [
-        "Add new educational topics to your Google Sheet",
-        "Review and update existing task statuses",
-        "Check spreadsheet formatting and column headers",
-        "Consider scheduling regular content batches",
-      ];
-    } else if (status.includes("Success") || status.includes("Complete")) {
-      aiSuggestions = [
-        "Review published content performance",
-        "Plan next batch of educational topics",
-        "Update content calendar and strategy",
-        "Analyze engagement metrics for optimization",
-      ];
-    }
-
-    const subject = `📊 Workflow Status: ${status}`;
+    const subject = `📊 Workflow Status Update: ${status}`;
 
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -245,8 +245,7 @@ const sendStatusUpdate = async (status, message, details = {}) => {
       
       <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>Status: ${status}</h3>
-        <p>${message}</p>
-        <p><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
       </div>
       
       ${
