@@ -3,7 +3,7 @@ const logger = require("../config/logger");
 
 // Gemini API configuration
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
 
 const generateScript = async (topic, description = "") => {
   const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
@@ -43,9 +43,7 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
           {
             parts: [
               {
-                text: `You are an expert educational content creator specializing in natural Indian English conversations.
-
-${prompt}`,
+                text: `You are an expert educational content creator specializing in natural Indian English conversations.\n\n${prompt}`,
               },
             ],
           },
@@ -109,16 +107,9 @@ ${prompt}`,
               {
                 parts: [
                   {
-                    text: `You are an expert educational content creator specializing in natural Indian English conversations.
-
-The previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.
-
-Original topic: ${topic}
-${description ? `Original description: ${description}` : ""}
-
-CRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.
-
-${prompt}`,
+                    text: `You are an expert educational content creator specializing in natural Indian English conversations.\n\nThe previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
+                      description ? `Original description: ${description}` : ""
+                    }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.\n\n${prompt}`,
                   },
                 ],
               },
