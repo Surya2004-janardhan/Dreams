@@ -31,10 +31,6 @@ class CarouselGeneratorService {
       __dirname,
       "../../videos/Post-Base-Image.png"
     );
-    this.contentFont = path.join(
-      __dirname,
-      "../../fonts/IBMPlexSerif-Regular.ttf"
-    );
 
     // Ensure slides directory exists
     if (!fs.existsSync(this.slidesDir)) {
@@ -183,27 +179,25 @@ class CarouselGeneratorService {
 
     let filters = [];
 
-    // Title positioning (strict 9% left/right margins, centered in 75% width, with visible red box for debugging)
+    // Title positioning (strict 9% left/right margins, centered in 82% width)
     let yPosition = 100;
     const titleLineHeight = 71 * 1.02; // Increase by 2%
     titleLines.forEach((line, index) => {
       filters.push(
-        `drawtext=text='${line}':fontsize=70:fontcolor=#808080:x=(w*0.09)+((w*0.75)-text_w)/2:y=${
+        `drawtext=text='${line}':fontsize=70:fontcolor=#808080:x=(w*0.09)+((w*0.82)-text_w)/2:y=${
           yPosition + index * titleLineHeight
-        }:font='Arial Black':box=1:boxcolor=red@0.5:boxborderw=0`
+        }:font='Arial Bold':box=1:boxcolor=red@0.5:boxborderw=0`
       );
     });
 
-    // Content positioning with increased 9% margins (9% left/right/bottom, 17% top)
+    // Content positioning with strict 9% margins (9% left/right, centered in 82% width)
     // Start content after title with increased 5% top margin
     yPosition = titleLines.length * titleLineHeight + 204; // Increased spacing after title (+54px for 5% more top margin)
     const contentLineHeight = 67 * 1.02; // Increase by 2%
     contentLines.forEach((line, index) => {
-      // Position content with 9% left margin - justified appearance through better wrapping
+      // Position content with 9% left/right margins - centered in 82% width
       filters.push(
-        `drawtext=fontfile='${
-          this.contentFont
-        }':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09):y=${
+        `drawtext=font='Times New Roman':text='${line}':fontsize=54:fontcolor=#000000:x=(w*0.09)+((w*0.82)-text_w)/2:y=${
           yPosition + index * contentLineHeight
         }`
       );
