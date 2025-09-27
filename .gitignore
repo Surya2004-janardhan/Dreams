@@ -4,12 +4,44 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+slide-generation/venv/
+slide-generation/.venv/
+slide-generation/env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
 # Environment variables
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Slide generation environment files
+slide-generation/venv
+slide-generation/.env.*
 
 # Generated files
 

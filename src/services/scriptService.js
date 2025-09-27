@@ -1,10 +1,8 @@
 const axios = require("axios");
 const logger = require("../config/logger");
 
-
-
 // future safer side shift to gen ai sdk instead of raw api calls to models
-// use sdk intead for script generation 
+// use sdk intead for script generation
 // import { GoogleGenAI } from "@google/genai";
 
 // const ai = new GoogleGenAI({});
@@ -17,7 +15,7 @@ const logger = require("../config/logger");
 //   console.log(response.text);
 // }
 
-await main();
+// await main();
 // Gemini API configuration
 const GEMINI_API_URL =
   "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent";
