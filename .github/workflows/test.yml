@@ -1,17 +1,10 @@
-name: NodeJS with FFmpeg - Scheduled Workflows
+name: NodeJS with FFmpeg - Auto Workflow
 
 on:
-  schedule:
-    # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
-    - cron: '30 2 * * *'
-    - cron: '30 14 * * *'
-    # workflow/posts-workflow timings (7:30 AM & 7:30 PM IST → 2:00 AM & 2:00 PM UTC)
-    - cron: '0 2 * * *'
-    - cron: '0 14 * * *'
   workflow_dispatch:
 
 jobs:
-  run-workflows:
+  run-auto-workflow:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,24 +20,15 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Run server and trigger endpoints
+      - name: Run server and trigger /workflow/auto
         run: |
           node server.js &
           SERVER_PID=$!
           echo "Server started with PID $SERVER_PID"
           sleep 5
 
-          # Trigger auto workflow at scheduled times
-          if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
-            echo "Triggering /workflow/auto"
-            curl -X POST http://localhost:${PORT:-3000}/workflow/auto
-          fi
-
-          # Trigger posts workflow at scheduled times
-          if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
-            echo "Triggering /posts-workflow"
-            curl -X POST http://localhost:${PORT:-3000}/posts-workflow
-          fi
+          echo "Triggering /workflow/auto..."
+          curl -X POST http://localhost:${PORT:-3000}/workflow/auto
 
           echo "Waiting 5 minutes..."
           sleep 300
