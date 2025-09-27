@@ -93,19 +93,19 @@ def generate():
     # First try fonts in assets directory (copied on startup)
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
     local_font_options = [
-        (os.path.join(assets_dir, "times_new_roman_bold.ttf"), 61),
+        (os.path.join(assets_dir, "times_new_roman_bold.ttf"), 62),
         (os.path.join(assets_dir, "times_new_roman.ttf"), 57),
     ]
     
     # Try different Times New Roman font paths and names
     system_font_options = [
-        ("timesbd.ttf", 61),           # Windows standard
+        ("timesbd.ttf", 62),           # Windows standard
         ("times.ttf", 57),             # Windows standard  
-        ("Times New Roman Bold.ttf", 61),  # Alternative name
+        ("Times New Roman Bold.ttf", 62),  # Alternative name
         ("Times New Roman.ttf", 57),       # Alternative name
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 61),  # Linux
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 62),  # Linux
         ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 57),       # Linux
-        ("/System/Library/Fonts/Times New Roman Bold.ttf", 61),  # macOS
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 62),  # macOS
         ("/System/Library/Fonts/Times New Roman.ttf", 57),       # macOS
     ]
     
@@ -142,10 +142,10 @@ def generate():
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
     title_width = bbox_title[2] - bbox_title[0]
     title_x = (width - title_width) / 2
-    title_y = 0.05 * height  # 5% top margin
+    title_y = 0.06 * height  # 6% top margin (increased by 1%)
     draw.text((title_x, title_y), title, fill=(64, 64, 64), font=font_title)
     # Underline title
-    underline_y = title_y + 61 + 2  # Below the text
+    underline_y = title_y + 62 + 2  # Below the text (updated for new font size)
     draw.line([title_x, underline_y, title_x + title_width, underline_y], fill=(64, 64, 64), width=2)
     
     # Content: dark black, left-aligned, wrap text, 15% top margin
@@ -155,7 +155,7 @@ def generate():
     avg_char_width = 51 / 2  # Rough estimate for arial 51pt
     wrap_width = int(available_width / avg_char_width)
     wrapped_content = textwrap.wrap(content, width=wrap_width, break_long_words=True)
-    content_y_start = 0.17 * height  # Increased by 2%
+    content_y_start = 0.19 * height  # Increased by 2% (from 17% to 19%)
     line_height = 51 * 1.236  # Increased by 1%
     for line in wrapped_content:
         content_x = left_margin
