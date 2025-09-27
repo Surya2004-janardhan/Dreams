@@ -3,7 +3,7 @@ const logger = require("../config/logger");
 
 // Gemini API configuration
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
 const generateScript = async (topic, description = "") => {
   const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
