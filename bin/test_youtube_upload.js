@@ -68,7 +68,7 @@ async function uploadVideo(filePath, title, description) {
 
 // Test function to upload the existing final video
 async function testUpload() {
-  const videoPath = "final_video_1758123737319.mp4";
+  const videoPath = "videos/Base-vedio.mp4";
   const title = "AI Generated Educational Content #Shorts";
   const description =
     "Automatically generated educational video about technology and learning. Created using AI automation tools. #AI #Education #Technology #Shorts";
