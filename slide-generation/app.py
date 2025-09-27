@@ -6,6 +6,10 @@ import textwrap
 
 app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Slide Generation API is running!"
+
 @app.route('/generate', methods=['POST'])
 def generate():
     data = request.get_json()
