@@ -111,8 +111,8 @@ def generate():
     
     all_font_options = local_font_options + system_font_options
     
-    # Load title font
-    for font_path, size in [(all_font_options[i][0], all_font_options[i][1]) for i in [0,2,4,6,8,10,12,14]]:
+    # Load title font (odd indices for bold fonts)
+    for font_path, size in all_font_options[::2]:  # Every other element starting from 0
         try:
             font_title = ImageFont.truetype(font_path, size)
             logger.info(f"Successfully loaded title font: {font_path}")
@@ -120,8 +120,8 @@ def generate():
         except OSError:
             continue
     
-    # Load content font  
-    for font_path, size in [(all_font_options[i][0], all_font_options[i][1]) for i in [1,3,5,7,9,11,13,15]]:
+    # Load content font (even indices for regular fonts) 
+    for font_path, size in all_font_options[1::2]:  # Every other element starting from 1
         try:
             font_content = ImageFont.truetype(font_path, size)
             logger.info(f"Successfully loaded content font: {font_path}")
