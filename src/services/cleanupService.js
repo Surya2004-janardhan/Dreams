@@ -48,7 +48,7 @@ const cleanupAllMediaFolders = async () => {
       images: { success: true, filesDeleted: 0 },
       temp: { success: true, filesDeleted: 0 },
       subtitles: { success: true, filesDeleted: 0 },
-      videos: { success: true, filesDeleted: 0 },
+      videos: { success: true, filesDeleted: 0 }, // Videos folder preserved
       scripts: { success: true, filesDeleted: 0 },
     };
 
@@ -58,7 +58,9 @@ const cleanupAllMediaFolders = async () => {
     cleanupResults.temp = await cleanDirectory("temp");
     cleanupResults.subtitles = await cleanDirectory("subtitles");
     cleanupResults.scripts = await cleanDirectory("scripts");
-    cleanupResults.videos = await cleanDirectory("videos");
+    // Skip videos folder cleanup - preserve all video files
+    logger.info("📁 Videos folder preserved - not cleaning");
+    cleanupResults.videos = { success: true, filesDeleted: 0 };
 
     // Clean root directory but preserve final video copies
     cleanupResults.root = await cleanupRootDirectory();
@@ -257,7 +259,8 @@ const cleanupOnError = async () => {
       path.join(__dirname, "../../scripts"),
       path.join(__dirname, "../../subtitles"),
       path.join(__dirname, "../../temp"),
-      path.join(__dirname, "../../videos"),
+      // Skip videos folder - preserve all video files
+      // path.join(__dirname, "../../videos"),
       path.join(__dirname, "../../final_video"),
     ];
 

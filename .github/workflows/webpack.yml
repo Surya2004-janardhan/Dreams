@@ -1,13 +1,13 @@
-name: NodeJS with FFmpeg - Scheduled Workflows
+name: NodeJS - Scheduled Workflows
 
 on:
   schedule:
     # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
-    - cron: '30 2 * * *'
-    - cron: '30 14 * * *'
+    - cron: "30 2 * * *"
+    - cron: "30 14 * * *"
     # workflow/posts-workflow timings (7:30 AM & 7:30 PM IST → 2:00 AM & 2:00 PM UTC)
-    - cron: '0 2 * * *'
-    - cron: '0 14 * * *'
+    - cron: "0 2 * * *"
+    - cron: "0 14 * * *"
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install FFmpeg
+      - name: Install FFmpeg (for auto workflow only)
+        if: github.event.schedule == '30 2 * * *' || github.event.schedule == '30 14 * * *'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Run server and trigger endpoints
@@ -34,15 +35,15 @@ jobs:
           echo "Server started with PID $SERVER_PID"
           sleep 5
 
-          # Trigger auto workflow at scheduled times
+          # Trigger auto workflow at scheduled times (requires FFmpeg)
           if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
-            echo "Triggering /workflow/auto"
+            echo "Triggering /workflow/auto (with FFmpeg)"
             curl -X POST http://localhost:${PORT:-3000}/workflow/auto
           fi
 
-          # Trigger posts workflow at scheduled times
+          # Trigger posts workflow at scheduled times (no FFmpeg needed)
           if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
-            echo "Triggering /posts-workflow"
+            echo "Triggering /posts-workflow (no FFmpeg needed)"
             curl -X POST http://localhost:${PORT:-3000}/posts-workflow
           fi
 
