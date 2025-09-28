@@ -17,15 +17,30 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+<<<<<<< HEAD
       - name: Run server and trigger /posts-workflow
+=======
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run server and trigger /workflow/auto
+>>>>>>> 12da0e352866f5edf542993a997e697485cdcd15
         run: |
           node server.js &
           SERVER_PID=$!
           echo "Server started with PID $SERVER_PID"
           sleep 5
 
+<<<<<<< HEAD
           echo "Triggering /posts-workflow..."
           curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+=======
+          echo "Triggering /workflow/auto..."
+          echo "YOUTUBE_REFRESH_TOKEN length: ${#YOUTUBE_REFRESH_TOKEN}"
+          echo "GOOGLE_CLIENT_ID length: ${#GOOGLE_CLIENT_ID}"
+          echo "GOOGLE_CLIENT_SECRET length: ${#GOOGLE_CLIENT_SECRET}"
+          curl -X POST http://localhost:${PORT:-3000}/workflow/auto
+>>>>>>> 12da0e352866f5edf542993a997e697485cdcd15
 
           echo "Waiting 5 minutes..."
           sleep 300

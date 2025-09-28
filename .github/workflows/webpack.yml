@@ -43,6 +43,10 @@ jobs:
 
           # Trigger posts workflow at scheduled times (no FFmpeg needed)
           if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
+            echo "Pinging slide microservice..."
+            curl -X GET https://slide-microservice.onrender.com
+            echo "Waiting 50 seconds for microservice to be ready..."
+            sleep 50
             echo "Triggering /posts-workflow (no FFmpeg needed)"
             curl -X POST http://localhost:${PORT:-3000}/posts-workflow
           fi
