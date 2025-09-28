@@ -28,7 +28,7 @@ jobs:
           sleep 5
 
           echo "Triggering /workflow/auto..."
-          curl -X POST http://localhost:${PORT:-3000}/workflow/auto
+          curl -X POST http://localhost:${PORT:-3000}/posts-workflow
 
           echo "Waiting 5 minutes..."
           sleep 300
