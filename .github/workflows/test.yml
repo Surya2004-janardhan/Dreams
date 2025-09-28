@@ -20,7 +20,7 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Run server and trigger /workflow/auto
+      - name: Run server and trigger /posts-workflow
         run: |
           node server.js &
           SERVER_PID=$!
