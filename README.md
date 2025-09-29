@@ -1,4 +1,4 @@
-# AI Content Automation System v2.0
+# AI Social media Content Automation System 
 
 ## Overview
 
@@ -374,3 +374,4 @@ For technical support, bug reports, or feature requests:
 **Version**: 2.0.0
 **Last Updated**: September 2025
 **Architecture**: Microservices with Clean MVC Design
+
