@@ -295,24 +295,31 @@ const uploadToYouTube = async (videoPath, title, description) => {
       auth: oauth2Client,
     });
 
-    const socialContent = await generateAISocialMediaContent(
-      title,
-      description
-    );
+    // Generate unified caption for all platforms
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
 
-    // Use the original title from sheet without modifications
-    const finalTitle = socialContent.youtube.title;
-    const tags = [...socialContent.youtube.tags];
+    // For YouTube Shorts: use title + #shorts + unified caption (no separate description)
+    const youtubeTitle =
+      title.length > 55 ? title.substring(0, 50) + "..." : title;
+    const youtubeDescription = `${unifiedContent.caption}\n\n#shorts`;
+
+    // Extract hashtags for tags (remove # and limit to 10)
+    const tags = unifiedContent.hashtags
+      .split(" ")
+      .filter((tag) => tag.startsWith("#"))
+      .map((tag) => tag.substring(1))
+      .slice(0, 10);
 
     logger.info(`🏷️ Final tags: ${tags.join(", ")}`);
-    logger.info(`📹 Final title: ${finalTitle}`);
+    logger.info(`📹 Final title: ${youtubeTitle}`);
+    logger.info(`📝 Description includes #shorts hashtag`);
 
     const response = await youtube.videos.insert({
       part: "snippet,status",
       requestBody: {
         snippet: {
-          title: finalTitle,
-          description: socialContent.youtube.description,
+          title: youtubeTitle,
+          description: youtubeDescription,
           tags: tags,
           categoryId: "27", // Education category
         },
@@ -334,8 +341,8 @@ const uploadToYouTube = async (videoPath, title, description) => {
       success: true,
       url: videoUrl,
       videoId: videoId,
-      title: finalTitle,
-      caption: finalTitle, // Use only title for YouTube caption, not the full description
+      title: youtubeTitle,
+      caption: unifiedContent.caption, // Use the unified caption for consistency
     };
   } catch (error) {
     logger.error("❌ YouTube upload failed:", error.message);
@@ -352,11 +359,19 @@ const uploadToYouTube = async (videoPath, title, description) => {
 /**
  * Upload video to Instagram (using Instagram Graph API for reels)
  */
-const uploadToInstagram = async (videoPath, caption, description) => {
+const uploadToInstagram = async (videoPath, title, description) => {
   let uploadedFileName = null; // Changed from filebaseFileName to be more descriptive
 
   try {
     logger.info("📱 Starting Instagram upload...");
+
+    // Generate unified caption for all platforms
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
+    const finalCaption = unifiedContent.caption;
+
+    logger.info(
+      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`
+    );
 
     // Required environment variables
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
@@ -387,8 +402,7 @@ const uploadToInstagram = async (videoPath, caption, description) => {
     const containerParams = {
       media_type: "REELS",
       video_url: publicVideoUrl,
-      caption: caption,
-      share_to_feed: false, // Set to false for Reels-only posts
+      caption: finalCaption,
       access_token: accessToken,
     };
 
@@ -459,7 +473,7 @@ const uploadToInstagram = async (videoPath, caption, description) => {
           success: true,
           url: permalink,
           mediaId: mediaId,
-          caption: caption,
+          caption: finalCaption,
         };
       }
     } catch (error) {
@@ -479,7 +493,7 @@ const uploadToInstagram = async (videoPath, caption, description) => {
       success: true,
       url: instagramUrl,
       mediaId: mediaId,
-      caption: caption,
+      caption: finalCaption,
     };
   } catch (error) {
     logger.error("❌ Instagram upload failed:", error.message);
@@ -506,9 +520,17 @@ const uploadToInstagram = async (videoPath, caption, description) => {
 /**
  * Upload video to Instagram using a pre-uploaded Supabase URL
  */
-const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
+const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
   try {
     logger.info("📱 Starting Instagram upload with provided URL...");
+
+    // Generate unified caption for all platforms
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
+    const finalCaption = unifiedContent.caption;
+
+    logger.info(
+      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`
+    );
 
     // Required environment variables
     const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
@@ -527,7 +549,7 @@ const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
     const containerParams = {
       media_type: "REELS",
       video_url: videoUrl,
-      caption: caption,
+      caption: finalCaption,
       access_token: accessToken,
     };
 
@@ -601,7 +623,7 @@ const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
           success: true,
           url: permalink,
           mediaId: mediaId,
-          caption: caption,
+          caption: finalCaption,
         };
       }
     } catch (error) {
@@ -616,7 +638,7 @@ const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
       success: true,
       url: instagramUrl,
       mediaId: mediaId,
-      caption: caption,
+      caption: finalCaption,
     };
   } catch (error) {
     logger.error("❌ Instagram upload failed:", error.message);
@@ -635,11 +657,19 @@ const uploadToInstagramWithUrl = async (videoUrl, caption, description) => {
 /**
  * Upload video to Facebook page
  */
-const uploadToFacebook = async (videoPath, caption, description) => {
+const uploadToFacebook = async (videoPath, title, description) => {
   let uploadedFileName = null;
 
   try {
     logger.info("📘 Starting Facebook upload...");
+
+    // Generate unified caption for all platforms
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
+    const finalCaption = unifiedContent.caption;
+
+    logger.info(
+      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`
+    );
 
     // Required environment variables
     const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
@@ -682,7 +712,7 @@ const uploadToFacebook = async (videoPath, caption, description) => {
     const postUrl = `https://graph.facebook.com/v23.0/${pageId}/videos`;
     const postParams = {
       file_url: publicVideoUrl,
-      description: caption,
+      description: finalCaption,
       access_token: pageAccessToken, // Use page access token for posting
     };
 
@@ -742,11 +772,19 @@ const uploadToFacebook = async (videoPath, caption, description) => {
 /**
  * Upload video to Facebook using a pre-uploaded Supabase URL
  */
-const uploadToFacebookWithUrl = async (videoUrl, caption, description) => {
+const uploadToFacebookWithUrl = async (videoUrl, title, description) => {
   let uploadedFileName = null;
 
   try {
     logger.info("📘 Starting Facebook upload with provided URL...");
+
+    // Generate unified caption for all platforms
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
+    const finalCaption = unifiedContent.caption;
+
+    logger.info(
+      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`
+    );
 
     // Required environment variables
     const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
@@ -777,7 +815,7 @@ const uploadToFacebookWithUrl = async (videoUrl, caption, description) => {
     const postUrl = `https://graph.facebook.com/v23.0/${pageId}/videos`;
     const postParams = {
       file_url: videoUrl,
-      description: caption,
+      description: finalCaption,
       access_token: pageAccessToken, // Use page access token for posting
     };
 
@@ -835,13 +873,9 @@ const uploadToBothPlatforms = async (
   try {
     logger.info("🚀 Starting upload to YouTube, Instagram, and Facebook...");
 
-    // Generate AI-powered content for both platforms
-    const socialContent = await generateAISocialMediaContent(
-      title,
-      description,
-      scriptContent
-    );
-    logger.info("🤖 AI-generated content ready for upload");
+    // Generate unified caption for all platforms using Gemini
+    const unifiedContent = await generateUnifiedSocialMediaCaption(title);
+    logger.info("🤖 Unified Gemini-generated caption ready for all platforms");
 
     // Step 1: Upload video to Supabase once (shared for Instagram and Facebook)
     logger.info(
@@ -867,11 +901,7 @@ const uploadToBothPlatforms = async (
 
     // Upload to YouTube
     try {
-      results.youtube = await uploadToYouTube(
-        videoPath,
-        socialContent.youtube.title,
-        socialContent.youtube.description
-      );
+      results.youtube = await uploadToYouTube(videoPath, title, description);
     } catch (error) {
       logger.error("YouTube upload failed:", error);
       results.youtube = { success: false, error: error.message };
@@ -881,7 +911,7 @@ const uploadToBothPlatforms = async (
     try {
       results.instagram = await uploadToInstagramWithUrl(
         sharedVideoUrl,
-        socialContent.instagram.caption,
+        title,
         description
       );
     } catch (error) {
@@ -893,7 +923,7 @@ const uploadToBothPlatforms = async (
     try {
       results.facebook = await uploadToFacebookWithUrl(
         sharedVideoUrl,
-        socialContent.facebook.caption,
+        title,
         description
       );
     } catch (error) {
@@ -1183,6 +1213,92 @@ const generateTopicExplanation = async (
   }
 };
 
+/**
+ * Generate unified social media caption using Gemini LLM
+ * Creates the same lengthy caption for all 3 platforms
+ */
+const generateUnifiedSocialMediaCaption = async (title) => {
+  try {
+    const apiKey =
+      process.env.GEMINI_API_KEY_FOR_T2T || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("No Gemini API key available for T2T");
+    }
+
+    // Generate 60-word theory about the title with emojis
+    const theoryPrompt = `Write exactly 60 words explaining the theory/concept of "${title}". Make it educational, engaging, and include relevant emojis throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
+
+    const theoryResponse = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: theoryPrompt }] }],
+      }
+    );
+
+    const theory =
+      theoryResponse.data.candidates[0].content.parts[0].text.trim();
+
+    // Generate 15 engaging hashtags
+    const hashtagPrompt = `Generate 15 highly engaging and relevant hashtags for a video about "${title}". Make them trending, educational, and optimized for social media discovery. Include a mix of popular and niche hashtags. Format as: #hashtag1 #hashtag2 #hashtag3 etc.`;
+
+    const hashtagResponse = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: hashtagPrompt }] }],
+      }
+    );
+
+    const hashtags =
+      hashtagResponse.data.candidates[0].content.parts[0].text.trim();
+
+    // Create the unified caption
+    const unifiedCaption = `${title}
+
+${theory}
+
+${hashtags}
+
+❤️ Like • 💬 Comment • 🔄 Share • 🔔 Subscribe
+👥 Tag a friend who needs to learn this!
+📚 Follow for more educational content!`;
+
+    logger.info(`✅ Generated unified caption for: ${title}`);
+    logger.info(`📏 Caption length: ${unifiedCaption.length} characters`);
+
+    return {
+      caption: unifiedCaption,
+      theory: theory,
+      hashtags: hashtags,
+      title: title,
+    };
+  } catch (error) {
+    logger.error(
+      "❌ Failed to generate unified caption with Gemini:",
+      error.message
+    );
+
+    // Fallback caption
+    const fallbackCaption = `${title}
+
+This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively. Whether you're learning for education or professional development, this content provides clear explanations and actionable information.
+
+#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover
+
+❤️ Like • 💬 Comment • 🔄 Share • 🔔 Subscribe
+👥 Tag a friend who needs to learn this!
+📚 Follow for more educational content!`;
+
+    return {
+      caption: fallbackCaption,
+      theory:
+        "This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively.",
+      hashtags:
+        "#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover",
+      title: title,
+    };
+  }
+};
+
 module.exports = {
   uploadToYouTube,
   uploadToInstagram,
@@ -1197,4 +1313,5 @@ module.exports = {
   generateAISocialMediaContent,
   getTopicEmoji,
   generateTopicExplanation,
+  generateUnifiedSocialMediaCaption,
 };
