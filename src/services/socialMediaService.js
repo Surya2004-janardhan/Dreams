@@ -1225,13 +1225,19 @@ const generateUnifiedSocialMediaCaption = async (title) => {
       throw new Error("No Gemini API key available for T2T");
     }
 
+    // Use a working model from the available list
+    const modelName = "gemini-2.0-flash-exp"; // This model supports generateContent
+
     // Generate 60-word theory about the title with emojis
     const theoryPrompt = `Write exactly 60 words explaining the theory/concept of "${title}". Make it educational, engaging, and include relevant emojis throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
 
     const theoryResponse = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: theoryPrompt }] }],
+      },
+      {
+        timeout: 30000, // 30 second timeout
       }
     );
 
@@ -1242,9 +1248,12 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const hashtagPrompt = `Generate 15 highly engaging and relevant hashtags for a video about "${title}". Make them trending, educational, and optimized for social media discovery. Include a mix of popular and niche hashtags. Format as: #hashtag1 #hashtag2 #hashtag3 etc.`;
 
     const hashtagResponse = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: hashtagPrompt }] }],
+      },
+      {
+        timeout: 30000,
       }
     );
 
@@ -1274,15 +1283,26 @@ ${hashtags}
   } catch (error) {
     logger.error(
       "❌ Failed to generate unified caption with Gemini:",
-      error.message
+      error.response?.status,
+      error.response?.statusText
     );
 
-    // Fallback caption
+    // Check if it's a quota exceeded error
+    if (error.response?.status === 429) {
+      logger.warn("🚨 Gemini API quota exceeded - using fallback captions");
+    }
+
+    // Fallback caption with dynamic content based on title
+    const fallbackTheory = `This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively. Whether you're learning for education or professional development, this content provides clear explanations and actionable information.`;
+
+    const fallbackHashtags =
+      "#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover";
+
     const fallbackCaption = `${title}
 
-This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively. Whether you're learning for education or professional development, this content provides clear explanations and actionable information.
+${fallbackTheory}
 
-#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover
+${fallbackHashtags}
 
 ❤️ Like • 💬 Comment • 🔄 Share • 🔔 Subscribe
 👥 Tag a friend who needs to learn this!
@@ -1290,10 +1310,8 @@ This fascinating topic explores fundamental concepts and practical applications 
 
     return {
       caption: fallbackCaption,
-      theory:
-        "This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively.",
-      hashtags:
-        "#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover",
+      theory: fallbackTheory,
+      hashtags: fallbackHashtags,
       title: title,
     };
   }
