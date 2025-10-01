@@ -443,11 +443,21 @@ const sendCarouselPostNotification = async (
   try {
     const transporter = createTransporter();
 
-    const subject = `🎠 Carousel Post Published Successfully: ${taskData.title}`;
+    // Check if this is an error notification
+    const hasError =
+      postResults && (postResults.error || postResults.partialResults);
+    const errorMessage = hasError ? postResults.error : null;
+    const partialResults = hasError ? postResults.partialResults : postResults;
+
+    const subject = hasError
+      ? `⚠️ Carousel Post Issue: ${taskData.title}`
+      : `🎠 Carousel Post Published Successfully: ${taskData.title}`;
 
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #28a745;">🎉 Carousel Post Success!</h2>
+      <h2 style="color: ${hasError ? "#dc3545" : "#28a745"};">${
+      hasError ? "⚠️ Carousel Post Issue" : "🎉 Carousel Post Success!"
+    }</h2>
       
        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
          <h3>📋 Carousel Details:</h3>
@@ -459,8 +469,20 @@ const sendCarouselPostNotification = async (
          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
        </div>
       
+      ${
+        hasError
+          ? `
+      <div style="background: #f8d7da; padding: 20px; border-radius: 5px; margin: 20px 0; color: #721c24;">
+        <h3>❌ Error Details:</h3>
+        <p><strong>Error:</strong> ${errorMessage}</p>
+        <p style="font-size: 12px; margin-top: 10px;">Please check the server logs for more details and try again if needed.</p>
+      </div>
+      `
+          : ""
+      }
+      
       <div style="background: #e7f3ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
-        <h3>🔗 Published Platform Links:</h3>
+        <h3>🔗 Platform Status:</h3>
         
         ${
           instagramUrl
@@ -477,7 +499,7 @@ const sendCarouselPostNotification = async (
         <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #dc3545;">
           <p style="margin: 0; color: #dc3545;"><strong>📸 Instagram:</strong> ❌ Failed to post</p>
           <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Error: ${
-            postResults.instagram?.error || "Unknown error"
+            partialResults?.instagram?.error || "Unknown error"
           }</p>
         </div>
         `
@@ -498,33 +520,56 @@ const sendCarouselPostNotification = async (
         <div style="background: #fff; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #dc3545;">
           <p style="margin: 0; color: #dc3545;"><strong>📘 Facebook:</strong> ❌ Failed to post</p>
           <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Error: ${
-            postResults.facebook?.error || "Unknown error"
+            partialResults?.facebook?.error || "Unknown error"
           }</p>
         </div>
         `
         }
       </div>
       
-      <div style="background: #f0f8f0; padding: 20px; border-radius: 5px; margin: 20px 0;">
+      <div style="background: ${
+        hasError ? "#f8d7da" : "#f0f8f0"
+      }; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>📊 Carousel Process Summary:</h3>
         <ul style="margin: 10px 0; padding-left: 20px;">
           <li style="margin: 5px 0;">✅ Read task from Google Sheets</li>
           <li style="margin: 5px 0;">✅ Generated 3 text overlay slides</li>
           <li style="margin: 5px 0;">✅ Uploaded images to Supabase for public URLs</li>
-          <li style="margin: 5px 0;">✅ Posted carousel to ${
-            instagramUrl && facebookUrl
-              ? "both platforms"
-              : instagramUrl
-              ? "Instagram only"
-              : facebookUrl
-              ? "Facebook only"
-              : "no platforms (failed)"
-          }</li>
-          <li style="margin: 5px 0;">✅ Updated Google Sheets with "Posted" status</li>
+          <li style="margin: 5px 0;">${
+            hasError ? "❌" : "✅"
+          } Posted carousel to ${
+      instagramUrl && facebookUrl
+        ? "both platforms"
+        : instagramUrl
+        ? "Instagram only"
+        : facebookUrl
+        ? "Facebook only"
+        : "no platforms (failed)"
+    }</li>
+          <li style="margin: 5px 0;">${
+            hasError ? "❌" : "✅"
+          } Updated Google Sheets with "${
+      hasError ? "Error" : "Posted"
+    }" status</li>
           <li style="margin: 5px 0;">✅ Cleaned up all temporary files</li>
         </ul>
       </div>
       
+      ${
+        hasError
+          ? `
+      <div style="background: #d1ecf1; padding: 20px; border-radius: 5px; margin: 20px 0; color: #0c5460;">
+        <h3>🔧 Troubleshooting Steps:</h3>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+          <li style="margin: 5px 0;">Check the server logs for detailed error information</li>
+          <li style="margin: 5px 0;">Verify API keys and credentials are still valid</li>
+          <li style="margin: 5px 0;">Check internet connectivity and API rate limits</li>
+          <li style="margin: 5px 0;">Try running the workflow again manually</li>
+          <li style="margin: 5px 0;">Contact support if the issue persists</li>
+        </ul>
+      </div>
+      `
+          : `
       <div style="background: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; color: #155724;">
         <h3>🎯 Next Steps & Engagement Tips:</h3>
         <ul style="margin: 10px 0; padding-left: 20px;">
@@ -535,18 +580,23 @@ const sendCarouselPostNotification = async (
           <li style="margin: 5px 0;">📈 Track which slides get the most engagement for future optimization</li>
         </ul>
       </div>
+      `
+      }
       
-      <div style="text-align: center; margin: 30px 0; padding: 20px; background: #fff3cd; border-radius: 5px;">
-        <p style="margin: 0; color: #856404;">
-          <strong>🎠 Your carousel post is now live!</strong><br>
-          Check the links above to view your posts on each platform.
-        </p>
-      </div>
-      
-      <div style="text-align: center; margin: 20px 0; padding: 15px; background: #e6f3ff; border-radius: 5px;">
-        <p style="margin: 0; font-size: 12px; color: #666;">
-          This notification was automatically generated by your AI Content Automation system.<br>
-          Carousel posted from row ${taskData.rowIndex} of your Google Sheets.
+      <div style="text-align: center; margin: 30px 0; padding: 20px; background: ${
+        hasError ? "#f8d7da" : "#fff3cd"
+      }; border-radius: 5px;">
+        <p style="margin: 0; color: ${hasError ? "#721c24" : "#856404"};">
+          <strong>${
+            hasError
+              ? "⚠️ Issue occurred during carousel posting"
+              : "🎠 Your carousel post is now live!"
+          }</strong><br>
+          ${
+            hasError
+              ? "Check the error details above and try again."
+              : "Check the links above to view your posts on each platform."
+          }
         </p>
       </div>
     </div>

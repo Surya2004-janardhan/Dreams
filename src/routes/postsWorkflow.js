@@ -236,40 +236,14 @@ ${relevantHashtags.join(" ")}`;
       }
     }
 
-    // Send error email
-    const errorMessage = `
-🚨 Carousel Post Workflow Failed!
-
-${taskData ? `Title: ${taskData.title}` : "No task data"}
-Error: ${error.message}
-Step: ${error.step || "Unknown"}
-
-${
-  error.details?.failedPosts
-    ? `Failed Platforms: ${error.details.failedPosts.join(", ")}`
-    : ""
-}
-${
-  error.details?.successfulPosts
-    ? `Successful Platforms: ${error.details.successfulPosts.join(", ")}`
-    : ""
-}
-
-⚠️ IMPORTANT: Sheet status was NOT updated (left as is)
-Generated Slides: ${slideImages.length}
-${taskData ? `Row: ${taskData.rowIndex}` : ""}
-Timestamp: ${new Date().toISOString()}
-    `.trim();
-
-    try {
-      await sendErrorNotification(
-        taskData,
-        error,
-        error.step || "Posts Workflow"
-      );
-    } catch (emailError) {
-      logger.error("❌ Error notification failed:", emailError.message);
-    }
+    // Send detailed notification with error and any available results
+    logger.info("📧 Sending detailed error notification...");
+    await sendCarouselPostNotification(
+      taskData,
+      { error: error.message, partialResults: postResult || null },
+      postResult?.instagram?.url || null,
+      postResult?.facebook?.url || null
+    );
 
     res.status(500).json({
       success: false,
