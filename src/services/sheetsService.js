@@ -16,9 +16,7 @@ const getNextTask = async (sheetId = null) => {
     });
 
     const rows = response.data.values;
-    console.log("🔍 SHEET DATA RECEIVED:");
-    console.log("Total rows found:", rows ? rows.length : 0);
-    console.log("Raw sheet data:", JSON.stringify(rows, null, 2));
+    logger.info(`📊 Sheet data received: ${rows ? rows.length : 0} rows`);
 
     if (!rows || rows.length === 0) {
       throw new Error("No data found in spreadsheet");
@@ -80,10 +78,9 @@ const getNextTask = async (sheetId = null) => {
     );
 
     // Loop through all data rows (skip header)
-    console.log("🔍 CHECKING EACH ROW FOR 'NOT POSTED' STATUS:");
+    logger.debug("🔍 Checking each row for 'NOT POSTED' status...");
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      console.log(`Row ${i + 1}:`, row);
 
       if (!row || row.length === 0) {
         console.log(`Row ${i + 1}: EMPTY ROW, SKIPPING`);
@@ -123,7 +120,7 @@ const getNextTask = async (sheetId = null) => {
           timestamp: row[timestampIndex] || "",
         };
 
-        console.log("📋 TASK DATA EXTRACTED:", taskData);
+        logger.info(`📋 Task data extracted for row ${i + 1}`);
         return taskData;
       }
     }
@@ -274,8 +271,9 @@ const getNextCarouselTask = async (sheetId = null) => {
     });
 
     const rows = response.data.values;
-    console.log("🔍 CAROUSEL SHEET DATA RECEIVED:");
-    console.log("Total rows found:", rows ? rows.length : 0);
+    logger.info(
+      `🎠 Carousel sheet data received: ${rows ? rows.length : 0} rows`
+    );
 
     if (!rows || rows.length === 0) {
       throw new Error("No data found in spreadsheet");
@@ -372,7 +370,7 @@ const getNextCarouselTask = async (sheetId = null) => {
           timestamp: row[timestampIndex] || "",
         };
 
-        console.log("📋 CAROUSEL TASK DATA EXTRACTED:", taskData);
+        logger.info(`📋 Carousel task data extracted for row ${i + 1}`);
         return taskData;
       }
     }
