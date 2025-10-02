@@ -76,3 +76,6 @@ build/
 # Temporary files
 *.tmp
 *.temp
+
+# Video files are tracked with Git LFS (see .gitattributes)
+# Large video files should be committed with Git LFS to avoid size limits
