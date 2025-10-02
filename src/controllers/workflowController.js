@@ -821,9 +821,17 @@ const assembleVideo = async (baseVideoPath, images, audioFiles, script) => {
       }
     });
 
-    // Add improved subtitles with black background and white bold font
+    // Add improved subtitles with black background and yellow bold BalsamiqSans-Bold font
     const lastVideoOutput = `[v${images.length - 1}]`;
-    filterComplex += `${lastVideoOutput}subtitles=${subtitlesPath}:force_style='FontName=Poppins-Bold,FontSize=20,PrimaryColour=&Hffffff,BackColour=&H80000000,Bold=1,Alignment=2'[vout]`;
+    const fontFilePath = path.resolve("fonts/BalsamiqSans-Bold.ttf");
+    const safeFontPath = fontFilePath
+      .replace(/\\/g, "\\\\")
+      .replace(/:/g, "\\:");
+    const safeSubtitlesPath = subtitlesPath
+      .replace(/\\/g, "\\\\")
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "\\'");
+    filterComplex += `${lastVideoOutput}subtitles='${safeSubtitlesPath}':force_style='FontFile=${safeFontPath},FontSize=13,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[vout]`;
 
     command = command
       .complexFilter(filterComplex)

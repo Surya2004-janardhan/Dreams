@@ -211,7 +211,7 @@ const composeVideo = async (
         filterParts.push(`${currentVideo}copy[final]`);
       } else {
         // Use working subtitles approach from test video with explicit font file
-        const fontFilePath = path.resolve("fonts/Montserrat-Black.ttf");
+        const fontFilePath = path.resolve("fonts/BalsamiqSans-Bold.ttf");
         const safeFontPath = fontFilePath
           .replace(/\\/g, "\\\\")
           .replace(/:/g, "\\:");
@@ -221,7 +221,7 @@ const composeVideo = async (
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
 
-        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=11,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[final]`;
+        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=13,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[final]`;
         filterParts.push(subtitleFilter);
       }
 

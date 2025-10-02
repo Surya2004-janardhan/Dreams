@@ -287,7 +287,7 @@ const getNextCarouselTask = async (sheetId = null) => {
 
     // Find header row (assuming first row)
     const headers = rows[0];
-    console.log("📋 CAROUSEL SHEET HEADERS:", headers);
+    // console.log("📋 CAROUSEL SHEET HEADERS:", headers);
 
     // Expected columns: Title, Slide 1, Slide 2, Slide 3, Status, Insta Link, Yt Link, FaceBook Link, Time Stamp
     const titleIndex = headers.findIndex(
@@ -329,32 +329,32 @@ const getNextCarouselTask = async (sheetId = null) => {
     );
 
     console.log("📊 CAROUSEL COLUMN INDEXES FOUND:");
-    console.log(
-      `Title=${titleIndex}, Slide1=${slide1Index}, Slide2=${slide2Index}, Slide3=${slide3Index}, Status=${statusIndex}`
-    );
+    // console.log(
+    //   `Title=${titleIndex}, Slide1=${slide1Index}, Slide2=${slide2Index}, Slide3=${slide3Index}, Status=${statusIndex}`
+    // );
 
     // Loop through all data rows (skip header)
     console.log("🔍 CHECKING EACH ROW FOR CAROUSEL TASK:");
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      console.log(`Row ${i + 1}:`, row);
+      // console.log(`Row ${i + 1}:`, row);
 
       if (!row || row.length === 0) {
-        console.log(`Row ${i + 1}: EMPTY ROW, SKIPPING`);
+        // console.log(`Row ${i + 1}: EMPTY ROW, SKIPPING`);
         continue;
       }
 
       // Get status value safely
       const statusValue = row[statusIndex];
       const status = statusValue ? statusValue.toLowerCase().trim() : "";
-      console.log(
-        `Row ${i + 1} Status: "${statusValue}" -> normalized: "${status}"`
-      );
+      // console.log(
+      //   `Row ${i + 1} Status: "${statusValue}" -> normalized: "${status}"`
+      // );
 
       // Check if this row should be processed (not posted)
       const shouldProcess = status !== "posted" && status !== "posted";
 
-      console.log(`Row ${i + 1} Should Process: ${shouldProcess}`);
+      // console.log(`Row ${i + 1} Should Process: ${shouldProcess}`);
 
       if (shouldProcess) {
         console.log(`✅ FOUND PROCESSABLE CAROUSEL TASK AT ROW ${i + 1}`);
