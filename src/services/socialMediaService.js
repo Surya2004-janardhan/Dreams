@@ -1245,7 +1245,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
       theoryResponse.data.candidates[0].content.parts[0].text.trim();
 
     // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate 15 highly engaging and relevant hashtags for a video about "${title}". Make them trending, educational, and optimized for social media discovery. Include a mix of popular and niche hashtags. Format as: #hashtag1 #hashtag2 #hashtag3 etc.`;
+    const hashtagPrompt = `Generate exactly 15 highly engaging and relevant hashtags for a video about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
 
     const hashtagResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
