@@ -745,7 +745,7 @@ const uploadToFacebook = async (videoPath, title, description) => {
       success: true,
       url: facebookUrl,
       postId: postId,
-      caption: caption,
+      caption: finalCaption,
     };
   } catch (error) {
     logger.error("❌ Facebook upload failed:", error.message);
@@ -843,7 +843,7 @@ const uploadToFacebookWithUrl = async (videoUrl, title, description) => {
       success: true,
       url: facebookUrl,
       postId: postId,
-      caption: caption,
+      caption: finalCaption,
     };
   } catch (error) {
     logger.error("❌ Facebook upload failed:", error.message);
