@@ -4,7 +4,6 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
-const { getGoogleDriveClient } = require("../config/google");
 // Load FFmpeg configuration
 require("../config/ffmpeg");
 // const fontspath = require("../../fonts");
@@ -28,33 +27,44 @@ const validateVideoFile = async (videoPath) => {
         return;
       }
 
-      // Quick FFmpeg probe to check if file is valid
-      ffmpeg(videoPath).ffprobe((err, data) => {
-        if (err) {
-          reject(
-            new Error(`Invalid video file: ${videoPath} - ${err.message}`)
-          );
-          return;
-        }
-
-        // Check if it has video streams
-        const videoStreams = data.streams.filter(
-          (stream) => stream.codec_type === "video"
+      // Check minimum file size (videos should be at least 1MB)
+      const minSizeMB = 1;
+      if (stats.size < minSizeMB * 1024 * 1024) {
+        reject(
+          new Error(
+            `Video file is too small (${(
+              stats.size /
+              1024 /
+              1024
+            ).toFixed(2)} MB). Minimum required: ${minSizeMB} MB`
+          )
         );
-        if (videoStreams.length === 0) {
-          reject(new Error(`No video streams found in file: ${videoPath}`));
-          return;
-        }
+        return;
+      }
 
-        logger.info(
-          `✅ Video file validated: ${videoPath} (${(
-            stats.size /
-            1024 /
-            1024
-          ).toFixed(2)} MB)`
+      // Basic file header check (MP4 files start with specific bytes)
+      const buffer = Buffer.alloc(12);
+      const fd = fs.openSync(videoPath, "r");
+      fs.readSync(fd, buffer, 0, 12, 0);
+      fs.closeSync(fd);
+
+      // Check for MP4 header (ftyp box)
+      const header = buffer.toString("ascii", 4, 8);
+      if (header !== "ftyp" && header !== "moov") {
+        reject(
+          new Error(`File does not appear to be a valid MP4 video: ${videoPath}`)
         );
-        resolve(true);
-      });
+        return;
+      }
+
+      logger.info(
+        `✅ Video file validated: ${videoPath} (${(
+          stats.size /
+          1024 /
+          1024
+        ).toFixed(2)} MB)`
+      );
+      resolve(true);
     } catch (error) {
       reject(new Error(`Error validating video file: ${error.message}`));
     }
@@ -89,90 +99,21 @@ const getBaseVideo = async () => {
           await validateVideoFile(localVideoPath);
           return path.resolve(localVideoPath);
         } catch (validationError) {
-          logger.warn(
-            `⚠️ Local video file is invalid: ${validationError.message}`
+          logger.error(
+            `❌ Local video file is invalid: ${validationError.message}`
           );
-          logger.info("🔄 Falling back to Google Drive download...");
-          // Continue to Google Drive download instead of returning invalid file
+          throw new Error(`Invalid base video file: ${validationError.message}`);
         }
       }
     }
 
-    // If no local base video, try to download from Google Drive
-    logger.info("🔄 No local base video found, checking Google Drive...");
-
-    const drive = await getGoogleDriveClient();
-    const folderId = process.env.GOOGLE_DRIVE_VIDEO_FOLDER_ID;
-
-    if (!folderId) {
-      logger.warn(
-        "⚠️ GOOGLE_DRIVE_VIDEO_FOLDER_ID not set, creating placeholder video"
-      );
-      return await createPlaceholderVideo();
-    }
-
-    // Search for base video files in the Drive folder
-    const response = await drive.files.list({
-      q: `'${folderId}' in parents and (name contains 'base' or name contains 'background' or name contains 'template') and mimeType contains 'video'`,
-      fields: "files(id, name, mimeType)",
-    });
-
-    if (response.data.files && response.data.files.length > 0) {
-      const file = response.data.files[0];
-      const localPath = path.resolve(`videos/base_video_${Date.now()}.mp4`);
-
-      logger.info(`📥 Downloading base video: ${file.name}`);
-
-      // Ensure videos directory exists
-      if (!fs.existsSync(videosDir)) {
-        fs.mkdirSync(videosDir, { recursive: true });
-      }
-
-      const dest = fs.createWriteStream(localPath);
-      const driveResponse = await drive.files.get(
-        {
-          fileId: file.id,
-          alt: "media",
-        },
-        { responseType: "stream" }
-      );
-
-      return new Promise((resolve, reject) => {
-        driveResponse.data.pipe(dest);
-        dest.on("finish", async () => {
-          logger.info(`✅ Base video downloaded: ${localPath}`);
-
-          // Validate the downloaded video file
-          try {
-            await validateVideoFile(localPath);
-            resolve(localPath);
-          } catch (validationError) {
-            logger.error(
-              `❌ Downloaded video file is invalid: ${validationError.message}`
-            );
-            // Clean up invalid file
-            try {
-              fs.unlinkSync(localPath);
-            } catch (cleanupError) {
-              logger.warn(
-                `⚠️ Could not clean up invalid file: ${cleanupError.message}`
-              );
-            }
-            reject(validationError);
-          }
-        });
-        dest.on("error", reject);
-      });
-    } else {
-      logger.warn(
-        "⚠️ No base video found in Google Drive, creating placeholder"
-      );
-      return await createPlaceholderVideo();
-    }
+    // No local base video found - this should not happen since repo is guaranteed to have videos
+    throw new Error(
+      "No base video found in videos folder. Repository should contain valid video files."
+    );
   } catch (error) {
     logger.error("❌ Error getting base video:", error);
-    logger.info("🔄 Creating placeholder video as fallback");
-    return await createPlaceholderVideo();
+    throw error; // Re-throw the error instead of creating placeholder
   }
 };
 
