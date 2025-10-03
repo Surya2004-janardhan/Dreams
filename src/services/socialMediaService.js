@@ -5,6 +5,9 @@ const axios = require("axios");
 const { google } = require("googleapis");
 const { createClient } = require("@supabase/supabase-js");
 
+// Load environment variables
+require("dotenv").config();
+
 // Supabase configuration
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -1014,14 +1017,24 @@ const uploadToSupabaseAndGetLink = async (videoPath, title) => {
     }
 
     const fileName = `${title.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}.mp4`;
-    const fileContent = fs.readFileSync(videoPath);
-    const fileBuffer = Buffer.from(fileContent);
+    const fileBuffer = fs.readFileSync(videoPath);
     const fileStats = fs.statSync(videoPath);
 
     logger.info(`📁 Uploading file: ${fileName}`);
     logger.info(
       `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`
     );
+
+    // Check file size limit (Supabase free tier limit is ~50MB)
+    const maxFileSizeMB = 50;
+    if (fileStats.size > maxFileSizeMB * 1024 * 1024) {
+      throw new Error(
+        `File size ${(fileStats.size / (1024 * 1024)).toFixed(
+          2
+        )} MB exceeds Supabase limit of ${maxFileSizeMB} MB. ` +
+          `Consider compressing the video or using a different storage solution.`
+      );
+    }
 
     // Upload to Supabase Storage
     const { data, error } = await supabase.storage

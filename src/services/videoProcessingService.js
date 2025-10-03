@@ -263,11 +263,11 @@ const composeVideo = async (
         "-preset",
         "fast",
         "-crf",
-        "23", // Balanced quality
+        "25", // Optimized for smaller file size while maintaining quality
         "-maxrate",
-        "4000k", // Good for both platforms
+        "3500k", // Reduced bitrate for better compression
         "-bufsize",
-        "8000k",
+        "7000k",
         "-movflags",
         "+faststart",
         "-pix_fmt",
@@ -392,9 +392,9 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
         .outputOptions([
           "-c:v libx264",
           "-preset fast",
-          "-crf 23", // Balanced quality
-          "-maxrate 4000k", // Good for both platforms
-          "-bufsize 8000k",
+          "-crf 25", // Optimized for smaller file size while maintaining quality
+          "-maxrate 3500k", // Reduced bitrate for better compression
+          "-bufsize 7000k",
           "-c:a aac",
           "-b:a 160k", // Good audio quality
           "-movflags +faststart",
