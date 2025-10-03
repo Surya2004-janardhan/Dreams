@@ -32,11 +32,9 @@ const validateVideoFile = async (videoPath) => {
       if (stats.size < minSizeMB * 1024 * 1024) {
         reject(
           new Error(
-            `Video file is too small (${(
-              stats.size /
-              1024 /
-              1024
-            ).toFixed(2)} MB). Minimum required: ${minSizeMB} MB`
+            `Video file is too small (${(stats.size / 1024 / 1024).toFixed(
+              2
+            )} MB). Minimum required: ${minSizeMB} MB`
           )
         );
         return;
@@ -52,7 +50,9 @@ const validateVideoFile = async (videoPath) => {
       const header = buffer.toString("ascii", 4, 8);
       if (header !== "ftyp" && header !== "moov") {
         reject(
-          new Error(`File does not appear to be a valid MP4 video: ${videoPath}`)
+          new Error(
+            `File does not appear to be a valid MP4 video: ${videoPath}`
+          )
         );
         return;
       }
@@ -102,7 +102,9 @@ const getBaseVideo = async () => {
           logger.error(
             `❌ Local video file is invalid: ${validationError.message}`
           );
-          throw new Error(`Invalid base video file: ${validationError.message}`);
+          throw new Error(
+            `Invalid base video file: ${validationError.message}`
+          );
         }
       }
     }
