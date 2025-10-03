@@ -10,6 +10,58 @@ require("../config/ffmpeg");
 // const fontspath = require("../../fonts");
 
 /**
+ * Validate if a video file is readable and not corrupted
+ */
+const validateVideoFile = async (videoPath) => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Check if file exists
+      if (!fs.existsSync(videoPath)) {
+        reject(new Error(`Video file does not exist: ${videoPath}`));
+        return;
+      }
+
+      // Check file size (must be > 0)
+      const stats = fs.statSync(videoPath);
+      if (stats.size === 0) {
+        reject(new Error(`Video file is empty: ${videoPath}`));
+        return;
+      }
+
+      // Quick FFmpeg probe to check if file is valid
+      ffmpeg(videoPath).ffprobe((err, data) => {
+        if (err) {
+          reject(
+            new Error(`Invalid video file: ${videoPath} - ${err.message}`)
+          );
+          return;
+        }
+
+        // Check if it has video streams
+        const videoStreams = data.streams.filter(
+          (stream) => stream.codec_type === "video"
+        );
+        if (videoStreams.length === 0) {
+          reject(new Error(`No video streams found in file: ${videoPath}`));
+          return;
+        }
+
+        logger.info(
+          `✅ Video file validated: ${videoPath} (${(
+            stats.size /
+            1024 /
+            1024
+          ).toFixed(2)} MB)`
+        );
+        resolve(true);
+      });
+    } catch (error) {
+      reject(new Error(`Error validating video file: ${error.message}`));
+    }
+  });
+};
+
+/**
  * Get base video from Google Drive or local videos folder
  */
 const getBaseVideo = async () => {
@@ -31,7 +83,18 @@ const getBaseVideo = async () => {
       if (videoFiles.length > 0) {
         const localVideoPath = path.join(videosDir, videoFiles[0]);
         logger.info(`✅ Found local base video: ${localVideoPath}`);
-        return path.resolve(localVideoPath);
+
+        // Validate the video file before using it
+        try {
+          await validateVideoFile(localVideoPath);
+          return path.resolve(localVideoPath);
+        } catch (validationError) {
+          logger.warn(
+            `⚠️ Local video file is invalid: ${validationError.message}`
+          );
+          logger.info("🔄 Falling back to Google Drive download...");
+          // Continue to Google Drive download instead of returning invalid file
+        }
       }
     }
 
@@ -76,9 +139,27 @@ const getBaseVideo = async () => {
 
       return new Promise((resolve, reject) => {
         driveResponse.data.pipe(dest);
-        dest.on("finish", () => {
+        dest.on("finish", async () => {
           logger.info(`✅ Base video downloaded: ${localPath}`);
-          resolve(localPath);
+
+          // Validate the downloaded video file
+          try {
+            await validateVideoFile(localPath);
+            resolve(localPath);
+          } catch (validationError) {
+            logger.error(
+              `❌ Downloaded video file is invalid: ${validationError.message}`
+            );
+            // Clean up invalid file
+            try {
+              fs.unlinkSync(localPath);
+            } catch (cleanupError) {
+              logger.warn(
+                `⚠️ Could not clean up invalid file: ${cleanupError.message}`
+              );
+            }
+            reject(validationError);
+          }
         });
         dest.on("error", reject);
       });
@@ -158,6 +239,13 @@ const composeVideo = async (
     }
     if (audioPath && !fs.existsSync(audioPath)) {
       throw new Error(`Audio file not found: ${audioPath}`);
+    }
+
+    // Validate base video file is actually a valid video
+    try {
+      await validateVideoFile(baseVideoPath);
+    } catch (validationError) {
+      throw new Error(`Invalid base video file: ${validationError.message}`);
     }
 
     return new Promise((resolve, reject) => {
@@ -426,4 +514,5 @@ module.exports = {
   createPlaceholderVideo,
   getVideoMetadata,
   createPlatformOptimized,
+  validateVideoFile,
 };
