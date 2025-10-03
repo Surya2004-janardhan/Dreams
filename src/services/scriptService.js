@@ -114,6 +114,10 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
         `⚠️ Script word count ${wordCount} is outside 110-120 range, retrying... (attempt ${retryCount}/${maxRetries})`
       );
 
+      // Wait 66 seconds before retry
+      logger.info(`⏳ Waiting 66 seconds before retry ${retryCount}...`);
+      await new Promise((resolve) => setTimeout(resolve, 66000));
+
       try {
         const retryResponse = await axios.post(
           `${GEMINI_API_URL}?key=${apiKey}`,

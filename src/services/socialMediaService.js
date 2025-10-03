@@ -1032,6 +1032,8 @@ const uploadToSupabaseAndGetLink = async (videoPath, title) => {
       });
 
     if (error) {
+      logger.error(`❌ Supabase upload failed: ${error.message}`);
+      logger.error("Error details:", JSON.stringify(error, null, 2));
       throw new Error(`Supabase upload failed: ${error.message}`);
     }
 
