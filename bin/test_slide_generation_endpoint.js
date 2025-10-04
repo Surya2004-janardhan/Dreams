@@ -18,7 +18,7 @@ async function testSlideGenerationEndpoint() {
 
     // Make request to the endpoint
     const response = await axios.post(
-      "http://localhost:5000/generate",
+      "https://slide-microservice.onrender.com/generate",
       testData,
       {
         responseType: "arraybuffer",
@@ -54,7 +54,9 @@ async function testFontStatusEndpoint() {
   try {
     console.log("🔤 Testing font status endpoint...");
 
-    const response = await axios.get("http://localhost:5000/font-status");
+    const response = await axios.get(
+      "https://slide-microservice.onrender.com/font-status"
+    );
 
     console.log("✅ Font status retrieved successfully!");
     console.log("📋 Font status:", JSON.stringify(response.data, null, 2));
