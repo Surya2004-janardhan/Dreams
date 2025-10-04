@@ -93,22 +93,22 @@ def generate():
     # First try Playfair Display fonts in assets directory
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
     local_font_options = [
-        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 40),  # Title font (reduced by 4px from 44)
-        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 33),  # Content font (reduced by 6px from 39)
+        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 36),  # Title font (reduced by 4px from 40)
+        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 26),  # Content font (reduced by 7px from 33)
     ]
     
     # Try different Playfair Display font paths and names
     system_font_options = [
-        ("PlayfairDisplay-Regular.ttf", 40),  # Local assets (reduced by 4px)
-        ("PlayfairDisplay-Regular.ttf", 33),  # Local assets (reduced by 6px)
-        ("timesbd.ttf", 40),           # Windows standard fallback (reduced by 4px)
-        ("times.ttf", 33),             # Windows standard fallback (reduced by 6px)
-        ("Times New Roman Bold.ttf", 40),  # Alternative name fallback (reduced by 4px)
-        ("Times New Roman.ttf", 33),       # Alternative name fallback (reduced by 6px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 40),  # Linux fallback (reduced by 4px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 33),       # Linux fallback (reduced by 6px)
-        ("/System/Library/Fonts/Times New Roman Bold.ttf", 40),  # macOS fallback (reduced by 4px)
-        ("/System/Library/Fonts/Times New Roman.ttf", 33),       # macOS fallback (reduced by 6px)
+        ("PlayfairDisplay-Regular.ttf", 36),  # Local assets (reduced by 4px)
+        ("PlayfairDisplay-Regular.ttf", 26),  # Local assets (reduced by 7px)
+        ("timesbd.ttf", 36),           # Windows standard fallback (reduced by 4px)
+        ("times.ttf", 26),             # Windows standard fallback (reduced by 7px)
+        ("Times New Roman Bold.ttf", 36),  # Alternative name fallback (reduced by 4px)
+        ("Times New Roman.ttf", 26),       # Alternative name fallback (reduced by 7px)
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 36),  # Linux fallback (reduced by 4px)
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 26),       # Linux fallback (reduced by 7px)
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 36),  # macOS fallback (reduced by 4px)
+        ("/System/Library/Fonts/Times New Roman.ttf", 26),       # macOS fallback (reduced by 7px)
     ]
     
     all_font_options = local_font_options + system_font_options
@@ -147,7 +147,7 @@ def generate():
     title_y = 0.06 * height  # 6% top margin (increased by 1%)
     draw.text((title_x, title_y), title, fill=(64, 64, 64), font=font_title)
     # Underline title
-    underline_y = title_y + 40 + 2  # Below the text (updated for new font size)
+    underline_y = title_y + 36 + 4  # Below the text (updated for new font size and moved 1px down)
     draw.line([title_x, underline_y, title_x + title_width, underline_y], fill=(64, 64, 64), width=2)
     
     # Content: dark black, left-aligned, wrap text, 15% top margin

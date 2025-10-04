@@ -28,7 +28,7 @@ async function testSlideGenerationEndpoint() {
       }
     );
 
-    // Save the generated image
+    // Save the generated image (or error response)
     const outputPath = path.join(__dirname, "..", "test_slide_output.png");
     fs.writeFileSync(outputPath, response.data);
 
@@ -37,12 +37,23 @@ async function testSlideGenerationEndpoint() {
     console.log(
       `📊 Image size: ${(response.data.length / 1024).toFixed(2)} KB`
     );
+    console.log(`📋 Response headers:`, response.headers);
   } catch (error) {
     console.error("❌ Slide generation test failed:", error.message);
 
     if (error.response) {
       console.error("Response status:", error.response.status);
-      console.error("Response data:", error.response.data);
+      console.error("Response headers:", error.response.headers);
+
+      // Save error response for debugging
+      const errorPath = path.join(__dirname, "..", "test_slide_error.html");
+      fs.writeFileSync(errorPath, error.response.data);
+      console.error(`📁 Error response saved to: ${errorPath}`);
+      console.error(
+        `📊 Error response size: ${(error.response.data.length / 1024).toFixed(
+          2
+        )} KB`
+      );
     }
   }
 }
