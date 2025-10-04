@@ -15,6 +15,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Pull Git LFS files
+        run: git lfs pull
+
+      - name: Verify video files
+        run: |
+          if [ -f "videos/Base-vedio.mp4" ]; then
+            FILE_SIZE=$(stat -c%s "videos/Base-vedio.mp4")
+            if [ "$FILE_SIZE" -gt 1000000 ]; then
+              echo "✅ Video file exists and has valid size: $FILE_SIZE bytes"
+            else
+              echo "❌ Video file exists but is too small: $FILE_SIZE bytes"
+              exit 1
+            fi
+          else
+            echo "❌ Video file not found: videos/Base-vedio.mp4"
+            exit 1
+          fi
 
       - name: Use Node.js
         uses: actions/setup-node@v4

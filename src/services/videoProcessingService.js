@@ -78,6 +78,10 @@ const getBaseVideo = async () => {
   try {
     logger.info("📹 Looking for base video...");
 
+    // Check if we're in CI environment
+    const isCI =
+      process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+
     // Check local videos folder first
     const videosDir = "videos";
     if (fs.existsSync(videosDir)) {
@@ -94,28 +98,67 @@ const getBaseVideo = async () => {
         const localVideoPath = path.join(videosDir, videoFiles[0]);
         logger.info(`✅ Found local base video: ${localVideoPath}`);
 
+        // In CI, wait a bit for LFS files to be fully downloaded
+        if (isCI) {
+          logger.info(
+            "🔄 CI environment detected, waiting for LFS file download..."
+          );
+          await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds
+        }
+
         // Validate the video file before using it
         try {
           await validateVideoFile(localVideoPath);
           return path.resolve(localVideoPath);
         } catch (validationError) {
-          logger.error(
-            `❌ Local video file is invalid: ${validationError.message}`
-          );
-          throw new Error(
-            `Invalid base video file: ${validationError.message}`
-          );
+          if (isCI) {
+            logger.error(
+              `❌ CI: Video file validation failed: ${validationError.message}`
+            );
+            logger.info("🔄 CI: Attempting to pull LFS files...");
+            // Try to pull LFS files in CI
+            const { execSync } = require("child_process");
+            try {
+              execSync("git lfs pull", { stdio: "inherit" });
+              logger.info("✅ LFS pull completed, re-validating...");
+              await validateVideoFile(localVideoPath);
+              return path.resolve(localVideoPath);
+            } catch (lfsError) {
+              logger.error(`❌ LFS pull failed: ${lfsError.message}`);
+              throw new Error(
+                `CI video file unavailable: ${validationError.message}`
+              );
+            }
+          } else {
+            logger.warn(
+              `⚠️ Local video file is invalid: ${validationError.message}`
+            );
+            logger.info("🔄 Creating placeholder video as fallback...");
+            return await createPlaceholderVideo();
+          }
         }
       }
     }
 
-    // No local base video found - this should not happen since repo is guaranteed to have videos
-    throw new Error(
-      "No base video found in videos folder. Repository should contain valid video files."
-    );
+    // No local base video found
+    if (isCI) {
+      throw new Error(
+        "CI: No base video found in repository. Ensure video files are committed and LFS is working."
+      );
+    } else {
+      logger.warn(
+        "⚠️ No base video found in videos folder, creating placeholder"
+      );
+      return await createPlaceholderVideo();
+    }
   } catch (error) {
     logger.error("❌ Error getting base video:", error);
-    throw error; // Re-throw the error instead of creating placeholder
+    if (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true") {
+      throw error; // Fail in CI
+    } else {
+      logger.info("🔄 Creating placeholder video as final fallback");
+      return await createPlaceholderVideo();
+    }
   }
 };
 
