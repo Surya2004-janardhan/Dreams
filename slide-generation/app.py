@@ -64,7 +64,7 @@ def font_status():
         "fonts_found": []
     }
     
-    font_files = ["times_new_roman_bold.ttf", "times_new_roman.ttf"]
+    font_files = ["PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
     for font_file in font_files:
         font_path = os.path.join(assets_dir, font_file)
         fonts_status["fonts_found"].append({
@@ -82,37 +82,39 @@ def generate():
     content = ' '.join(data['content'].split())  # Increased to 40 words
     
     # Create image
-    img = Image.open('assets/Post-Base-Image.png')
+    img = Image.open('assets/new-image.jpeg')
     draw = ImageDraw.Draw(img)
     width, height = img.size
     
-    # Fonts - Use Times New Roman fonts with multiple fallback options
+    # Fonts - Use Playfair Display fonts with multiple fallback options
     font_title = None
     font_content = None
     
-    # First try fonts in assets directory (copied on startup)
+    # First try Playfair Display fonts in assets directory
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
     local_font_options = [
-        (os.path.join(assets_dir, "times_new_roman_bold.ttf"), 62),
-        (os.path.join(assets_dir, "times_new_roman.ttf"), 57),
+        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 62),  # Title font
+        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 57),  # Content font
     ]
     
-    # Try different Times New Roman font paths and names
+    # Try different Playfair Display font paths and names
     system_font_options = [
-        ("timesbd.ttf", 62),           # Windows standard
-        ("times.ttf", 57),             # Windows standard  
-        ("Times New Roman Bold.ttf", 62),  # Alternative name
-        ("Times New Roman.ttf", 57),       # Alternative name
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 62),  # Linux
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 57),       # Linux
-        ("/System/Library/Fonts/Times New Roman Bold.ttf", 62),  # macOS
-        ("/System/Library/Fonts/Times New Roman.ttf", 57),       # macOS
+        ("PlayfairDisplay-Regular.ttf", 62),  # Local assets
+        ("PlayfairDisplay-Regular.ttf", 57),  # Local assets
+        ("timesbd.ttf", 62),           # Windows standard fallback
+        ("times.ttf", 57),             # Windows standard fallback
+        ("Times New Roman Bold.ttf", 62),  # Alternative name fallback
+        ("Times New Roman.ttf", 57),       # Alternative name fallback
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 62),  # Linux fallback
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 57),       # Linux fallback
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 62),  # macOS fallback
+        ("/System/Library/Fonts/Times New Roman.ttf", 57),       # macOS fallback
     ]
     
     all_font_options = local_font_options + system_font_options
     
-    # Load title font (odd indices for bold fonts)
-    for font_path, size in all_font_options[::2]:  # Every other element starting from 0
+    # Load title font (try Playfair Display first, then fallbacks)
+    for font_path, size in all_font_options:
         try:
             font_title = ImageFont.truetype(font_path, size)
             logger.info(f"Successfully loaded title font: {font_path}")
@@ -120,8 +122,8 @@ def generate():
         except OSError:
             continue
     
-    # Load content font (even indices for regular fonts) 
-    for font_path, size in all_font_options[1::2]:  # Every other element starting from 1
+    # Load content font (same font, smaller size)
+    for font_path, size in all_font_options:
         try:
             font_content = ImageFont.truetype(font_path, size)
             logger.info(f"Successfully loaded content font: {font_path}")
@@ -132,11 +134,11 @@ def generate():
     # Final fallback to default fonts
     if font_title is None:
         font_title = ImageFont.load_default()
-        logger.warning("Times New Roman Bold font not found, using default font for title")
+        logger.warning("Playfair Display font not found, using default font for title")
     
     if font_content is None:
         font_content = ImageFont.load_default()
-        logger.warning("Times New Roman font not found, using default font for content")
+        logger.warning("Playfair Display font not found, using default font for content")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
