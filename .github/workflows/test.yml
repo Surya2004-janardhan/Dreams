@@ -17,19 +17,18 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run server and trigger /posts-workflow
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run server and trigger /workflow/auto
         run: |
           node server.js &
           SERVER_PID=$!
           echo "Server started with PID $SERVER_PID"
           sleep 5
-          echo "Pinging slide microservice..."
-          curl -X GET https://slide-microservice.onrender.com
-          echo "Waiting 50 seconds for microservice to be ready..."
-          sleep 50
 
-          echo "Triggering /posts-workflow..."
-          curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+          echo "Triggering /workflow/auto..."
+          curl -X POST http://localhost:${PORT:-3000}/workflow/auto
 
           echo "Waiting 5 minutes..."
           sleep 300
