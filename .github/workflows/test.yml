@@ -30,7 +30,42 @@ jobs:
           echo "Triggering /workflow/auto..."
           curl -X POST http://localhost:${PORT:-3000}/workflow/auto
 
-          echo "Waiting 5 minutes..."
+          echo "Checking environment variables..."
+          echo "SUPABASE_URL: ${SUPABASE_URL:0:20}..."
+          echo "SUPABASE_ANON_KEY length: ${#SUPABASE_ANON_KEY}"
+          echo "SUPABASE_BUCKET: $SUPABASE_BUCKET"
+
+          echo "Testing Supabase connectivity..."
+          SUPABASE_TEST=$(curl -s -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" "$SUPABASE_URL/rest/v1/" 2>&1)
+          echo "Supabase test response: $SUPABASE_TEST"
+
+          if [[ "$SUPABASE_TEST" == *"html"* ]]; then
+            echo "❌ Supabase is returning HTML - likely authentication or service issue"
+            exit 1
+          else
+            echo "✅ Supabase connectivity OK"
+          fi
+
+          echo "Monitoring workflow status..."
+          for i in {1..60}; do
+            echo "Checking status (attempt $i/60)..."
+            STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status)
+            echo "Status response: $STATUS"
+            
+            # Check if workflow completed or failed
+            if echo "$STATUS" | grep -q '"status":"completed"'; then
+              echo "✅ Workflow completed successfully!"
+              break
+            elif echo "$STATUS" | grep -q '"status":"failed"'; then
+              echo "❌ Workflow failed!"
+              echo "Full status: $STATUS"
+              exit 1
+            fi
+            
+            sleep 10
+          done
+
+          echo "Waiting remaining time..."
           sleep 300
           kill $SERVER_PID
           echo "Server stopped"
