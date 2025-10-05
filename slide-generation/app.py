@@ -64,7 +64,7 @@ def font_status():
         "fonts_found": []
     }
     
-    font_files = ["PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
+    font_files = ["AlanSans-Bold.ttf", "AbrilFatface-Regular.ttf", "PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
     for font_file in font_files:
         font_path = os.path.join(assets_dir, font_file)
         fonts_status["fonts_found"].append({
@@ -82,63 +82,67 @@ def generate():
     content = ' '.join(data['content'].split())  # Increased to 40 words
     
     # Create image
-    img = Image.open('assets/new-image.jpeg')
-    draw = ImageDraw.Draw(img)
+    img = Image.open('assets/Post-Base-Image.png')
+    logger.info(f"Using base image: assets/Post-Base-Image.png")
     width, height = img.size
+    logger.info(f"Image dimensions: {width}x{height}")
+    draw = ImageDraw.Draw(img)
     
-    # Fonts - Use Playfair Display fonts with multiple fallback options
+    # Fonts - Use Alan Sans Bold fonts with multiple fallback options
     font_title = None
     font_content = None
     
-    # First try Playfair Display fonts in assets directory
+    # First try Alan Sans Bold fonts in assets directory
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
     local_font_options = [
-        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 36),  # Title font (reduced by 4px from 40)
-        (os.path.join(assets_dir, "PlayfairDisplay-Regular.ttf"), 26),  # Content font (reduced by 7px from 33)
+        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 38),  # Title font (increased by 2px)
+        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 18),  # Content font (increased by 2px)
     ]
     
-    # Try different Playfair Display font paths and names
+    # Try different Alan Sans Bold font paths and names
     system_font_options = [
-        ("PlayfairDisplay-Regular.ttf", 36),  # Local assets (reduced by 4px)
-        ("PlayfairDisplay-Regular.ttf", 26),  # Local assets (reduced by 7px)
-        ("timesbd.ttf", 36),           # Windows standard fallback (reduced by 4px)
-        ("times.ttf", 26),             # Windows standard fallback (reduced by 7px)
-        ("Times New Roman Bold.ttf", 36),  # Alternative name fallback (reduced by 4px)
-        ("Times New Roman.ttf", 26),       # Alternative name fallback (reduced by 7px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 36),  # Linux fallback (reduced by 4px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 26),       # Linux fallback (reduced by 7px)
-        ("/System/Library/Fonts/Times New Roman Bold.ttf", 36),  # macOS fallback (reduced by 4px)
-        ("/System/Library/Fonts/Times New Roman.ttf", 26),       # macOS fallback (reduced by 7px)
+        ("AlanSans-Bold.ttf", 38),  # Local assets (increased by 2px)
+        ("AlanSans-Bold.ttf", 18),  # Local assets (increased by 2px)
+        ("timesbd.ttf", 38),           # Windows standard fallback (increased by 2px)
+        ("times.ttf", 18),             # Windows standard fallback (increased by 2px)
+        ("Times New Roman Bold.ttf", 38),  # Alternative name fallback (increased by 2px)
+        ("Times New Roman.ttf", 18),       # Alternative name fallback (increased by 2px)
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 38),  # Linux fallback (increased by 2px)
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 18),       # Linux fallback (increased by 2px)
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 38),  # macOS fallback (increased by 2px)
+        ("/System/Library/Fonts/Times New Roman.ttf", 18),       # macOS fallback (increased by 2px)
     ]
     
     all_font_options = local_font_options + system_font_options
     
-    # Load title font (try Playfair Display first, then fallbacks)
+    # Load title font (try Alan Sans Bold first, then fallbacks)
     for font_path, size in all_font_options:
         try:
             font_title = ImageFont.truetype(font_path, size)
-            logger.info(f"Successfully loaded title font: {font_path}")
+            logger.info(f"✅ Successfully loaded title font: {font_path} (size: {size})")
             break
-        except OSError:
+        except OSError as e:
+            logger.warning(f"❌ Failed to load title font: {font_path} (size: {size}) - {e}")
             continue
     
     # Load content font (same font, smaller size)
     for font_path, size in all_font_options:
         try:
             font_content = ImageFont.truetype(font_path, size)
-            logger.info(f"Successfully loaded content font: {font_path}")
+            logger.info(f"✅ Successfully loaded content font: {font_path} (size: {size})")
             break
-        except OSError:
+        except OSError as e:
+            logger.warning(f"❌ Failed to load content font: {font_path} (size: {size}) - {e}")
             continue
     
     # Final fallback to default fonts
     if font_title is None:
         font_title = ImageFont.load_default()
-        logger.warning("Playfair Display font not found, using default font for title")
+        logger.warning("Alan Sans Bold font not found, using default font for title")
     
     if font_content is None:
         font_content = ImageFont.load_default()
-        logger.warning("Playfair Display font not found, using default font for content")
+        logger.warning("Alan Sans Bold font not found, using default font for content")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
@@ -147,11 +151,11 @@ def generate():
     title_y = 0.06 * height  # 6% top margin (increased by 1%)
     draw.text((title_x, title_y), title, fill=(64, 64, 64), font=font_title)
     # Underline title
-    underline_y = title_y + 36 + 4  # Below the text (updated for new font size and moved 1px down)
+    underline_y = title_y + 38 + 4  # Below the text (updated for new font size)
     draw.line([title_x, underline_y, title_x + title_width, underline_y], fill=(64, 64, 64), width=2)
     
     # Content: dark black, left-aligned, wrap text, 15% top margin
-    left_margin = 0.13 * width  # Increased by 2%
+    left_margin = 0.15 * width  # Increased by 2% (from 13% to 15%)
     right_margin = 0.92 * width  # Increased by 1%
     available_width = right_margin - left_margin
     avg_char_width = 51 / 2  # Rough estimate for arial 51pt
