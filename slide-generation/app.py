@@ -11,9 +11,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def setup_fonts():
-    """Copy Times New Roman fonts to assets directory if available"""
+    """Copy Times New Roman and Montserrat fonts to assets directory if available"""
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+    fonts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
     os.makedirs(assets_dir, exist_ok=True)
+    
+    # Copy Montserrat fonts from fonts directory to assets
+    montserrat_fonts = ["Montserrat-Bold.ttf", "Montserrat-Black.ttf", "Montserrat-Medium.ttf"]
+    for font in montserrat_fonts:
+        src_path = os.path.join(fonts_dir, font)
+        dest_path = os.path.join(assets_dir, font)
+        if os.path.exists(src_path) and not os.path.exists(dest_path):
+            try:
+                shutil.copy2(src_path, dest_path)
+                logger.info(f"Copied Montserrat font from {src_path} to {dest_path}")
+            except Exception as e:
+                logger.warning(f"Failed to copy Montserrat font {src_path}: {e}")
     
     # Possible system font locations
     system_font_paths = [
@@ -64,7 +77,7 @@ def font_status():
         "fonts_found": []
     }
     
-    font_files = ["AlanSans-Bold.ttf", "AbrilFatface-Regular.ttf", "PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
+    font_files = ["Montserrat-Bold.ttf", "Montserrat-Medium.ttf", "PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
     for font_file in font_files:
         font_path = os.path.join(assets_dir, font_file)
         fonts_status["fonts_found"].append({
@@ -88,29 +101,32 @@ def generate():
     logger.info(f"Image dimensions: {width}x{height}")
     draw = ImageDraw.Draw(img)
     
-    # Fonts - Use Alan Sans Bold fonts with multiple fallback options
+    # Fonts - Use Montserrat fonts with multiple fallback options
     font_title = None
     font_content = None
     
-    # First try Alan Sans Bold fonts in assets directory
+    # Paths to font directories
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
+    fonts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fonts')
+    
+    # First try Montserrat fonts
     local_font_options = [
-        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 43),  # Title font (increased by 2px)
-        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 24),  # Content font (increased by 2px)
+        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 43),  # Title font
+        (os.path.join(assets_dir, "Montserrat-Medium.ttf"), 24),  # Content font
     ]
     
-    # Try different Alan Sans Bold font paths and names
+    # Try different Montserrat font paths and names
     system_font_options = [
-        ("AlanSans-Bold.ttf", 43),  # Local assets (increased by 2px)
-        ("AlanSans-Bold.ttf", 24),  # Local assets (increased by 2px)
-        ("timesbd.ttf", 38),           # Windows standard fallback (increased by 2px)
-        ("times.ttf", 18),             # Windows standard fallback (increased by 2px)
-        ("Times New Roman Bold.ttf", 38),  # Alternative name fallback (increased by 2px)
-        ("Times New Roman.ttf", 18),       # Alternative name fallback (increased by 2px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 38),  # Linux fallback (increased by 2px)
-        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 18),       # Linux fallback (increased by 2px)
-        ("/System/Library/Fonts/Times New Roman Bold.ttf", 38),  # macOS fallback (increased by 2px)
-        ("/System/Library/Fonts/Times New Roman.ttf", 18),       # macOS fallback (increased by 2px)
+        ("Montserrat-Bold.ttf", 43),  # Local assets
+        ("Montserrat-Medium.ttf", 24),  # Local assets
+        ("timesbd.ttf", 38),           # Windows standard fallback
+        ("times.ttf", 18),             # Windows standard fallback
+        ("Times New Roman Bold.ttf", 38),  # Alternative name fallback
+        ("Times New Roman.ttf", 18),       # Alternative name fallback
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman_Bold.ttf", 38),  # Linux fallback
+        ("/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf", 18),       # Linux fallback
+        ("/System/Library/Fonts/Times New Roman Bold.ttf", 38),  # macOS fallback
+        ("/System/Library/Fonts/Times New Roman.ttf", 18),       # macOS fallback
     ]
     
     all_font_options = local_font_options + system_font_options
@@ -138,11 +154,11 @@ def generate():
     # Final fallback to default fonts
     if font_title is None:
         font_title = ImageFont.load_default()
-        logger.warning("Alan Sans Bold font not found, using default font for title")
+        logger.warning("Montserrat Bold font not found, using default font for title")
     
     if font_content is None:
         font_content = ImageFont.load_default()
-        logger.warning("Alan Sans Bold font not found, using default font for content")
+        logger.warning("Montserrat Medium font not found, using default font for content")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
