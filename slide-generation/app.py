@@ -111,7 +111,7 @@ def generate():
     
     # First try Montserrat fonts
     local_font_options = [
-        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 47),  # Title font (increased by 4px)
+        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 53),  # Title font (increased by 4px)
         (os.path.join(assets_dir, "Montserrat-Light.ttf"), 24),  # Content font
     ]
     
