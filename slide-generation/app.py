@@ -17,7 +17,7 @@ def setup_fonts():
     os.makedirs(assets_dir, exist_ok=True)
     
     # Copy Montserrat fonts from fonts directory to assets
-    montserrat_fonts = ["Montserrat-Bold.ttf", "Montserrat-Black.ttf", "Montserrat-Medium.ttf"]
+    montserrat_fonts = ["Montserrat-Bold.ttf", "Montserrat-Black.ttf", "Montserrat-Medium.ttf", "Montserrat-Light.ttf"]
     for font in montserrat_fonts:
         src_path = os.path.join(fonts_dir, font)
         dest_path = os.path.join(assets_dir, font)
@@ -77,7 +77,7 @@ def font_status():
         "fonts_found": []
     }
     
-    font_files = ["Montserrat-Bold.ttf", "Montserrat-Medium.ttf", "PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
+    font_files = ["Montserrat-Bold.ttf", "Montserrat-Light.ttf", "PlayfairDisplay-Regular.ttf", "times_new_roman_bold.ttf", "times_new_roman.ttf"]
     for font_file in font_files:
         font_path = os.path.join(assets_dir, font_file)
         fonts_status["fonts_found"].append({
@@ -111,14 +111,14 @@ def generate():
     
     # First try Montserrat fonts
     local_font_options = [
-        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 43),  # Title font
-        (os.path.join(assets_dir, "Montserrat-Medium.ttf"), 24),  # Content font
+        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 47),  # Title font (increased by 4px)
+        (os.path.join(assets_dir, "Montserrat-Light.ttf"), 24),  # Content font
     ]
     
     # Try different Montserrat font paths and names
     system_font_options = [
-        ("Montserrat-Bold.ttf", 43),  # Local assets
-        ("Montserrat-Medium.ttf", 24),  # Local assets
+        ("Montserrat-Bold.ttf", 47),  # Local assets (increased by 4px)
+        ("Montserrat-Light.ttf", 24),  # Local assets
         ("timesbd.ttf", 38),           # Windows standard fallback
         ("times.ttf", 18),             # Windows standard fallback
         ("Times New Roman Bold.ttf", 38),  # Alternative name fallback
@@ -158,7 +158,7 @@ def generate():
     
     if font_content is None:
         font_content = ImageFont.load_default()
-        logger.warning("Montserrat Medium font not found, using default font for content")
+        logger.warning("Montserrat Light font not found, using default font for content")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
