@@ -95,14 +95,14 @@ def generate():
     # First try Alan Sans Bold fonts in assets directory
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
     local_font_options = [
-        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 38),  # Title font (increased by 2px)
-        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 18),  # Content font (increased by 2px)
+        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 43),  # Title font (increased by 2px)
+        (os.path.join(assets_dir, "AlanSans-Bold.ttf"), 24),  # Content font (increased by 2px)
     ]
     
     # Try different Alan Sans Bold font paths and names
     system_font_options = [
-        ("AlanSans-Bold.ttf", 38),  # Local assets (increased by 2px)
-        ("AlanSans-Bold.ttf", 18),  # Local assets (increased by 2px)
+        ("AlanSans-Bold.ttf", 43),  # Local assets (increased by 2px)
+        ("AlanSans-Bold.ttf", 24),  # Local assets (increased by 2px)
         ("timesbd.ttf", 38),           # Windows standard fallback (increased by 2px)
         ("times.ttf", 18),             # Windows standard fallback (increased by 2px)
         ("Times New Roman Bold.ttf", 38),  # Alternative name fallback (increased by 2px)
@@ -148,20 +148,20 @@ def generate():
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
     title_width = bbox_title[2] - bbox_title[0]
     title_x = (width - title_width) / 2
-    title_y = 0.06 * height  # 6% top margin (increased by 1%)
+    title_y = 0.09 * height  # 9% top margin (increased by 3%)
     draw.text((title_x, title_y), title, fill=(64, 64, 64), font=font_title)
     # Underline title
     underline_y = title_y + 38 + 4  # Below the text (updated for new font size)
     draw.line([title_x, underline_y, title_x + title_width, underline_y], fill=(64, 64, 64), width=2)
     
     # Content: dark black, left-aligned, wrap text, 15% top margin
-    left_margin = 0.15 * width  # Increased by 2% (from 13% to 15%)
+    left_margin = 0.16 * width  # Increased by 3% (from 13% to 16%)
     right_margin = 0.92 * width  # Increased by 1%
     available_width = right_margin - left_margin
     avg_char_width = 51 / 2  # Rough estimate for arial 51pt
     wrap_width = int(available_width / avg_char_width)
     wrapped_content = textwrap.wrap(content, width=wrap_width, break_long_words=True)
-    content_y_start = 0.19 * height  # Increased by 2% (from 17% to 19%)
+    content_y_start = 0.22 * height  # Increased by 5% (from 17% to 22%)
     line_height = 51 * 1.236  # Increased by 1%
     for line in wrapped_content:
         content_x = left_margin
