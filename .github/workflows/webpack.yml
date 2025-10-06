@@ -71,10 +71,7 @@ jobs:
             curl -X POST http://localhost:${PORT:-3000}/posts-workflow
           fi
 
-          echo "Waiting 5 minutes..."
-          sleep 300
-          kill $SERVER_PID
-          echo "Server stopped"
+          
 
         env:
           PORT: ${{ secrets.PORT }}
