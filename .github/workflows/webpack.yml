@@ -58,7 +58,20 @@ jobs:
           # Trigger auto workflow at scheduled times (requires FFmpeg)
           if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
             echo "Triggering /workflow/auto (with FFmpeg)"
-            curl -X POST http://localhost:${PORT:-3000}/workflow/auto
+            RESPONSE=$(curl -X POST http://localhost:${PORT:-3000}/workflow/auto)
+            echo "Response: $RESPONSE"
+            TASK_ID=$(echo $RESPONSE | jq -r '.taskId')
+            echo "Task ID: $TASK_ID"
+            
+            # Poll workflow status until completed
+            while true; do
+              STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status | jq -r '.status')
+              echo "Workflow status: $STATUS"
+              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
+                break
+              fi
+              sleep 30
+            done
           fi
 
           # Trigger posts workflow at scheduled times (no FFmpeg needed)
@@ -68,11 +81,24 @@ jobs:
             echo "Waiting 50 seconds for microservice to be ready..."
             sleep 50
             echo "Triggering /posts-workflow (no FFmpeg needed)"
-            curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+            RESPONSE=$(curl -X POST http://localhost:${PORT:-3000}/posts-workflow)
+            echo "Response: $RESPONSE"
+            TASK_ID=$(echo $RESPONSE | jq -r '.taskId')
+            echo "Task ID: $TASK_ID"
+            
+            # Poll workflow status until completed
+            while true; do
+              STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status | jq -r '.status')
+              echo "Workflow status: $STATUS"
+              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
+                break
+              fi
+              sleep 30
+            done
           fi
 
-          
-
+          # Kill the server
+          kill $SERVER_PID
         env:
           PORT: ${{ secrets.PORT }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
