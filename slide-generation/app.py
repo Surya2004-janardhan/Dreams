@@ -104,6 +104,8 @@ def generate():
     # Fonts - Use Montserrat fonts with multiple fallback options
     font_title = None
     font_content = None
+    title_font_path = None
+    content_font_path = None
     
     # Paths to font directories
     assets_dir = os.path.join(os.path.dirname(__file__), 'assets')
@@ -131,10 +133,11 @@ def generate():
     
     all_font_options = local_font_options + system_font_options
     
-    # Load title font (try Alan Sans Bold first, then fallbacks)
+    # Load title font (try Montserrat first, then fallbacks)
     for font_path, size in all_font_options:
         try:
             font_title = ImageFont.truetype(font_path, size)
+            title_font_path = font_path
             logger.info(f"✅ Successfully loaded title font: {font_path} (size: {size})")
             break
         except OSError as e:
@@ -145,6 +148,7 @@ def generate():
     for font_path, size in all_font_options:
         try:
             font_content = ImageFont.truetype(font_path, size)
+            content_font_path = font_path
             logger.info(f"✅ Successfully loaded content font: {font_path} (size: {size})")
             break
         except OSError as e:
@@ -154,11 +158,16 @@ def generate():
     # Final fallback to default fonts
     if font_title is None:
         font_title = ImageFont.load_default()
+        title_font_path = "default"
         logger.warning("Montserrat Bold font not found, using default font for title")
     
     if font_content is None:
         font_content = ImageFont.load_default()
+        content_font_path = "default"
         logger.warning("Montserrat Light font not found, using default font for content")
+    
+    # Log the fonts being used
+    logger.info(f"🎨 Final fonts used - Title: {title_font_path}, Content: {content_font_path}")
     
     # Title: dark grey, center
     bbox_title = draw.textbbox((0, 0), title, font=font_title)
