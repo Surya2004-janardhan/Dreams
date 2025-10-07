@@ -1,4 +1,6 @@
 flask
 pillow
+requests
+python-dotenv
 python-pptx
 gunicorn
