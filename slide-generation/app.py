@@ -111,13 +111,13 @@ def generate():
     
     # First try Montserrat fonts
     local_font_options = [
-        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 53),  # Title font (increased by 4px)
+        (os.path.join(assets_dir, "Montserrat-Bold.ttf"), 49),  # Title font (increased by 6px)
         (os.path.join(assets_dir, "Montserrat-Light.ttf"), 24),  # Content font
     ]
     
     # Try different Montserrat font paths and names
     system_font_options = [
-        ("Montserrat-Bold.ttf", 47),  # Local assets (increased by 4px)
+        ("Montserrat-Bold.ttf", 49),  # Local assets (increased by 6px)
         ("Montserrat-Light.ttf", 24),  # Local assets
         ("timesbd.ttf", 38),           # Windows standard fallback
         ("times.ttf", 18),             # Windows standard fallback
@@ -167,11 +167,11 @@ def generate():
     title_y = 0.09 * height  # 9% top margin (increased by 3%)
     draw.text((title_x, title_y), title, fill=(64, 64, 64), font=font_title)
     # Underline title
-    underline_y = title_y + 38 + 4  # Below the text (updated for new font size)
+    underline_y = title_y + 38 + 6  # Below the text (updated for new font size, pushed down by 2px)
     draw.line([title_x, underline_y, title_x + title_width, underline_y], fill=(64, 64, 64), width=2)
     
     # Content: dark black, left-aligned, wrap text, 15% top margin
-    left_margin = 0.16 * width  # Increased by 3% (from 13% to 16%)
+    left_margin = 0.13 * width  # Decreased by 3% (from 16% to 13%)
     right_margin = 0.92 * width  # Increased by 1%
     available_width = right_margin - left_margin
     avg_char_width = 51 / 2  # Rough estimate for arial 51pt
