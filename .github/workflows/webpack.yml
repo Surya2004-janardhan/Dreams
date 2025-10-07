@@ -13,6 +13,7 @@ on:
 jobs:
   run-workflows:
     runs-on: ubuntu-latest
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
         with:
@@ -81,20 +82,7 @@ jobs:
             echo "Waiting 50 seconds for microservice to be ready..."
             sleep 50
             echo "Triggering /posts-workflow (no FFmpeg needed)"
-            RESPONSE=$(curl -X POST http://localhost:${PORT:-3000}/posts-workflow)
-            echo "Response: $RESPONSE"
-            TASK_ID=$(echo $RESPONSE | jq -r '.taskId')
-            echo "Task ID: $TASK_ID"
-            
-            # Poll workflow status until completed
-            while true; do
-              STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status | jq -r '.status')
-              echo "Workflow status: $STATUS"
-              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
-                break
-              fi
-              sleep 30
-            done
+            curl -X POST http://localhost:${PORT:-3000}/posts-workflow
           fi
 
           # Kill the server
