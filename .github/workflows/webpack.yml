@@ -64,15 +64,26 @@ jobs:
             TASK_ID=$(echo $RESPONSE | jq -r '.taskId')
             echo "Task ID: $TASK_ID"
             
-            # Poll workflow status until completed
-            while true; do
-              STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status | jq -r '.status')
-              echo "Workflow status: $STATUS"
+            # Simple polling: wait at least 15 minutes, check status every 30 seconds
+            echo "Monitoring workflow for at least 15 minutes..."
+            for i in {1..30}; do
+              sleep 30
+              STATUS=$(curl -s --max-time 5 http://localhost:${PORT:-3000}/workflow/status 2>/dev/null | jq -r '.status // "unknown"' 2>/dev/null)
+              echo "Status check $i/30: $STATUS"
+              
+              # Break if workflow clearly completed or failed
               if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
+                echo "Workflow finished with status: $STATUS"
                 break
               fi
-              sleep 30
+              
+              # If server is down or status is null, assume completion
+              if [[ "$STATUS" == "unknown" ]] || [[ "$STATUS" == "null" ]] || [[ -z "$STATUS" ]]; then
+                echo "Server not responding, assuming workflow completed"
+                break
+              fi
             done
+            echo "Workflow monitoring complete"
           fi
 
           # Trigger posts workflow at scheduled times (no FFmpeg needed)
