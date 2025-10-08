@@ -27,6 +27,7 @@ def generate():
     
     payload = {
         
+  
   "overrides": [
     {
       "name": "rect-image_1",
@@ -52,6 +53,7 @@ def generate():
       "color": "#ffffff"
     }
   ]
+
 
     }
     

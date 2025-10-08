@@ -115,7 +115,7 @@ class CarouselGeneratorService {
         },
         {
           responseType: "arraybuffer", // To handle binary image data
-          timeout: 60000, // 30 second timeout
+          timeout: 60000, // 60 second timeout
         }
       );
 
