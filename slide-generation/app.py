@@ -32,7 +32,7 @@ def generate():
     {
       "name": "rect-image_1",
       "stroke": "grey",
-      "src": "https://apitemplateio-user.s3-ap-southeast-1.amazonaws.com/39821/53500/b6c42c55-e5e9-4bb1-a365-6551b386fa33.jpg"
+      "src": "https://apitemplateio-user.s3-ap-southeast-1.amazonaws.com/39821/53500/17ddfdb5-6aaf-4819-81b8-92692f10675d.jpg"
     },
     {
       "name": "text_1",
@@ -43,16 +43,17 @@ def generate():
     {
       "name": "text_2",
       "text": title,
-      "textBackgroundColor": "#141111",
-      "color": "#BAB9BE"
+      "textBackgroundColor": "#ffffff",
+      "color": "#121212"
     },
     {
       "name": "text_3",
-      "text": content,
+      "text": cotent,
       "textBackgroundColor": "rgba(0, 0, 0, 0)",
       "color": "#ffffff"
     }
   ]
+
 
 
     }
