@@ -1282,7 +1282,7 @@ ${theory}
 
 ${hashtags}
 
-❤️ Like • 💬 Comment • 🔄 Share • 🔔 Subscribe
+❤️ Like • 💬 Comment • 🔄 Share 
 👥 Tag a friend who needs to learn this!
 📚 Follow for more educational content!`;
 
@@ -1319,7 +1319,7 @@ ${fallbackTheory}
 
 ${fallbackHashtags}
 
-❤️ Like • 💬 Comment • 🔄 Share • 🔔 Subscribe
+❤️ Like • 💬 Comment • 🔄 Share • 
 👥 Tag a friend who needs to learn this!
 📚 Follow for more educational content!`;
 
