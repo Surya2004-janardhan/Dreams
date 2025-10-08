@@ -48,7 +48,7 @@ def generate():
     },
     {
       "name": "text_3",
-      "text": cotent,
+      "text": content,
       "textBackgroundColor": "rgba(0, 0, 0, 0)",
       "color": "#ffffff"
     }
