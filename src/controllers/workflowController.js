@@ -398,8 +398,10 @@ const runCompleteWorkflow = async (taskData) => {
     // Emergency cleanup on error
     await cleanupOnError();
 
-    // Send error notification with current step information
-    await sendErrorNotification(taskData, error, currentWorkflow.currentStep);
+    // Note: Error notification is already sent by runCompleteWorkflow
+    // No need to send duplicate notification here
+    logger.info("ℹ️ Error notification already sent by runCompleteWorkflow");
+
     throw error;
   }
 };
