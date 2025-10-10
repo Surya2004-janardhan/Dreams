@@ -1,5 +1,11 @@
 name: NodeJS - Scheduled Workflows
 
+# Scheduled automation for content creation workflows
+# - workflow/auto: Runs at 8:00 AM/PM IST (2:30 AM/PM UTC) - Full video creation with FFmpeg
+# - posts-workflow: Runs at 7:30 AM/PM IST (2:00 AM/PM UTC) - Social media posting only
+# - 18-minute timeout protects against infinite hangs
+# - Proper cleanup ensures resources are freed
+
 on:
   schedule:
     # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
@@ -51,6 +57,18 @@ jobs:
 
       - name: Run server and trigger endpoints
         run: |
+          # Function to cleanup server
+          cleanup_server() {
+            if [ ! -z "$SERVER_PID" ] && kill -0 $SERVER_PID 2>/dev/null; then
+              echo "Cleaning up server (PID: $SERVER_PID)"
+              kill $SERVER_PID 2>/dev/null || true
+              wait $SERVER_PID 2>/dev/null || true
+            fi
+          }
+
+          # Set trap to cleanup on exit
+          trap cleanup_server EXIT
+
           node server.js &
           SERVER_PID=$!
           echo "Server started with PID $SERVER_PID"
@@ -59,13 +77,27 @@ jobs:
           # Trigger auto workflow at scheduled times (requires FFmpeg)
           if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
             echo "Triggering /workflow/auto (with FFmpeg)"
-            RESPONSE=$(curl -X POST http://localhost:${PORT:-3000}/workflow/auto)
-            echo "Response: $RESPONSE"
-            TASK_ID=$(echo $RESPONSE | jq -r '.taskId')
-            echo "Task ID: $TASK_ID"
+            RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:${PORT:-3000}/workflow/auto)
+            CURL_EXIT_CODE=$?
+            
+            if [ $CURL_EXIT_CODE -eq 0 ]; then
+              echo "✅ Workflow/auto triggered successfully"
+              TASK_ID=$(echo "$RESPONSE" | jq -r '.taskId // empty' 2>/dev/null)
+              if [ -n "$TASK_ID" ] && [ "$TASK_ID" != "null" ] && [ "$TASK_ID" != "empty" ]; then
+                echo "📋 Task ID: $TASK_ID"
+              else
+                echo "⚠️ No task ID returned, but proceeding with monitoring"
+              fi
+            else
+              echo "❌ Workflow/auto trigger failed (exit code: $CURL_EXIT_CODE)"
+              echo "Response: $RESPONSE"
+              echo "Continuing with monitoring anyway..."
+            fi
             
             # Simple polling: wait at least 15 minutes, check status every 30 seconds
             echo "Monitoring workflow for at least 15 minutes..."
+            UNKNOWN_COUNT=0
+            
             for i in {1..30}; do
               sleep 30
               # Try to get status with multiple fallback methods
@@ -87,15 +119,22 @@ jobs:
               
               echo "Status check $i/30: $STATUS"
               
+              # Track consecutive unknown statuses
+              if [[ "$STATUS" == "unknown" ]]; then
+                UNKNOWN_COUNT=$((UNKNOWN_COUNT + 1))
+              else
+                UNKNOWN_COUNT=0
+              fi
+              
               # Break if workflow clearly completed or failed
               if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]] || [[ "$STATUS" == "partial_success" ]]; then
                 echo "Workflow finished with status: $STATUS"
                 break
               fi
               
-              # If server is down or status is unknown, assume completion after a few checks
-              if [[ "$STATUS" == "unknown" ]] && [[ $i -ge 3 ]]; then
-                echo "Server not responding consistently, assuming workflow completed"
+              # If server is down or status is unknown for 3+ consecutive checks, assume completion
+              if [[ $UNKNOWN_COUNT -ge 3 ]]; then
+                echo "Server not responding consistently (3+ unknown statuses), assuming workflow completed"
                 break
               fi
             done
@@ -105,15 +144,30 @@ jobs:
           # Trigger posts workflow at scheduled times (no FFmpeg needed)
           if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
             echo "Pinging slide microservice..."
-            curl -X GET https://slide-microservice.onrender.com
+            SLIDE_RESPONSE=$(curl -s --max-time 30 -X GET https://slide-microservice.onrender.com)
+            if [ $? -eq 0 ]; then
+              echo "✅ Slide microservice ping successful"
+            else
+              echo "⚠️ Slide microservice ping failed, proceeding anyway"
+            fi
+            
             echo "Waiting 50 seconds for microservice to be ready..."
             sleep 50
+            
             echo "Triggering /posts-workflow (no FFmpeg needed)"
-            curl -X POST http://localhost:${PORT:-3000}/posts-workflow
+            POSTS_RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:${PORT:-3000}/posts-workflow)
+            POSTS_EXIT_CODE=$?
+            
+            if [ $POSTS_EXIT_CODE -eq 0 ]; then
+              echo "✅ Posts workflow triggered successfully"
+              echo "Response: $POSTS_RESPONSE"
+            else
+              echo "❌ Posts workflow trigger failed (exit code: $POSTS_EXIT_CODE)"
+              echo "Response: $POSTS_RESPONSE"
+            fi
           fi
 
-          # Kill the server
-          kill $SERVER_PID
+          # Server will be cleaned up automatically by trap
         env:
           PORT: ${{ secrets.PORT }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
