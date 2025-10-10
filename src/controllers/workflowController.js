@@ -671,34 +671,23 @@ const runWorkflow = async (req, res) => {
 /**
  * Get current workflow status
  */
-const getWorkflowStatus = async (req, res) => {
-  res.json({
-    success: true,
-    workflow: {
-      taskId: currentWorkflow.taskId,
-      status: currentWorkflow.status,
-      currentStep: currentWorkflow.currentStep,
-      error: currentWorkflow.error,
-      taskData: currentWorkflow.taskData
-        ? {
-            idea: currentWorkflow.taskData.idea,
-            sno: currentWorkflow.taskData.sno,
-            rowId: currentWorkflow.taskData.rowId,
-          }
-        : null,
-      progress: getProgressInfo(currentWorkflow.currentStep),
-      results: {
-        scriptGenerated: !!currentWorkflow.results.script,
-        audioGenerated: !!currentWorkflow.results.audioFiles,
-        imagesGenerated: currentWorkflow.results.images?.length || 0,
-        subtitlesCreated: !!currentWorkflow.results.subtitles,
-        videoComposed: !!currentWorkflow.results.finalVideo,
-        socialMediaUploaded: !!currentWorkflow.results.uploadResults,
-        sheetUpdated: currentWorkflow.currentStep === "finished",
-        cleaned: currentWorkflow.currentStep === "finished",
-      },
-    },
-  });
+const getWorkflowStatus = (req, res) => {
+  try {
+    res.json({
+      status: currentWorkflow.status || "idle",
+      currentStep: currentWorkflow.currentStep || null,
+      error: currentWorkflow.error || null,
+      taskId: currentWorkflow.taskId || null,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error getting workflow status:", error);
+    res.status(500).json({
+      status: "error",
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+  }
 };
 
 /**

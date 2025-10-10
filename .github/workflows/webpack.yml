@@ -68,18 +68,34 @@ jobs:
             echo "Monitoring workflow for at least 15 minutes..."
             for i in {1..30}; do
               sleep 30
-              STATUS=$(curl -s --max-time 5 http://localhost:${PORT:-3000}/workflow/status 2>/dev/null | jq -r '.status // "unknown"' 2>/dev/null)
+              # Try to get status with multiple fallback methods
+              STATUS_RESPONSE=$(curl -s --max-time 10 http://localhost:${PORT:-3000}/workflow/status 2>/dev/null)
+              
+              if [ $? -eq 0 ] && [ -n "$STATUS_RESPONSE" ]; then
+                # Try jq first
+                STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status' 2>/dev/null)
+                if [ $? -ne 0 ] || [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+                  # Fallback: try grep for status
+                  STATUS=$(echo "$STATUS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+                  if [ -z "$STATUS" ]; then
+                    STATUS="unknown"
+                  fi
+                fi
+              else
+                STATUS="unknown"
+              fi
+              
               echo "Status check $i/30: $STATUS"
               
               # Break if workflow clearly completed or failed
-              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]]; then
+              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]] || [[ "$STATUS" == "partial_success" ]]; then
                 echo "Workflow finished with status: $STATUS"
                 break
               fi
               
-              # If server is down or status is null, assume completion
-              if [[ "$STATUS" == "unknown" ]] || [[ "$STATUS" == "null" ]] || [[ -z "$STATUS" ]]; then
-                echo "Server not responding, assuming workflow completed"
+              # If server is down or status is unknown, assume completion after a few checks
+              if [[ "$STATUS" == "unknown" ]] && [[ $i -ge 3 ]]; then
+                echo "Server not responding consistently, assuming workflow completed"
                 break
               fi
             done
