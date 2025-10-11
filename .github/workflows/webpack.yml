@@ -143,26 +143,22 @@ jobs:
 
           # Trigger posts workflow at scheduled times (no FFmpeg needed)
           if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
-            echo "Pinging slide microservice..."
-            SLIDE_RESPONSE=$(curl -s --max-time 30 -X GET https://slide-microservice.onrender.com)
-            if [ $? -eq 0 ]; then
-              echo "✅ Slide microservice ping successful"
-            else
-              echo "⚠️ Slide microservice ping failed, proceeding anyway"
-            fi
+            echo "Pinging slide microservice (fire and forget)..."
+            # Fire and forget ping - don't wait for response
+            curl -s -X GET https://slide-microservice.onrender.com > /dev/null 2>&1 &
             
-            echo "Waiting 50 seconds for microservice to be ready..."
-            sleep 50
+            echo "Waiting 65 seconds for microservice to wake up..."
+            sleep 65
             
             echo "Triggering /posts-workflow (no FFmpeg needed)"
-            POSTS_RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:${PORT:-3000}/posts-workflow)
-            POSTS_EXIT_CODE=$?
+            # Always succeed even if posts workflow fails
+            POSTS_RESPONSE=$(timeout 60 curl -s -X POST http://localhost:${PORT:-3000}/posts-workflow 2>/dev/null || echo "timeout")
             
-            if [ $POSTS_EXIT_CODE -eq 0 ]; then
+            if [[ "$POSTS_RESPONSE" != "timeout" ]] && [[ -n "$POSTS_RESPONSE" ]]; then
               echo "✅ Posts workflow triggered successfully"
               echo "Response: $POSTS_RESPONSE"
             else
-              echo "❌ Posts workflow trigger failed (exit code: $POSTS_EXIT_CODE)"
+              echo "❌ Posts workflow trigger failed or timed out"
               echo "Response: $POSTS_RESPONSE"
             fi
           fi
