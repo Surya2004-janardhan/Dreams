@@ -1244,7 +1244,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const modelName = "gemini-2.0-flash-exp"; // This model supports generateContent
 
     // Generate 60-word theory about the title with emojis
-    const theoryPrompt = `Write exactly 60 words explaining the theory/concept of "${title}". Make it educational, engaging, and include relevant emojis throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
+    const theoryPrompt = `Write exactly 180 words within exactly 3 paras explaining the theory/concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
 
     const theoryResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
@@ -1260,7 +1260,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
       theoryResponse.data.candidates[0].content.parts[0].text.trim();
 
     // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate exactly 15 highly engaging and relevant hashtags for a video about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
+    const hashtagPrompt = `Generate exactly 15 highly engaging(mostly trending right now) and relevant hashtags for a insta/yt video  about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
 
     const hashtagResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
