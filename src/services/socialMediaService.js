@@ -1244,7 +1244,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const modelName = "gemini-2.0-flash-exp"; // This model supports generateContent
 
     // Generate 60-word theory about the title with emojis
-    const theoryPrompt = `Write exactly 180 words within exactly 3 paras explaining the theory/concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
+    const theoryPrompt = `Write exactly 100 words within exactly 2 paras explaining the theory/concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
 
     const theoryResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
