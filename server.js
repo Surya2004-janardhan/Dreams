@@ -133,3 +133,9 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+
+
+
+// # run auto workflow cmd
+// # PS C:\Users\chint\Desktop\Ai-content-automation> Invoke-WebRequest -Uri "http://localhost:3000/workflow/auto" -Method POST
