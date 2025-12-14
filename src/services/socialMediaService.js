@@ -876,9 +876,9 @@ const uploadToBothPlatforms = async (
   try {
     logger.info("🚀 Starting upload to YouTube, Instagram, and Facebook...");
 
-    // Generate unified caption for all platforms using Gemini
+    // Generate unified caption for all platforms using Groq
     const unifiedContent = await generateUnifiedSocialMediaCaption(title);
-    logger.info("🤖 Unified Gemini-generated caption ready for all platforms");
+    logger.info("🤖 Unified Groq-generated caption ready for all platforms");
 
     // Step 1: Upload video to Supabase once (shared for Instagram and Facebook)
     logger.info(
@@ -1229,51 +1229,72 @@ const generateTopicExplanation = async (
 };
 
 /**
- * Generate unified social media caption using Gemini LLM
+ * Generate unified social media caption using Groq LLM
  * Creates the same lengthy caption for all 3 platforms
  */
 const generateUnifiedSocialMediaCaption = async (title) => {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY_FOR_T2T || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      throw new Error("No Gemini API key available for T2T");
+      throw new Error("No Groq API key available");
     }
 
-    // Use a working model from the available list
-    const modelName = "gemini-2.0-flash-exp"; // This model supports generateContent
+    // Use Groq's fast model
+    const modelName = "llama-3.3-70b-versatile";
 
-    // Generate 60-word theory about the title with emojis
+    // Generate 100-word theory about the title
     const theoryPrompt = `Write exactly 100 words within exactly 2 paras explaining the theory/concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
 
     const theoryResponse = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      `https://api.groq.com/openai/v1/chat/completions`,
       {
-        contents: [{ parts: [{ text: theoryPrompt }] }],
+        model: modelName,
+        messages: [
+          {
+            role: "user",
+            content: theoryPrompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 500,
       },
       {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
         timeout: 30000, // 30 second timeout
       }
     );
 
-    const theory =
-      theoryResponse.data.candidates[0].content.parts[0].text.trim();
+    const theory = theoryResponse.data.choices[0].message.content.trim();
 
     // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate exactly 15 highly engaging(mostly trending right now) and relevant hashtags for a insta/yt video  about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
+    const hashtagPrompt = `Generate exactly 15 highly engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
 
     const hashtagResponse = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      `https://api.groq.com/openai/v1/chat/completions`,
       {
-        contents: [{ parts: [{ text: hashtagPrompt }] }],
+        model: modelName,
+        messages: [
+          {
+            role: "user",
+            content: hashtagPrompt,
+          },
+        ],
+        temperature: 0.8,
+        max_tokens: 200,
       },
       {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
         timeout: 30000,
       }
     );
 
-    const hashtags =
-      hashtagResponse.data.candidates[0].content.parts[0].text.trim();
+    const hashtags = hashtagResponse.data.choices[0].message.content.trim();
 
     // Create the unified caption
     const unifiedCaption = `${title}
@@ -1297,14 +1318,14 @@ ${hashtags}
     };
   } catch (error) {
     logger.error(
-      "❌ Failed to generate unified caption with Gemini:",
+      "❌ Failed to generate unified caption with Groq:",
       error.response?.status,
       error.response?.statusText
     );
 
     // Check if it's a quota exceeded error
     if (error.response?.status === 429) {
-      logger.warn("🚨 Gemini API quota exceeded - using fallback captions");
+      logger.warn("🚨 Groq API quota exceeded - using fallback captions");
     }
 
     // Fallback caption with dynamic content based on title
