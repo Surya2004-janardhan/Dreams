@@ -22,8 +22,7 @@ const axios = require("axios");
  */
 const generateImagePrompt = async (title) => {
   try {
-    const apiKey =
-      process.env.GEMINI_API_KEY_FOR_T2T || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY_FOR_IMAGES_2;
     if (!apiKey) {
       throw new Error("No T2T API key available");
     }
