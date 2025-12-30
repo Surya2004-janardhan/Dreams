@@ -1243,7 +1243,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const modelName = "llama-3.3-70b-versatile";
 
     // Generate 100-word theory about the title
-    const theoryPrompt = `Write exactly 200 words within exactly 2 lines points wise with emojes explaining the concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications.`;
+    const theoryPrompt = `Write exactly 200 words in total within in points as each 2 lines , include emojes relevant emojes explaining the concept of "${title}.no introductory text just onlt content`;
 
     const theoryResponse = await axios.post(
       `https://api.groq.com/openai/v1/chat/completions`,
@@ -1270,7 +1270,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const theory = theoryResponse.data.choices[0].message.content.trim();
 
     // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate exactly 15 highly engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
+    const hashtagPrompt = `Generate exactly 15 highly real-time current engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}". Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
 
     const hashtagResponse = await axios.post(
       `https://api.groq.com/openai/v1/chat/completions`,
