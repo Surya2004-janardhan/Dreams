@@ -1243,7 +1243,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const modelName = "llama-3.3-70b-versatile";
 
     // Generate 100-word theory about the title
-    const theoryPrompt = `Write exactly 100 words within exactly 2 paras explaining the theory/concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications, and why it's important to learn.`;
+    const theoryPrompt = `Write exactly 200 words within exactly 2 lines points wise with emojes explaining the concept of "${title}". Make it educational, engaging throughout the explanation. Focus on key concepts, practical applications.`;
 
     const theoryResponse = await axios.post(
       `https://api.groq.com/openai/v1/chat/completions`,
