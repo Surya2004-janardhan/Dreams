@@ -112,15 +112,22 @@ const generateImageWithGemini = async (prompt, outputDir = null) => {
     logger.info(`🔑 Using API key ending with: ...${apiKey.slice(-10)}`);
     logger.info(`📝 Prompt: ${prompt.substring(0, 100)}...`);
 
+    // Create a more direct prompt for image generation
+    const imagePrompt = `Generate an image based on this description: ${prompt}
+
+IMPORTANT: Generate the actual image directly. Do not use tools or external services. Create the visual content described.`;
+
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-image",
+      model: "gemini-2.5-flash-image-preview",
       generationConfig: {
         responseModalities: ["Text", "Image"],
+        temperature: 0.7,
       },
+      tools: [], // Disable tool calling to force direct image generation
     });
 
-    const response = await model.generateContent(prompt);
+    const response = await model.generateContent(imagePrompt);
 
     for (const part of response.response.candidates[0].content.parts) {
       if (part.text) {
@@ -190,7 +197,7 @@ const generateTitleImage = async (title, outputDir = null) => {
     // Step 1: Generate enhanced prompt using T2T API
     const enhancedPrompt = await generateImagePrompt(title);
 
-    // Step 2: Generate image using T2I API with enhanced prompt
+    // Step 2: Generate image using Gemini with enhanced prompt
     const imagePath = await generateImageWithGemini(enhancedPrompt, outputDir);
     logger.info(`✅ Title image generated successfully: ${imagePath}`);
 
