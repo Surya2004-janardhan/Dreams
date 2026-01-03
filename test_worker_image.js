@@ -1,4 +1,7 @@
-const { generateImageFromWorker, generateTitleImage } = require("./src/services/imageService");
+const {
+  generateImageFromWorker,
+  generateTitleImage,
+} = require("./src/services/imageService");
 const logger = require("./src/config/logger");
 
 /**
@@ -14,7 +17,8 @@ async function testImageGeneration() {
     logger.info("\n📋 Test 1: Testing generateImageFromWorker() directly");
     logger.info("-".repeat(60));
 
-    const testPrompt = "A futuristic cyberpunk robot, ultra realistic, 4k, professional lighting";
+    const testPrompt =
+      "A futuristic cyberpunk robot, ultra realistic, 4k, professional lighting";
     logger.info(`📝 Using test prompt: "${testPrompt}"`);
 
     const imagePath1 = await generateImageFromWorker(testPrompt);
@@ -42,7 +46,9 @@ async function testImageGeneration() {
     }
 
     // Test 3: Another title test
-    logger.info("\n📋 Test 3: Testing generateTitleImage() with different title");
+    logger.info(
+      "\n📋 Test 3: Testing generateTitleImage() with different title"
+    );
     logger.info("-".repeat(60));
 
     const testTitle2 = "Machine Learning Basics";
