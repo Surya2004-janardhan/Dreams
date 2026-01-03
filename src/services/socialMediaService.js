@@ -1243,7 +1243,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     const modelName = "llama-3.3-70b-versatile";
 
     // Generate 100-word theory about the title
-    const theoryPrompt = `Write exactly 200 words in total within in points as each 2 lines , include emojes relevant emojes explaining the concept of "${title}.no introductory text just onlt content`;
+    const theoryPrompt = `Write exactly 200 words in total within in points as each 2 lines where each point is in new line with a space 1 line left in between points, make sure each point starts with one emoje arrrow no bold words in the whole thing , include emojes relevant emojes explaining the concept of "${title}.no introductory text just onlt content`;
 
     const theoryResponse = await axios.post(
       `https://api.groq.com/openai/v1/chat/completions`,
