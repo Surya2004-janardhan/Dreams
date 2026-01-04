@@ -1,23 +1,23 @@
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 
 /**
- * NEW IMAGE SERVICE - Using Worker API
+ * IMAGE SERVICE - Using Gemini API
  *
- * Purpose: Generate title images via Cloudflare Workers endpoint
- * Endpoint: https://quiet-scene-4d5f.chintalajanardhan2004.workers.dev/
- * Method: POST with JSON prompt
+ * Purpose: Generate title images via Google Gemini API
+ * Model: gemini-2.5-flash-image
+ * Method: Direct image generation with text prompt
  * Response: Image file (PNG)
  */
 
-/**
- * Generate image using Worker API - Simple fetch function
- * @param {string} prompt - Image generation prompt
- * @param {string} outputDir - Optional output directory
- * @returns {Promise<string>} - Path to generated image
- */
+/*
+// ================================================================
+// ARCHIVED WORKER API FUNCTIONS - COMMENTED OUT
+// ================================================================
+
 const generateImageFromWorker = async (prompt, outputDir = null) => {
   try {
     const workerUrl =
@@ -63,8 +63,81 @@ const generateImageFromWorker = async (prompt, outputDir = null) => {
   }
 };
 
+// ================================================================
+*/
+
 /**
- * MAIN FUNCTION: Generate title image using Worker API
+ * Generate image using Gemini Image API
+ * @param {string} prompt - Image generation prompt
+ * @param {string} outputDir - Optional output directory
+ * @returns {Promise<string>} - Path to generated image
+ */
+const generateImageWithGemini = async (prompt, outputDir = null) => {
+  try {
+    const apiKey =
+      process.env.GEMINI_API_KEY_FOR_IMAGES_1 ||
+      process.env.GEMINI_API_KEY_FOR_IMAGES_2 ||
+      process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("No Gemini API key available");
+    }
+
+    logger.info(`🎨 Generating image with Gemini...`);
+    logger.info(`🔑 Using API key ending with: ...${apiKey.slice(-10)}`);
+    logger.info(`📝 Prompt: ${prompt.substring(0, 100)}...`);
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash-image",
+      generationConfig: {
+        responseModalities: ["image"],
+        temperature: 0.7,
+      },
+    });
+
+    const response = await model.generateContent(prompt);
+
+    // Check if we got image data
+    if (!response.response.candidates || !response.response.candidates[0]) {
+      throw new Error("No image data received from Gemini");
+    }
+
+    const candidate = response.response.candidates[0];
+    const parts = candidate.content.parts;
+
+    for (const part of parts) {
+      if (part.inlineData) {
+        const imageData = part.inlineData.data;
+        const buffer = Buffer.from(imageData, "base64");
+
+        const timestamp = Date.now();
+        const baseDir = outputDir || "images";
+        const imagePath = path.resolve(
+          `${baseDir}/title_image_${timestamp}.png`
+        );
+
+        // Ensure output directory exists
+        const imageDir = path.dirname(imagePath);
+        if (!fs.existsSync(imageDir)) {
+          fs.mkdirSync(imageDir, { recursive: true });
+        }
+
+        fs.writeFileSync(imagePath, buffer);
+        logger.info(`✅ Image saved successfully: ${imagePath}`);
+        return imagePath;
+      }
+    }
+
+    throw new Error("No image data in Gemini response");
+  } catch (error) {
+    logger.error(`❌ Gemini image generation failed:`, error.message || error);
+    throw error;
+  }
+};
+
+/**
+ * MAIN FUNCTION: Generate title image using Gemini API
  * @param {string} title - Video title text
  * @param {string} outputDir - Optional output directory (defaults to 'images')
  * @returns {Promise<Object>} - {success, imagePath, usedDefault, error}
@@ -73,17 +146,14 @@ const generateTitleImage = async (title, outputDir = null) => {
   try {
     logger.info(`🎨 Starting title image generation for: "${title}"`);
 
-    // Create a descriptive prompt from the title
-    const prompt = `Create a professional title card image with 9:8 aspect ratio and clean white background.
+    // Escape any special characters in the title for the prompt
+    const cleanedTitle = title.replace(/"/g, "'").replace(/\n/g, " ");
 
-MAIN ELEMENT: Display the text "${title}" in bold, professional typography equivalent to 57px Arial Black font, centered for optimal readability.
+    // Simple prompt for Gemini - white background with centered black text
+    const prompt = `White background with black text in center saying "${cleanedTitle}". Bold large text. Professional. Clear.`;
 
-VISUAL ENHANCEMENT: Add 1-2 small, relevant visual elements based on the topic.
-
-DESIGN: Keep visual elements small (10-15% of image), positioned around title without blocking text. Use modern color palette with professional appearance. Perfect for educational video overlay and social media platforms.`;
-
-    // Generate image using Worker API
-    const imagePath = await generateImageFromWorker(prompt, outputDir);
+    // Generate image using Gemini
+    const imagePath = await generateImageWithGemini(prompt, outputDir);
     logger.info(`✅ Title image generated successfully: ${imagePath}`);
 
     return {
@@ -180,7 +250,7 @@ module.exports = {
   generateTitleImage,
 
   // Core image generation function
-  generateImageFromWorker,
+  generateImageWithGemini,
 
   // Utility functions
   validateImage,
@@ -192,10 +262,8 @@ module.exports = {
 ARCHIVED FUNCTIONS - KEPT FOR REFERENCE
 =====================================================
 
-// Old Gemini functions commented out
-// const generateImagePrompt = async (title) => { ... }
-// const generateImageWithGemini = async (prompt, outputDir = null) => { ... }
-// const createFallbackImage = async (title, outputDir = null) => { ... }
+// Old Worker API functions commented out
+// const generateImageFromWorker = async (prompt, outputDir = null) => { ... }
 
-These functions have been replaced with the simpler Worker API approach.
+This function has been replaced with Gemini API approach.
 */

@@ -1,27 +1,28 @@
 const {
-  generateImageFromWorker,
+  generateImageWithGemini,
   generateTitleImage,
 } = require("./src/services/imageService");
 const logger = require("./src/config/logger");
 
 /**
- * Test script for the new Worker API image generation function
+ * Test script for the Gemini image generation function
  */
 async function testImageGeneration() {
   logger.info("=".repeat(60));
-  logger.info("Testing Worker API Image Generation Function");
+  logger.info("Testing Gemini Image Generation Function");
   logger.info("=".repeat(60));
 
   try {
-    // Test 1: Test the core generateImageFromWorker function directly
-    logger.info("\n📋 Test 1: Testing generateImageFromWorker() directly");
+    // Test 1: Test the core generateImageWithGemini function directly
+    logger.info("\n📋 Test 1: Testing generateImageWithGemini() directly");
     logger.info("-".repeat(60));
 
     const testPrompt =
+      "White background with black text in center saying 'Machine Learning'. Bold large text. Professional.";
       "A futuristic cyberpunk robot, ultra realistic, 4k, professional lighting";
     logger.info(`📝 Using test prompt: "${testPrompt}"`);
 
-    const imagePath1 = await generateImageFromWorker(testPrompt);
+    const imagePath1 = await generateImageWithGemini(testPrompt);
     logger.info(`✅ Test 1 PASSED - Image saved at: ${imagePath1}`);
 
     // Test 2: Test the main generateTitleImage function
