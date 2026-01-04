@@ -19,7 +19,7 @@ async function testImageGeneration() {
 
     const testPrompt =
       "White background with black text in center saying 'Machine Learning'. Bold large text. Professional.";
-      "A futuristic cyberpunk robot, ultra realistic, 4k, professional lighting";
+    ("A futuristic cyberpunk robot, ultra realistic, 4k, professional lighting");
     logger.info(`📝 Using test prompt: "${testPrompt}"`);
 
     const imagePath1 = await generateImageWithGemini(testPrompt);
