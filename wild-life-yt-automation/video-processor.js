@@ -3,6 +3,7 @@ const path = require("path");
 const { exec } = require("child_process");
 const { google } = require("googleapis");
 const readline = require("readline");
+const nodemailer = require("nodemailer");
 
 class VideoProcessor {
   constructor(googleSheetId = null) {
@@ -16,10 +17,15 @@ class VideoProcessor {
     this.credentialsPath = path.join(__dirname, "credentials.json");
     this.tokenPath = path.join(__dirname, "token.json");
 
-    // Configuration
-    this.defaultDescription = "";
-    this.defaultHashtags = [];
+    // Configuration - CONSTANT FOR ALL VIDEOS
+    this.defaultDescription =
+      "Educational wildlife content - nature, animals, and conservation";
+    this.defaultHashtags = ["#wildlife", "#education", "#nature", "#learning"];
     this.autoCaption = true;
+
+    // Email Configuration
+    this.emailTransporter = null;
+    this.recipientEmail = "";
 
     this.ensureDirectories();
   }
@@ -57,7 +63,7 @@ class VideoProcessor {
     try {
       const auth = new google.auth.GoogleAuth({
         keyFile: this.credentialsPath,
-        scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
       });
 
       this.sheets = google.sheets({
@@ -101,9 +107,12 @@ class VideoProcessor {
           obj[header.trim()] = (row[index] || "").trim();
         });
 
-        // Only process rows with "not posted" status
-        if (obj.status && obj.status.toLowerCase() === "not posted") {
-          data.push(obj);
+        // Only process rows with empty "Posted Status" (not posted)
+        if (
+          !obj["Posted Status"] ||
+          obj["Posted Status"].toString().trim() === ""
+        ) {
+          data.push({ ...obj, rowIndex: i + 1 });
         }
       }
 
@@ -115,136 +124,146 @@ class VideoProcessor {
     }
   }
 
-  // Update status in Google Sheet
-  async updateGoogleSheetStatus(sno, newStatus) {
+  // Update status and timestamp in Google Sheet
+  async updateGoogleSheetStatus(sno, rowIndex) {
     try {
-      const response = await this.sheets.spreadsheets.values.get({
-        spreadsheetId: this.googleSheetId,
-        range: "Sheet1!A:A",
+      const now = new Date();
+      const timestamp = now.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       });
 
-      const rows = response.data.values;
-      const rowIndex = rows.findIndex((row) => row[0] === String(sno));
-
-      if (rowIndex === -1) {
-        console.log(`Could not find row with sno ${sno}`);
-        return;
-      }
-
+      // Update Posted Status (column B) with timestamp
       await this.sheets.spreadsheets.values.update({
         spreadsheetId: this.googleSheetId,
-        range: `Sheet1!A${rowIndex + 1}:Z${rowIndex + 1}`,
+        range: `Sheet1!B${rowIndex}`,
         valueInputOption: "RAW",
         resource: {
-          values: [[sno, newStatus]],
+          values: [[timestamp]],
         },
       });
 
-      console.log(`✓ Updated row ${sno} status to "${newStatus}"`);
+      // Update Time Posted Completion (last column) with timestamp
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId: this.googleSheetId,
+        range: `Sheet1!I${rowIndex}`,
+        valueInputOption: "RAW",
+        resource: {
+          values: [[timestamp]],
+        },
+      });
+
+      console.log(
+        `✓ Updated row ${sno} - Status: "Posted" | Timestamp: ${timestamp}`
+      );
     } catch (error) {
       console.error("Error updating Google Sheet:", error);
     }
   }
 
+  // Parse timing from format "1 - 7 min" or "1-7 min" to seconds
+  parseTimingToSeconds(timingStr) {
+    if (!timingStr) return null;
+
+    // Extract numbers from format like "1 - 7 min", "1-7 min", "14 - 21 min"
+    const match = timingStr.match(/(\d+)\s*-\s*(\d+)\s*min/i);
+    if (match) {
+      const startMin = parseInt(match[1]);
+      const endMin = parseInt(match[2]);
+      return {
+        start: `${startMin}:00`,
+        end: `${endMin}:00`,
+        display: timingStr,
+      };
+    }
+    return null;
+  }
+
   // Process video row (extract 2 long + 4 short videos)
   async processVideoRow(videoRow) {
     const {
-      sno,
-      long1_0_7m,
-      long1_7_14m,
-      long1_14_21m,
-      long2_0_7m,
-      long2_7_14m,
-      long2_14_21m,
-      short1_0_1m,
-      short1_1_2m,
-      short1_2_3m,
-      short1_3_4m,
-      short2_0_1m,
-      short2_1_2m,
-      short2_2_3m,
-      short2_3_4m,
-      short3_0_1m,
-      short3_1_2m,
-      short3_2_3m,
-      short3_3_4m,
-      short4_0_1m,
-      short4_1_2m,
-      short4_2_3m,
-      short4_3_4m,
+      Sno,
+      "Long Form 1": long1,
+      "Long Form 2": long2,
+      "Short 1": short1,
+      "Short 2": short2,
+      "Short 3": short3,
+      "Short 4": short4,
+      rowIndex,
     } = videoRow;
 
     try {
       const videos = [];
 
       // Long-form video 1
-      if (long1_0_7m) {
-        videos.push({
-          id: `${sno}_long1`,
-          type: "long",
-          title: `Part ${sno} - Long Form 1`,
-          segments: [
-            { name: "0-7m", timing: long1_0_7m },
-            { name: "7-14m", timing: long1_7_14m },
-            { name: "14-21m", timing: long1_14_21m },
-          ],
-        });
-      }
-
-      // Long-form video 2
-      if (long2_0_7m) {
-        videos.push({
-          id: `${sno}_long2`,
-          type: "long",
-          title: `Part ${sno} - Long Form 2`,
-          segments: [
-            { name: "0-7m", timing: long2_0_7m },
-            { name: "7-14m", timing: long2_7_14m },
-            { name: "14-21m", timing: long2_14_21m },
-          ],
-        });
-      }
-
-      // Short-form videos 1-4
-      for (let i = 1; i <= 4; i++) {
-        const shortKey = `short${i}`;
-        const timing0 = videoRow[`${shortKey}_0_1m`];
-
-        if (timing0) {
+      if (long1) {
+        const timing = this.parseTimingToSeconds(long1);
+        if (timing) {
           videos.push({
-            id: `${sno}_${shortKey}`,
-            type: "short",
-            title: `Part ${sno} - Short Form ${i}`,
-            segments: [
-              { name: "0-1m", timing: videoRow[`${shortKey}_0_1m`] },
-              { name: "1-2m", timing: videoRow[`${shortKey}_1_2m`] },
-              { name: "2-3m", timing: videoRow[`${shortKey}_2_3m`] },
-              { name: "3-4m", timing: videoRow[`${shortKey}_3_4m`] },
-            ],
+            id: `${Sno}_long1`,
+            type: "long",
+            title: `Part - ${Sno} - Long Form 1`,
+            timing: timing,
           });
         }
       }
 
-      // Update sheet status
-      await this.updateGoogleSheetStatus(sno, "posted");
+      // Long-form video 2
+      if (long2) {
+        const timing = this.parseTimingToSeconds(long2);
+        if (timing) {
+          videos.push({
+            id: `${Sno}_long2`,
+            type: "long",
+            title: `Part - ${Sno} - Long Form 2`,
+            timing: timing,
+          });
+        }
+      }
 
-      console.log(`✓ Row ${sno} processed: ${videos.length} videos extracted`);
+      // Short-form videos 1-4
+      for (let i = 1; i <= 4; i++) {
+        const shortKey = `Short ${i}`;
+        const shortTiming = videoRow[shortKey];
+
+        if (shortTiming) {
+          const timing = this.parseTimingToSeconds(shortTiming);
+          if (timing) {
+            videos.push({
+              id: `${Sno}_short${i}`,
+              type: "short",
+              title: `Part - ${Sno} - Short Form ${i}`,
+              timing: timing,
+            });
+          }
+        }
+      }
+
+      // Update sheet status and timestamp
+      await this.updateGoogleSheetStatus(Sno, rowIndex);
+
+      console.log(`✓ Row ${Sno} processed: ${videos.length} videos extracted`);
 
       return {
-        sno,
+        sno: Sno,
         videosCount: videos.length,
         videos: videos.map((v) => ({
           id: v.id,
           type: v.type,
           title: v.title,
-          segments: v.segments,
+          timing: v.timing,
           description: this.defaultDescription,
           hashtags: this.defaultHashtags,
           captions: this.autoCaption,
         })),
       };
     } catch (error) {
-      console.error(`✗ Error processing row ${sno}:`, error);
+      console.error(`✗ Error processing row ${Sno}:`, error);
       throw error;
     }
   }
@@ -286,8 +305,95 @@ class VideoProcessor {
     this.defaultHashtags = hashtags;
   }
 
+  // Initialize Email Service
+  async initializeEmailService(emailConfig) {
+    try {
+      this.emailTransporter = nodemailer.createTransport({
+        service: emailConfig.service || "gmail",
+        auth: {
+          user: emailConfig.email,
+          pass: emailConfig.appPassword,
+        },
+      });
+
+      // Test connection
+      await this.emailTransporter.verify();
+      this.recipientEmail = emailConfig.recipientEmail || emailConfig.email;
+      console.log("✓ Email service initialized");
+    } catch (error) {
+      console.error("Failed to initialize email service:", error);
+      throw error;
+    }
+  }
+
+  // Send email notification
+  async sendEmailNotification(subject, htmlContent) {
+    try {
+      if (!this.emailTransporter) {
+        console.warn(
+          "Email service not initialized. Skipping email notification."
+        );
+        return;
+      }
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: this.recipientEmail,
+        subject: subject,
+        html: htmlContent,
+      };
+
+      const info = await this.emailTransporter.sendMail(mailOptions);
+      console.log(`✓ Email sent: ${info.messageId}`);
+      return info;
+    } catch (error) {
+      console.error("Error sending email:", error);
+    }
+  }
+
+  // Format email for successful processing
+  formatSuccessEmail(rowData, videosCount, timestamp) {
+    return `
+      <html>
+        <body style="font-family: Arial, sans-serif;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+            <h2 style="color: #27ae60;">✓ Video Processing Successful</h2>
+            <p><strong>Row Number:</strong> ${rowData.Sno}</p>
+            <p><strong>Videos Processed:</strong> ${videosCount}</p>
+            <p><strong>Long Form 1:</strong> ${
+              rowData["Long Form 1"] || "N/A"
+            }</p>
+            <p><strong>Long Form 2:</strong> ${
+              rowData["Long Form 2"] || "N/A"
+            }</p>
+            <p><strong>Short Form Videos:</strong> 4 videos</p>
+            <p><strong>Completion Time:</strong> ${timestamp}</p>
+            <p style="color: #7f8c8d; font-size: 12px; margin-top: 20px;">Status updated in Google Sheet</p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
+  // Format email for failed processing
+  formatFailureEmail(rowData, errorMessage, timestamp) {
+    return `
+      <html>
+        <body style="font-family: Arial, sans-serif;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e74c3c; border-radius: 8px;">
+            <h2 style="color: #e74c3c;">✗ Video Processing Failed</h2>
+            <p><strong>Row Number:</strong> ${rowData.Sno}</p>
+            <p><strong>Error:</strong> ${errorMessage}</p>
+            <p><strong>Failed At:</strong> ${timestamp}</p>
+            <p style="color: #7f8c8d; font-size: 12px; margin-top: 20px;">Please check the logs for more details</p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+
   // Main processing workflow
-  async processAllVideos(uploadToYT = false) {
+  async processAllVideos(uploadToYT = true) {
     console.log("🎬 Wildlife YouTube Automation Started\n");
 
     try {
@@ -313,6 +419,22 @@ class VideoProcessor {
           const result = await this.processVideoRow(videoRow);
           results.push(result);
 
+          // Send success email
+          if (this.emailTransporter) {
+            const timestamp = new Date().toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+            });
+            const successEmail = this.formatSuccessEmail(
+              videoRow,
+              result.videosCount,
+              timestamp
+            );
+            await this.sendEmailNotification(
+              `✓ Video Processing Complete - Row ${videoRow.Sno}`,
+              successEmail
+            );
+          }
+
           if (uploadToYT) {
             console.log(
               `Uploading ${result.videosCount} videos from row ${result.sno}...`
@@ -326,6 +448,22 @@ class VideoProcessor {
           }
         } catch (error) {
           console.error(`Failed to process row:`, videoRow);
+
+          // Send failure email
+          if (this.emailTransporter) {
+            const timestamp = new Date().toLocaleString("en-IN", {
+              timeZone: "Asia/Kolkata",
+            });
+            const failureEmail = this.formatFailureEmail(
+              videoRow,
+              error.message,
+              timestamp
+            );
+            await this.sendEmailNotification(
+              `✗ Video Processing Failed - Row ${videoRow.Sno}`,
+              failureEmail
+            );
+          }
         }
       }
 
@@ -339,18 +477,24 @@ class VideoProcessor {
 
 // Main execution
 const GOOGLE_SHEET_ID =
-  process.env.GOOGLE_SHEET_ID || "YOUR_GOOGLE_SHEET_ID_HERE";
+  process.env.GOOGLE_SHEET_ID || "1UtcTTHV0ChwpXBIBjRsgpbZLq-QrsTCcJPg4O1gHPI8";
 
 const processor = new VideoProcessor(GOOGLE_SHEET_ID);
 
-processor.setConfig(
-  "Educational wildlife content - nature, animals, and conservation",
-  ["#wildlife", "#education", "#nature", "#learning"]
-);
+// Email configuration
+const emailConfig = {
+  email: process.env.EMAIL_USER || "your-email@gmail.com",
+  appPassword: process.env.EMAIL_PASS || "your-app-password",
+  recipientEmail: process.env.RECIPIENT_EMAIL || "recipient@example.com",
+  service: "gmail",
+};
 
-// Run with YouTube upload: set second parameter to true
 processor
-  .processAllVideos(false)
+  .initializeEmailService(emailConfig)
+  .then(() => {
+    // Run with YouTube upload: set second parameter to true
+    return processor.processAllVideos(false);
+  })
   .then((results) => {
     console.log("\n✅ Processing Complete!");
     console.log(`Total rows processed: ${results.length}`);
