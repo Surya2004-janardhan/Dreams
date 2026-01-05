@@ -1,5 +1,5 @@
 require("dotenv").config();
-const CarouselGeneratorService = require("./src/services/carouselGeneratorService");
+const CarouselGeneratorService = require("../src/services/carouselGeneratorService");
 const fs = require("fs");
 const path = require("path");
 

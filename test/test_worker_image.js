@@ -1,8 +1,8 @@
 const {
   generateImageWithGemini,
   generateTitleImage,
-} = require("./src/services/imageService");
-const logger = require("./src/config/logger");
+} = require("../src/services/imageService");
+const logger = require("../src/config/logger");
 
 /**
  * Test script for the Gemini image generation function

@@ -3,21 +3,21 @@ const cors = require("cors");
 require("dotenv").config();
 
 // Import configurations
-require("./src/config/ffmpeg"); // Initialize FFmpeg
-const logger = require("./src/config/logger");
+require("../src/config/ffmpeg"); // Initialize FFmpeg
+const logger = require("../src/config/logger");
 
 // Import middleware
-const upload = require("./src/middleware/upload");
+const upload = require("../src/middleware/upload");
 
 // Import routes
-const workflowRoutes = require("./src/routes/workflow");
-const scriptRoutes = require("./src/routes/script");
-const audioRoutes = require("./src/routes/audio");
-const imageRoutes = require("./src/routes/images");
-const videoRoutes = require("./src/routes/video");
-const postsWorkflowRoutes = require("./src/routes/postsWorkflow");
-const carouselRoutes = require("./src/routes/carousel");
-const testFFmpegRouter = require("./src/routes/testFFmpeg");
+const workflowRoutes = require("../src/routes/workflow");
+const scriptRoutes = require("../src/routes/script");
+const audioRoutes = require("../src/routes/audio");
+const imageRoutes = require("../src/routes/images");
+const videoRoutes = require("../src/routes/video");
+const postsWorkflowRoutes = require("../src/routes/postsWorkflow");
+const carouselRoutes = require("../src/routes/carousel");
+const testFFmpegRouter = require("../src/routes/testFFmpeg");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -133,9 +133,6 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
-
-
-
 
 // # run auto workflow cmd
 // # PS C:\Users\chint\Desktop\Ai-content-automation> Invoke-WebRequest -Uri "http://localhost:3000/workflow/auto" -Method POST
