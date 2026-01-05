@@ -70,7 +70,7 @@ jobs:
       - name: Setup Google credentials
         run: |
           # Decode and create credentials.json from secret (base64 encoded)
-          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" | base64 -d > wild-life-yt-automation/credentials.json
+          echo "${{ secrets.NEW_JSON_FOR_WILD }}" | base64 -d > wild-life-yt-automation/credentials.json
           echo "✅ Google credentials file created"
         shell: bash
 

@@ -27,6 +27,9 @@ class VideoProcessor {
     this.emailTransporter = null;
     this.recipientEmail = "";
 
+    // Global variable: Store the downloaded video title (only 1 video)
+    this.downloadedVideoTitle = null;
+
     this.ensureDirectories();
   }
 
@@ -166,34 +169,214 @@ class VideoProcessor {
     }
   }
 
-  // Get downloaded video title from file
-  getDownloadedVideoTitle(videoId) {
+  // Download single video from hardcoded Drive link and extract title
+  async downloadVideoFromDrive() {
     try {
-      // Look for video files in downloaded_videos directory
-      const files = fs.readdirSync(this.downloadDir);
+      // HARDCODED DRIVE LINK - Replace with your actual Drive link
+      const driveLink =
+        process.env.DRIVE_LINK ||
+        "https://drive.google.com/uc?id=YOUR_FILE_ID&export=download";
 
-      // Find file that matches the videoId pattern
-      const videoFile = files.find(
-        (file) => file.includes(videoId) || file.startsWith(videoId)
-      );
+      console.log(`📥 Downloading video from Drive...`);
 
-      if (videoFile) {
-        // Extract title from filename (remove extension and ID prefix)
-        let title = videoFile
-          .replace(/\.(mp4|mkv|avi|mov|webm)$/i, "") // Remove extension
-          .replace(/^[0-9]+[-_]/, "") // Remove leading numbers and separators
-          .replace(/[-_]/g, " ") // Replace separators with spaces
-          .trim();
+      // Download the video file
+      const videoPath = await this.downloadFromDriveLink(driveLink);
 
-        return title;
+      if (!videoPath) {
+        console.warn(`Failed to download video from Drive`);
+        return null;
+      }
+
+      // Extract title from downloaded video metadata
+      const videoTitle = await this.extractVideoMetadata(videoPath);
+
+      if (videoTitle) {
+        // Store title as global class variable (single video, used for all formats)
+        this.downloadedVideoTitle = videoTitle;
+        console.log(
+          `✓ Video downloaded and title stored globally: ${videoTitle}`
+        );
+        return videoTitle;
       }
 
       return null;
     } catch (error) {
-      console.warn(`Could not extract title for ${videoId}:`, error.message);
+      console.error(`Error downloading video from Drive:`, error);
       return null;
     }
   }
+
+  // Download video from Google Drive link
+  async downloadFromDriveLink(driveLink) {
+    return new Promise((resolve) => {
+      // TODO: Implement Google Drive download logic
+      // This should download the file and save to this.downloadDir
+      // Return the file path
+      const filePath = path.join(this.downloadDir, `source-video.mp4`);
+
+      console.log(`Downloading from: ${driveLink} -> ${filePath}`);
+
+      // For now, return the expected path
+      if (fs.existsSync(filePath)) {
+        resolve(filePath);
+      } else {
+        console.warn(`Download incomplete: ${filePath}`);
+        resolve(null);
+      }
+    });
+  }
+
+  // Extract title/metadata from video file using ffprobe
+  async extractVideoMetadata(filePath) {
+    return new Promise((resolve) => {
+      // Use ffprobe to extract metadata including title
+      const command = `ffprobe -v quiet -print_format json -show_format "${filePath}"`;
+
+      exec(command, (error, stdout, stderr) => {
+        try {
+          if (error) {
+            console.warn(`ffprobe error:`, error.message);
+            resolve(null);
+            return;
+          }
+
+          const metadata = JSON.parse(stdout);
+
+          // Try to get title from metadata
+          if (metadata.format && metadata.format.tags) {
+            const title =
+              metadata.format.tags.title || metadata.format.tags.Title || null;
+
+            if (title) {
+              console.log(`✓ Extracted title from video metadata: ${title}`);
+              resolve(title);
+              return;
+            }
+          }
+
+          // If no title in metadata, extract from filename
+          const filename = path.basename(filePath);
+          const titleFromFile = filename
+            .replace(/\.(mp4|mkv|avi|mov|webm)$/i, "")
+            .replace(/^[0-9]+[-_]/, "")
+            .replace(/[-_]/g, " ")
+            .trim();
+
+          console.log(`✓ Extracted title from filename: ${titleFromFile}`);
+          resolve(titleFromFile);
+        } catch (parseError) {
+          console.warn(`Failed to parse ffprobe output:`, parseError.message);
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  // Download video from Drive and store title in class variable
+  async downloadVideoAndExtractTitle(driveLink, videoId) {
+    try {
+      console.log(`📥 Downloading video: ${videoId}`);
+
+      // Download the video file
+      const videoPath = await this.downloadFromDriveLink(driveLink, videoId);
+
+      if (!videoPath) {
+        console.warn(`Failed to download video: ${videoId}`);
+        return null;
+      }
+
+      // Extract metadata/title from downloaded video file
+      const videoTitle = await this.extractVideoMetadata(videoPath, videoId);
+
+      if (videoTitle) {
+        // Store title as global class variable for later use
+        this.videoTitles[videoId] = videoTitle;
+        console.log(`✓ Video title stored: ${videoId} -> ${videoTitle}`);
+        return videoTitle;
+      }
+
+      return null;
+    } catch (error) {
+      console.error(
+        `Error downloading/extracting title for ${videoId}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  // Download video from Google Drive link
+  async downloadFromDriveLink(driveLink, videoId) {
+    return new Promise((resolve) => {
+      // TODO: Implement Google Drive download logic
+      // This should download the file and save to this.downloadDir
+      // Return the file path
+      const filePath = path.join(this.downloadDir, `${videoId}.mp4`);
+
+      console.log(`Downloading from: ${driveLink} -> ${filePath}`);
+
+      // For now, return the expected path
+      if (fs.existsSync(filePath)) {
+        resolve(filePath);
+      } else {
+        console.warn(`Download incomplete: ${filePath}`);
+        resolve(null);
+      }
+    });
+  }
+
+  // Extract title/metadata from video file using ffprobe
+  async extractVideoMetadata(filePath, videoId) {
+    return new Promise((resolve) => {
+      // Use ffprobe to extract metadata including title
+      const command = `ffprobe -v quiet -print_format json -show_format "${filePath}"`;
+
+      exec(command, (error, stdout, stderr) => {
+        try {
+          if (error) {
+            console.warn(`ffprobe error for ${videoId}:`, error.message);
+            resolve(null);
+            return;
+          }
+
+          const metadata = JSON.parse(stdout);
+
+          // Try to get title from metadata
+          if (metadata.format && metadata.format.tags) {
+            const title =
+              metadata.format.tags.title || metadata.format.tags.Title || null;
+
+            if (title) {
+              console.log(`✓ Extracted title from metadata: ${title}`);
+              resolve(title);
+              return;
+            }
+          }
+
+          // If no title in metadata, extract from filename
+          const filename = path.basename(filePath);
+          const titleFromFile = filename
+            .replace(/\.(mp4|mkv|avi|mov|webm)$/i, "")
+            .replace(/^[0-9]+[-_]/, "")
+            .replace(/[-_]/g, " ")
+            .trim();
+
+          console.log(`✓ Extracted title from filename: ${titleFromFile}`);
+          resolve(titleFromFile);
+        } catch (parseError) {
+          console.warn(`Failed to parse ffprobe output:`, parseError.message);
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  // Get video title from global variable
+  getVideoTitle() {
+    return this.downloadedVideoTitle;
+  }
+
+  // (Old methods removed - no longer needed for per-videoId storage)
 
   // Parse timing from format "1 - 7 min" or "1-7 min" to seconds
   parseTimingToSeconds(timingStr) {
@@ -229,14 +412,13 @@ class VideoProcessor {
     try {
       const videos = [];
 
+      // Get the globally stored video title (downloaded once from Drive)
+      const videoTitle = this.getVideoTitle() || "Wildlife Video";
+
       // Long-form video 1
       if (long1) {
         const timing = this.parseTimingToSeconds(long1);
         if (timing) {
-          // Get actual downloaded video title
-          const videoTitle =
-            this.getDownloadedVideoTitle(`${Sno}_long1`) || "Long Form Video 1";
-
           videos.push({
             id: `${Sno}_long1`,
             type: "long",
@@ -250,10 +432,6 @@ class VideoProcessor {
       if (long2) {
         const timing = this.parseTimingToSeconds(long2);
         if (timing) {
-          // Get actual downloaded video title
-          const videoTitle =
-            this.getDownloadedVideoTitle(`${Sno}_long2`) || "Long Form Video 2";
-
           videos.push({
             id: `${Sno}_long2`,
             type: "long",
@@ -271,11 +449,6 @@ class VideoProcessor {
         if (shortTiming) {
           const timing = this.parseTimingToSeconds(shortTiming);
           if (timing) {
-            // Get actual downloaded video title
-            const videoTitle =
-              this.getDownloadedVideoTitle(`${Sno}_short${i}`) ||
-              `Short Form Video ${i}`;
-
             videos.push({
               id: `${Sno}_short${i}`,
               type: "short",
