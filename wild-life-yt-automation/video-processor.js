@@ -166,6 +166,35 @@ class VideoProcessor {
     }
   }
 
+  // Get downloaded video title from file
+  getDownloadedVideoTitle(videoId) {
+    try {
+      // Look for video files in downloaded_videos directory
+      const files = fs.readdirSync(this.downloadDir);
+
+      // Find file that matches the videoId pattern
+      const videoFile = files.find(
+        (file) => file.includes(videoId) || file.startsWith(videoId)
+      );
+
+      if (videoFile) {
+        // Extract title from filename (remove extension and ID prefix)
+        let title = videoFile
+          .replace(/\.(mp4|mkv|avi|mov|webm)$/i, "") // Remove extension
+          .replace(/^[0-9]+[-_]/, "") // Remove leading numbers and separators
+          .replace(/[-_]/g, " ") // Replace separators with spaces
+          .trim();
+
+        return title;
+      }
+
+      return null;
+    } catch (error) {
+      console.warn(`Could not extract title for ${videoId}:`, error.message);
+      return null;
+    }
+  }
+
   // Parse timing from format "1 - 7 min" or "1-7 min" to seconds
   parseTimingToSeconds(timingStr) {
     if (!timingStr) return null;
@@ -204,10 +233,14 @@ class VideoProcessor {
       if (long1) {
         const timing = this.parseTimingToSeconds(long1);
         if (timing) {
+          // Get actual downloaded video title
+          const videoTitle =
+            this.getDownloadedVideoTitle(`${Sno}_long1`) || "Long Form Video 1";
+
           videos.push({
             id: `${Sno}_long1`,
             type: "long",
-            title: `Part - ${Sno} - Long Form 1`,
+            title: `Part - ${Sno} - ${videoTitle}`,
             timing: timing,
           });
         }
@@ -217,10 +250,14 @@ class VideoProcessor {
       if (long2) {
         const timing = this.parseTimingToSeconds(long2);
         if (timing) {
+          // Get actual downloaded video title
+          const videoTitle =
+            this.getDownloadedVideoTitle(`${Sno}_long2`) || "Long Form Video 2";
+
           videos.push({
             id: `${Sno}_long2`,
             type: "long",
-            title: `Part - ${Sno} - Long Form 2`,
+            title: `Part - ${Sno} - ${videoTitle}`,
             timing: timing,
           });
         }
@@ -234,10 +271,15 @@ class VideoProcessor {
         if (shortTiming) {
           const timing = this.parseTimingToSeconds(shortTiming);
           if (timing) {
+            // Get actual downloaded video title
+            const videoTitle =
+              this.getDownloadedVideoTitle(`${Sno}_short${i}`) ||
+              `Short Form Video ${i}`;
+
             videos.push({
               id: `${Sno}_short${i}`,
               type: "short",
-              title: `Part - ${Sno} - Short Form ${i}`,
+              title: `Part - ${Sno} - ${videoTitle}`,
               timing: timing,
             });
           }
