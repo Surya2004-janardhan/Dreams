@@ -514,6 +514,126 @@ class VideoProcessor {
     }
   }
 
+  // Trim video based on timing (start and end minutes)
+  async trimVideoByTiming(videoId, timing, outputDir) {
+    return new Promise((resolve) => {
+      try {
+        // Source: RAW DOWNLOADED VIDEO (single video file)
+        const inputPath = path.join(this.downloadDir, `source-video.mp4`);
+        const outputPath = path.join(outputDir, `${videoId}_trimmed.mp4`);
+
+        // Verify raw video exists
+        if (!fs.existsSync(inputPath)) {
+          console.error(`✗ Source video not found: ${inputPath}`);
+          resolve(null);
+          return;
+        }
+
+        // Ensure output directory exists
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        // FFmpeg command to trim video from raw source
+        // -ss: start time, -to: end time, -c copy: fast copying without re-encoding
+        const command = `ffmpeg -i "${inputPath}" -ss ${timing.start} -to ${timing.end} -c copy "${outputPath}"`;
+
+        console.log(
+          `    🎬 Running: ffmpeg -ss ${timing.start} -to ${timing.end} -c copy`
+        );
+
+        exec(command, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`    ✗ FFmpeg error: ${error.message}`);
+            resolve(null);
+            return;
+          }
+
+          if (!fs.existsSync(outputPath)) {
+            console.error(`    ✗ Output file not created: ${outputPath}`);
+            resolve(null);
+            return;
+          }
+
+          const stats = fs.statSync(outputPath);
+          console.log(
+            `    ✓ Trimmed successfully (${(stats.size / 1024 / 1024).toFixed(
+              2
+            )} MB)`
+          );
+          resolve(outputPath);
+        });
+      } catch (error) {
+        console.error(`Error trimming video ${videoId}:`, error);
+        resolve(null);
+      }
+    });
+  }
+
+  // Process all videos: download -> trim based on timing -> prepare for upload
+  async processAndTrimVideos(videosList) {
+    console.log(`\n📊 Video Trimming Process:`);
+    console.log(`   Total videos to trim: ${videosList.length}`);
+
+    // Validate: should have exactly 2 long + 4 short = 6 videos
+    const longVideos = videosList.filter((v) => v.type === "long");
+    const shortVideos = videosList.filter((v) => v.type === "short");
+
+    console.log(`   Long form videos: ${longVideos.length} (expected: 2)`);
+    console.log(`   Short form videos: ${shortVideos.length} (expected: 4)`);
+
+    if (longVideos.length !== 2 || shortVideos.length !== 4) {
+      console.warn(
+        `⚠️ WARNING: Expected 2 long + 4 short videos, but got ${longVideos.length} long + ${shortVideos.length} short`
+      );
+    }
+
+    const processedVideos = [];
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const video of videosList) {
+      try {
+        console.log(`\n  Trimming: ${video.id} (${video.type})`);
+        console.log(`    Title: ${video.title}`);
+        console.log(
+          `    Timing: ${video.timing.display} (${video.timing.start} → ${video.timing.end})`
+        );
+
+        // Trim video based on timing values from raw downloaded video
+        const trimmedPath = await this.trimVideoByTiming(
+          video.id,
+          video.timing,
+          this.outputDir
+        );
+
+        if (trimmedPath) {
+          processedVideos.push({
+            ...video,
+            filePath: trimmedPath,
+            status: "trimmed",
+          });
+          successCount++;
+        } else {
+          console.warn(`❌ Failed to trim video: ${video.id}`);
+          processedVideos.push({
+            ...video,
+            status: "trim_failed",
+          });
+          failureCount++;
+        }
+      } catch (error) {
+        console.error(`Error processing video ${video.id}:`, error);
+        failureCount++;
+      }
+    }
+
+    console.log(
+      `\n✓ Trimming complete: ${successCount} success, ${failureCount} failed`
+    );
+    return processedVideos;
+  }
+
   // Set configuration
   setConfig(description, hashtags) {
     this.defaultDescription = description;
@@ -612,6 +732,15 @@ class VideoProcessor {
     console.log("🎬 Wildlife YouTube Automation Started\n");
 
     try {
+      // Step 1: Download video from Drive and extract title
+      console.log("Step 1: Downloading video from Drive...");
+      await this.downloadVideoFromDrive();
+
+      if (!this.downloadedVideoTitle) {
+        console.error("Failed to download video or extract title. Exiting.");
+        return [];
+      }
+
       // Initialize APIs
       await this.initializeSheetsAPI();
       if (uploadToYT) {
@@ -632,7 +761,17 @@ class VideoProcessor {
       for (const videoRow of videosToProcess) {
         try {
           const result = await this.processVideoRow(videoRow);
-          results.push(result);
+
+          // Step 2: Trim videos based on timing from Google Sheet
+          console.log(
+            `\nStep 2: Trimming ${result.videosCount} videos for row ${result.sno}...`
+          );
+          const trimmedVideos = await this.processAndTrimVideos(result.videos);
+
+          results.push({
+            ...result,
+            videos: trimmedVideos,
+          });
 
           // Send success email
           if (this.emailTransporter) {
@@ -652,12 +791,21 @@ class VideoProcessor {
 
           if (uploadToYT) {
             console.log(
-              `Uploading ${result.videosCount} videos from row ${result.sno}...`
+              `\n▶️ Uploading ${result.videosCount} trimmed videos from row ${result.sno}...`
             );
             for (const video of result.videos) {
-              const videoId = await this.uploadToYouTube(video);
-              if (videoId) {
-                video.youtubeId = videoId;
+              // Only upload if video was successfully trimmed
+              if (video.status === "trimmed") {
+                console.log(`  Uploading: ${video.title}`);
+                const videoId = await this.uploadToYouTube(video);
+                if (videoId) {
+                  video.youtubeId = videoId;
+                  console.log(`  ✓ Uploaded with ID: ${videoId}`);
+                } else {
+                  console.error(`  ✗ Failed to upload: ${video.title}`);
+                }
+              } else {
+                console.warn(`  ⊘ Skipping upload (trim failed): ${video.id}`);
               }
             }
           }
