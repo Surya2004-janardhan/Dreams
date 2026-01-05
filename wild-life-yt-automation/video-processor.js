@@ -7,7 +7,7 @@ const nodemailer = require("nodemailer");
 
 class VideoProcessor {
   constructor(googleSheetId = null) {
-    this.googleSheetId = googleSheetId || process.env.GOOGLE_SHEET_ID;
+    this.googleSheetId = "1UtcTTHV0ChwpXBIBjRsgpbZLq-QrsTCcJPg4O1gHPI8";
     this.downloadDir = path.join(__dirname, "downloaded_videos");
     this.outputDir = path.join(__dirname, "processed_videos");
 
