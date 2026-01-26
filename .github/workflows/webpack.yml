@@ -1,8 +1,7 @@
-name: NodeJS - Scheduled Workflows
+name: NodeJS - Scheduled Video Workflows
 
-# Scheduled automation for content creation workflows
+# Scheduled automation for video content creation
 # - workflow/auto: Runs at 8:00 AM/PM IST (2:30 AM/PM UTC) - Full video creation with FFmpeg
-# - posts-workflow: Runs at 7:30 AM/PM IST (2:00 AM/PM UTC) - Social media posting only
 # - 18-minute timeout protects against infinite hangs
 # - Proper cleanup ensures resources are freed
 
@@ -11,9 +10,6 @@ on:
     # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
     - cron: "30 2 * * *"
     - cron: "30 14 * * *"
-    # workflow/posts-workflow timings (7:30 AM & 7:30 PM IST → 2:00 AM & 2:00 PM UTC)
-    - cron: "0 2 * * *"
-    - cron: "0 14 * * *"
   workflow_dispatch:
 
 jobs:
@@ -139,30 +135,6 @@ jobs:
               fi
             done
             echo "Workflow monitoring complete"
-          fi
-
-          # Trigger posts workflow at scheduled times (no FFmpeg needed)
-          if [[ "${{ github.event.schedule }}" == "0 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "0 14 * * *" ]]; then
-            echo "Pinging slide microservice (fire and forget)..."
-            # Fire and forget ping - don't wait for response
-            curl -s -X GET https://slide-microservice.onrender.com > /dev/null 2>&1 &
-            
-            echo "Waiting 65 seconds for microservice to wake up..."
-            sleep 65
-            
-            echo "Triggering /posts-workflow (no FFmpeg needed)"
-            # Always succeed even if posts workflow fails
-            POSTS_RESPONSE=$(timeout 60 curl -s -X POST http://localhost:${PORT:-3000}/posts-workflow 2>/dev/null || echo "timeout")
-            
-            if [[ "$POSTS_RESPONSE" != "timeout" ]] && [[ -n "$POSTS_RESPONSE" ]]; then
-              echo "✅ Posts workflow triggered successfully"
-              echo "Response: $POSTS_RESPONSE"
-            else
-              echo "❌ Posts workflow trigger failed or timed out"
-              echo "Response: $POSTS_RESPONSE"
-            fi
-          fi
-
           # Server will be cleaned up automatically by trap
         env:
           PORT: ${{ secrets.PORT }}

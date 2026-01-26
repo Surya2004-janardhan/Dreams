@@ -3,7 +3,7 @@ const logger = require("../src/config/logger");
 
 /**
  * Test script to validate service separation
- * Tests both video posting and carousel posting services
+ * Tests video posting services
  */
 async function testServiceSeparation() {
   console.log("🧪 Testing Service Separation...");
@@ -17,7 +17,7 @@ async function testServiceSeparation() {
     const testVideoPath = "./videos/Base-vedio.mp4";
     const validationResult = await videoService.validateVideoForPlatform(
       testVideoPath,
-      "youtube"
+      "youtube",
     );
     console.log("Video validation result:", validationResult);
 
@@ -27,7 +27,7 @@ async function testServiceSeparation() {
       platforms,
       testVideoPath,
       "Test Video Title",
-      "Test video description for service separation testing"
+      "Test video description for service separation testing",
     );
     console.log("Video upload result:", uploadResult);
   } catch (error) {

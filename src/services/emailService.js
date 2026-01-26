@@ -271,7 +271,7 @@ const sendStatusUpdate = async (status, details, aiSuggestions) => {
         <ul style="margin: 10px 0; padding-left: 20px;">
           ${aiSuggestions
             .map(
-              (suggestion) => `<li style="margin: 5px 0;">${suggestion}</li>`
+              (suggestion) => `<li style="margin: 5px 0;">${suggestion}</li>`,
             )
             .join("")}
         </ul>
@@ -415,7 +415,7 @@ const clearLogFiles = async () => {
         logger.info(`🧹 Cleared log file: ${path.basename(logFile)}`);
       } else {
         logger.info(
-          `📝 Log file not found (skipping): ${path.basename(logFile)}`
+          `📝 Log file not found (skipping): ${path.basename(logFile)}`,
         );
       }
     }
@@ -438,7 +438,7 @@ const sendCarouselPostNotification = async (
   taskData,
   postResults,
   instagramUrl,
-  facebookUrl
+  facebookUrl,
 ) => {
   try {
     const transporter = createTransporter();
@@ -456,8 +456,8 @@ const sendCarouselPostNotification = async (
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: ${hasError ? "#dc3545" : "#28a745"};">${
-      hasError ? "⚠️ Carousel Post Issue" : "🎉 Carousel Post Success!"
-    }</h2>
+        hasError ? "⚠️ Carousel Post Issue" : "🎉 Carousel Post Success!"
+      }</h2>
       
        <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
          <h3>📋 Carousel Details:</h3>
@@ -538,19 +538,19 @@ const sendCarouselPostNotification = async (
           <li style="margin: 5px 0;">${
             hasError ? "❌" : "✅"
           } Posted carousel to ${
-      instagramUrl && facebookUrl
-        ? "both platforms"
-        : instagramUrl
-        ? "Instagram only"
-        : facebookUrl
-        ? "Facebook only"
-        : "no platforms (failed)"
-    }</li>
+            instagramUrl && facebookUrl
+              ? "both platforms"
+              : instagramUrl
+                ? "Instagram only"
+                : facebookUrl
+                  ? "Facebook only"
+                  : "no platforms (failed)"
+          }</li>
           <li style="margin: 5px 0;">${
             hasError ? "❌" : "✅"
           } Updated Google Sheets with "${
-      hasError ? "Error" : "Posted"
-    }" status</li>
+            hasError ? "Error" : "Posted"
+          }" status</li>
           <li style="margin: 5px 0;">✅ Cleaned up all temporary files</li>
         </ul>
       </div>
@@ -611,12 +611,12 @@ const sendCarouselPostNotification = async (
 
     await transporter.sendMail(mailOptions);
     logger.info(
-      `✅ Carousel post notification email sent for: ${taskData.title}`
+      `✅ Carousel post notification email sent for: ${taskData.title}`,
     );
   } catch (error) {
     logger.error(
       "❌ Failed to send carousel post notification:",
-      error.message
+      error.message,
     );
     // Don't throw error to prevent workflow failure
   }
@@ -626,7 +626,6 @@ module.exports = {
   sendSuccessNotification,
   sendErrorNotification,
   sendStatusUpdate,
-  sendCarouselPostNotification,
   analyzeError,
   clearLogFiles,
 };

@@ -2,11 +2,7 @@
 
 ## Overview
 
-A comprehensive AI-powered content automation platform that creates and posts educational video and carousel content to social media platforms (YouTube, Instagram, Facebook). Features dual workflow architecture with microservices for scalable content generation.
-
----
-
-## Architecture Overview
+A comprehensive AI-powered content automation platform that creates and posts educational video content to social media platforms (YouTube, Instagram, Facebook). Features workflow architecture with microservices for scalable content generation.
 
 ### Core Components
 
@@ -36,7 +32,7 @@ A comprehensive AI-powered content automation platform that creates and posts ed
 ├── fonts/                 # Custom fonts for text rendering
 ├── images/                # Generated images and thumbnails
 ├── scripts/               # AI-generated text scripts
-├── slides/                # Temporary carousel slide storage
+├── slides/                # Temporary image storage
 ├── src/                   # Main application source
 │   ├── config/           # Configuration files
 │   ├── controllers/      # Express route controllers
@@ -81,29 +77,9 @@ A comprehensive AI-powered content automation platform that creates and posts ed
 - Comprehensive error recovery
 - Real-time progress monitoring
 
-### 2. Posts Carousel Workflow (`/posts-workflow`)
-
-**Purpose**: Automated carousel post creation for Instagram and Facebook
-
-**Process Flow**:
-
-1. **Task Retrieval** → Fetch carousel data from Google Sheets
-2. **Slide Generation** → External Python API creates text overlay images
-3. **Image Upload** → Supabase storage for public URLs
-4. **Caption Creation** → AI-generated hashtags and descriptions
-5. **Social Posting** → Carousel upload to Instagram and Facebook
-6. **Status Update** → Google Sheets updated with post URLs
-7. **Notifications** → Email delivery of results
-8. **Cleanup** → Storage cleanup and local file removal
-
-**Key Features**:
-
-- External Python microservice for image generation
-- Times New Roman font rendering
-- Supabase CDN integration
-- Platform-specific formatting
-
 ---
+
+## Microservices Architecture
 
 ## Microservices Architecture
 
@@ -163,7 +139,7 @@ A comprehensive AI-powered content automation platform that creates and posts ed
 
 - **Scheduled Execution**: 2x daily automated runs (8AM/8PM IST)
 - **Conditional Dependencies**: FFmpeg installed only for video workflows
-- **Resource Optimization**: Minimal footprint for carousel-only runs
+- **Resource Optimization**: Efficient video processing workflows
 - **Error Handling**: Comprehensive failure recovery and notifications
 
 ### Environment Configuration
@@ -195,7 +171,6 @@ NOTIFICATION_EMAIL=...
 ```
 GET  /health              # System health check
 POST /workflow/auto       # Trigger full video workflow
-POST /posts-workflow      # Trigger carousel workflow
 GET  /audio/:file         # Serve audio files
 GET  /images/:file        # Serve image files
 GET  /videos/:file        # Serve video files
@@ -250,9 +225,6 @@ python app.py
 ```bash
 # Test video workflow
 curl -X POST http://localhost:3000/workflow/auto
-
-# Test carousel workflow
-curl -X POST http://localhost:3000/posts-workflow
 
 # Check service health
 curl http://localhost:3000/health

@@ -156,19 +156,39 @@ const updateSheetStatus = async (
   try {
     const sheets = await getSheetsClient();
 
-    // Get current data to find column positions
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: targetSheetId,
-      range: "Sheet1!A1:Z1",
+    // Get current timestamp
+    const now = new Date();
+    const timestamp = now.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     });
 
-    const headers = response.data.values[0];
-    const statusIndex = headers.findIndex((h) =>
-      h.toLowerCase().includes("status")
+    // Find column indexes for the row
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: targetSheetId,
+      range: "Sheet1!A:Z",
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      throw new Error("No data found in spreadsheet for update");
+    }
+
+    const headers = rows[0];
+
+    // Find column indexes
+    const statusIndex = headers.findIndex(
+      (h) => h && h.toLowerCase().includes("status")
     );
     const ytLinkIndex = headers.findIndex(
       (h) =>
-        h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube")
+        h &&
+        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
     );
     const instaLinkIndex = headers.findIndex(
       (h) =>
@@ -181,13 +201,19 @@ const updateSheetStatus = async (
     );
     const timestampIndex = headers.findIndex(
       (h) =>
-        h.toLowerCase().includes("timestamp") ||
-        h.toLowerCase().includes("date")
+        h &&
+        (h.toLowerCase().includes("timestamp") ||
+          h.toLowerCase().includes("date"))
     );
 
+    console.log("📊 UPDATE COLUMN INDEXES:");
+    console.log(
+      `Status=${statusIndex}, YT=${ytLinkIndex}, Insta=${instaLinkIndex}, FB=${fbLinkIndex}, Timestamp=${timestampIndex}`
+    );
+
+    // Prepare update data
     const updates = [];
 
-    // Update status
     if (statusIndex !== -1) {
       updates.push({
         range: `Sheet1!${getColumnLetter(statusIndex + 1)}${rowId}`,
@@ -195,48 +221,48 @@ const updateSheetStatus = async (
       });
     }
 
-    // Update YouTube link
-    if (ytLinkIndex !== -1 && ytLink) {
+    if (ytLink && ytLinkIndex !== -1) {
       updates.push({
         range: `Sheet1!${getColumnLetter(ytLinkIndex + 1)}${rowId}`,
         values: [[ytLink]],
       });
     }
 
-    // Update Instagram link
-    if (instaLinkIndex !== -1 && instaLink) {
+    if (instaLink && instaLinkIndex !== -1) {
       updates.push({
         range: `Sheet1!${getColumnLetter(instaLinkIndex + 1)}${rowId}`,
         values: [[instaLink]],
       });
     }
 
-    // Update Facebook link
-    if (fbLinkIndex !== -1 && fbLink) {
+    if (fbLink && fbLinkIndex !== -1) {
       updates.push({
         range: `Sheet1!${getColumnLetter(fbLinkIndex + 1)}${rowId}`,
         values: [[fbLink]],
       });
     }
 
-    // Update timestamp
     if (timestampIndex !== -1) {
       updates.push({
         range: `Sheet1!${getColumnLetter(timestampIndex + 1)}${rowId}`,
-        values: [[new Date().toISOString()]],
+        values: [[timestamp]],
       });
     }
 
-    // Batch update all changes
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: targetSheetId,
-      resource: {
-        data: updates,
-        valueInputOption: "RAW",
-      },
-    });
+    // Execute batch update
+    if (updates.length > 0) {
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: targetSheetId,
+        resource: {
+          valueInputOption: "RAW",
+          data: updates,
+        },
+      });
 
-    logger.info(`✓ Updated sheet row ${rowId} with status: ${status}`);
+      logger.info(`✓ Updated sheet row ${rowId} with status: ${status}`);
+    } else {
+      logger.warn("No columns found to update in sheet");
+    }
   } catch (error) {
     logger.error("Error updating sheet status:", error);
     throw error;
@@ -256,249 +282,7 @@ const getColumnLetter = (columnNumber) => {
   return result;
 };
 
-/**
- * Get the next carousel task from Google Sheets with format: Title, Slide 1, Slide 2, Slide 3, Status, Insta Link, Yt Link, FaceBook Link, Time Stamp
- * @param {string} sheetId - Optional sheet ID, defaults to GOOGLE_SHEET_ID
- */
-const getNextCarouselTask = async (sheetId = null) => {
-  try {
-    const targetSheetId = sheetId || process.env.GOOGLE_SHEET_ID;
-    const sheets = await getSheetsClient();
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: targetSheetId,
-      range: "Sheet1!A:I", // Get columns A to I (Title to Time Stamp)
-    });
-
-    const rows = response.data.values;
-    logger.info(
-      `🎠 Carousel sheet data received: ${rows ? rows.length : 0} rows`
-    );
-
-    if (!rows || rows.length === 0) {
-      throw new Error("No data found in spreadsheet");
-    }
-
-    if (rows.length < 2) {
-      throw new Error("Spreadsheet has headers but no data rows");
-    }
-
-    // Find header row (assuming first row)
-    const headers = rows[0];
-    // console.log("📋 CAROUSEL SHEET HEADERS:", headers);
-
-    // Expected columns: Title, Slide 1, Slide 2, Slide 3, Status, Insta Link, Yt Link, FaceBook Link, Time Stamp
-    const titleIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("title")
-    );
-    const slide1Index = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("slide 1")
-    );
-    const slide2Index = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("slide 2")
-    );
-    const slide3Index = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("slide 3")
-    );
-    const statusIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("status")
-    );
-    const instaLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("insta") ||
-          h.toLowerCase().includes("instagram"))
-    );
-    const ytLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
-    );
-    const fbLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook"))
-    );
-    const timestampIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("timestamp") ||
-          h.toLowerCase().includes("time"))
-    );
-
-    console.log("📊 CAROUSEL COLUMN INDEXES FOUND:");
-    // console.log(
-    //   `Title=${titleIndex}, Slide1=${slide1Index}, Slide2=${slide2Index}, Slide3=${slide3Index}, Status=${statusIndex}`
-    // );
-
-    // Loop through all data rows (skip header)
-    console.log("🔍 CHECKING EACH ROW FOR CAROUSEL TASK:");
-    for (let i = 1; i < rows.length; i++) {
-      const row = rows[i];
-      // console.log(`Row ${i + 1}:`, row);
-
-      if (!row || row.length === 0) {
-        // console.log(`Row ${i + 1}: EMPTY ROW, SKIPPING`);
-        continue;
-      }
-
-      // Get status value safely
-      const statusValue = row[statusIndex];
-      const status = statusValue ? statusValue.toLowerCase().trim() : "";
-      // console.log(
-      //   `Row ${i + 1} Status: "${statusValue}" -> normalized: "${status}"`
-      // );
-
-      // Check if this row should be processed (not posted)
-      const shouldProcess = status !== "posted" && status !== "posted";
-
-      // console.log(`Row ${i + 1} Should Process: ${shouldProcess}`);
-
-      if (shouldProcess) {
-        console.log(`✅ FOUND PROCESSABLE CAROUSEL TASK AT ROW ${i + 1}`);
-
-        const taskData = {
-          rowId: i + 1, // Google Sheets is 1-indexed
-          title: row[titleIndex] || "",
-          slide1: row[slide1Index] || "",
-          slide2: row[slide2Index] || "",
-          slide3: row[slide3Index] || "",
-          status: row[statusIndex] || "",
-          instaLink: row[instaLinkIndex] || "",
-          ytLink: row[ytLinkIndex] || "",
-          fbLink: row[fbLinkIndex] || "",
-          timestamp: row[timestampIndex] || "",
-        };
-
-        logger.info(`📋 Carousel task data extracted for row ${i + 1}`);
-        return taskData;
-      }
-    }
-
-    console.log("❌ NO PROCESSABLE CAROUSEL TASKS FOUND");
-    throw new Error("No unposted carousel tasks found in spreadsheet");
-  } catch (error) {
-    console.error("❌ ERROR IN getNextCarouselTask:", error);
-    logger.error("Error getting next carousel task from sheets:", error);
-    throw error;
-  }
-};
-
-/**
- * Update carousel sheet row status to "Posted" with links and timestamp
- * @param {number} rowId - Row ID to update
- * @param {string} status - New status
- * @param {string} instaLink - Instagram link
- * @param {string} ytLink - YouTube link
- * @param {string} fbLink - Facebook link
- * @param {string} sheetId - Optional sheet ID
- */
-const updateCarouselSheetStatus = async (
-  rowId,
-  status,
-  instaLink = "",
-  ytLink = "",
-  fbLink = "",
-  sheetId = null
-) => {
-  try {
-    const targetSheetId = sheetId || process.env.GOOGLE_SHEET_ID;
-    const sheets = await getSheetsClient();
-
-    // Get current headers to find column positions
-    const headerResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: targetSheetId,
-      range: "Sheet1!A1:I1",
-    });
-
-    const headers = headerResponse.data.values[0];
-    const statusIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("status")
-    );
-    const instaLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("insta") ||
-          h.toLowerCase().includes("instagram"))
-    );
-    const ytLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
-    );
-    const fbLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook"))
-    );
-    const timestampIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("timestamp") ||
-          h.toLowerCase().includes("time"))
-    );
-
-    const updates = [];
-
-    // Update status
-    if (statusIndex !== -1) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(statusIndex + 1)}${rowId}`,
-        values: [[status]],
-      });
-    }
-
-    // Update Instagram link
-    if (instaLinkIndex !== -1 && instaLink) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(instaLinkIndex + 1)}${rowId}`,
-        values: [[instaLink]],
-      });
-    }
-
-    // Update YouTube link
-    if (ytLinkIndex !== -1 && ytLink) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(ytLinkIndex + 1)}${rowId}`,
-        values: [[ytLink]],
-      });
-    }
-
-    // Update Facebook link
-    if (fbLinkIndex !== -1 && fbLink) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(fbLinkIndex + 1)}${rowId}`,
-        values: [[fbLink]],
-      });
-    }
-
-    // Update timestamp
-    if (timestampIndex !== -1) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(timestampIndex + 1)}${rowId}`,
-        values: [[new Date().toISOString()]],
-      });
-    }
-
-    // Batch update all changes
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: targetSheetId,
-      resource: {
-        data: updates,
-        valueInputOption: "RAW",
-      },
-    });
-
-    logger.info(`✓ Updated carousel sheet row ${rowId} with status: ${status}`);
-  } catch (error) {
-    logger.error("Error updating carousel sheet status:", error);
-    throw error;
-  }
-};
-
 module.exports = {
   getNextTask,
   updateSheetStatus,
-  getNextCarouselTask,
-  updateCarouselSheetStatus,
 };
