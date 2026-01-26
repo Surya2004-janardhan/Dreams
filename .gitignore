@@ -77,10 +77,16 @@ build/
 *.tmp
 *.temp
 
+test*
+new/
+temp*
+
+audio/
+automation_log*
 # Test cache (expensive API results)
 test_cache/
 
-new/
+# new/
 BASE-VEDIO.mp4
 # Video files are tracked with Git LFS (see .gitattributes)
 # Large video files should be committed with Git LFS to avoid size limits

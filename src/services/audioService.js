@@ -278,7 +278,11 @@ const generateAudioWithBatchingStrategy = async (script) => {
 
     const base64Audio =
       response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio data returned");
+    
+    if (!base64Audio) {
+        console.log("Full Response:", JSON.stringify(response, null, 2));
+        throw new Error("No audio data returned");
+    }
 
     // Convert Base64 to Buffer (PCM Data)
     const binaryString = Buffer.from(base64Audio, "base64").toString("binary");
@@ -314,18 +318,19 @@ const generateAudioWithBatchingStrategy = async (script) => {
       `✅ Audio file created successfully: ${conversationFile} (${stats.size} bytes)`,
     );
 
+    const audioSegments = [];
     // Since we're doing a single API call, create a single segment
-    const estimatedDuration = 70 * (1 / 0.85); // Adjust for 15% slower speech rate (70 / 0.85 ≈ 82.35 seconds)
+    const estimatedDuration = 70 * (1 / 0.85); // Adjust for 15% slower speech rate
     audioSegments.push({
-      file: actualFile,
+      file: conversationFile,
       duration: estimatedDuration,
       speaker: "Multi-speaker conversation",
     });
 
-    logger.info(`✓ Generated complete conversation: ${actualFile}`);
+    logger.info(`✓ Generated complete conversation: ${conversationFile}`);
 
     return {
-      conversationFile: actualFile,
+      conversationFile: conversationFile,
       segments: audioSegments,
       totalSegments: 1, // Single API call
       apiCallsUsed: 1,

@@ -158,6 +158,35 @@ OUTPUT RULES:
   }
 };
 
+const generateVisualPrompt = async (script) => {
+    const prompt = `
+    Based on the following video script, describe a Visual Style and Motion Graphics Concept in exactly 3 lines.
+    Focus on colors, shapes, and movement. Do NOT describe the speaker. Focus on the overlay graphics.
+    
+    SCRIPT:
+    "${script}"
+    
+    OUTPUT RULES:
+    - 3 lines only.
+    - Concise and descriptive.
+    `;
+    
+    try {
+        const completion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile",
+            temperature: 0.7,
+        });
+        const visualDescription = completion.choices[0].message.content;
+        logger.info("✓ Visual prompt generated via Groq");
+        return visualDescription;
+    } catch (e) {
+        logger.error("Failed to generate visual prompt", e);
+        return "Neon aesthetic, dynamic data pulse, cybernetic overlays.";
+    }
+};
+
 module.exports = {
   generateScript,
+  generateVisualPrompt
 };
