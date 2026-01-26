@@ -1,7 +1,36 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI, Modality } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
+
+// Function to create WAV header for PCM data
+function createWavHeader(pcmData, sampleRate, numChannels, bitsPerSample) {
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length;
+  const buffer = Buffer.alloc(44);
+
+  // RIFF header
+  buffer.write("RIFF", 0);
+  buffer.writeUInt32LE(36 + dataSize, 4); // File size
+  buffer.write("WAVE", 8);
+
+  // Format chunk
+  buffer.write("fmt ", 12);
+  buffer.writeUInt32LE(16, 16); // Chunk size
+  buffer.writeUInt16LE(1, 20); // Audio format (PCM)
+  buffer.writeUInt16LE(numChannels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(byteRate, 28);
+  buffer.writeUInt16LE(blockAlign, 32);
+  buffer.writeUInt16LE(bitsPerSample, 34);
+
+  // Data chunk
+  buffer.write("data", 36);
+  buffer.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([buffer, pcmData]);
+}
 
 // Define audio directory
 const audioDir = "audio";
@@ -216,23 +245,15 @@ const generateAudioWithBatchingStrategy = async (script) => {
     logger.info(`🎭 Generating single-speaker explanation audio`);
 
     // Initialize Google GenAI client
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
+    });
 
-    // Create optimized prompt for single-speaker educational video narration
-    const prompt = `Convert this educational script to natural speech audio. This is for a video explanation where the narrator (Raj) speaks conversationally in Indian English to explain a technical topic to viewers.
+    // Correct model for TTS
+    const model = "gemini-2.5-flash-preview-tts";
 
-SCRIPT TO CONVERT:
-${script}
-
-VOICE REQUIREMENTS:
-- Single male narrator with warm, knowledgeable tone
-- Natural Indian English pronunciation and rhythm
-- Conversational pace, not too fast or slow
-- Clear articulation for subtitle generation
-- Engaging and enthusiastic delivery
-- Professional but approachable tone
-
-OUTPUT: Generate high-quality speech audio that will be used to create video subtitles and final educational content.`;
+    // Map to Gemini Voices - using male voice
+    const voiceName = "Charon"; // Male voice
 
     logger.info(`📝 Sending TTS request for ${script.length} characters`);
     logger.info(`📝 Script text: "${script}"`);
@@ -242,74 +263,55 @@ OUTPUT: Generate high-quality speech audio that will be used to create video sub
       } letters, ${script.split(/\s+/).length} words`,
     );
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash-preview-tts",
+    const response = await ai.models.generateContent({
+      model: model,
+      contents: { parts: [{ text: script }] },
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName },
+          },
+        },
+      },
     });
 
-    const result = await model.generateContent([
-      {
-        text: prompt,
-      },
-    ]);
+    const base64Audio =
+      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) throw new Error("No audio data returned");
 
-    const audioData =
-      result.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-    if (!audioData) {
-      logger.error("❌ API Response Debug:", {
-        hasResponse: !!response,
-        hasCandidates: !!response.candidates,
-        candidatesLength: response.candidates?.length,
-        firstCandidate: response.candidates?.[0],
-        finishReason: response.candidates?.[0]?.finishReason,
-        hasContent: !!response.candidates?.[0]?.content,
-        content: response.candidates?.[0]?.content,
-        hasParts: !!response.candidates?.[0]?.content?.parts,
-        parts: response.candidates?.[0]?.content?.parts,
-      });
-      throw new Error("No audio data received from API");
+    // Convert Base64 to Buffer (PCM Data)
+    const binaryString = Buffer.from(base64Audio, "base64").toString("binary");
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
     }
 
-    // Validate audio data
-    if (typeof audioData !== "string" || audioData.length === 0) {
-      throw new Error("Invalid audio data format");
-    }
+    // Create WAV from PCM data
+    const pcmBuffer = Buffer.from(bytes);
+    const wavBuffer = createWavHeader(pcmBuffer, 24000, 1, 16);
 
-    logger.info(`📊 Received audio data: ${audioData.length} characters`);
-
-    const buffer = Buffer.from(audioData, "base64");
-
-    // Validate buffer
-    if (!buffer || buffer.length === 0) {
-      throw new Error("Failed to create audio buffer");
-    }
-
-    logger.info(`🔊 Audio buffer size: ${buffer.length} bytes`);
+    logger.info(`🔊 Audio buffer size: ${wavBuffer.length} bytes`);
 
     const conversationFile = path.resolve(
       path.join(audioDir, `conversation_${Date.now()}.wav`),
     );
 
-    const actualFile = await saveWaveFile(
-      conversationFile,
-      buffer,
-      1,
-      24000,
-      2,
-    );
+    fs.writeFileSync(conversationFile, wavBuffer);
 
     // Validate that the file was actually created and has content
-    if (!fs.existsSync(actualFile)) {
-      throw new Error(`Audio file was not created: ${actualFile}`);
+    if (!fs.existsSync(conversationFile)) {
+      throw new Error(`Audio file was not created: ${conversationFile}`);
     }
 
-    const stats = fs.statSync(actualFile);
+    const stats = fs.statSync(conversationFile);
     if (stats.size === 0) {
-      throw new Error(`Audio file is empty: ${actualFile}`);
+      throw new Error(`Audio file is empty: ${conversationFile}`);
     }
 
     logger.info(
-      `✅ Audio file created successfully: ${actualFile} (${stats.size} bytes)`,
+      `✅ Audio file created successfully: ${conversationFile} (${stats.size} bytes)`,
     );
 
     // Since we're doing a single API call, create a single segment

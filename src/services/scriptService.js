@@ -83,7 +83,7 @@ OUTPUT RULES:
 
     // Try up to 3 times to get desired word count
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 1;
 
     while ((wordCount < 105 || wordCount > 120) && retryCount < maxRetries) {
       retryCount++;
@@ -93,7 +93,7 @@ OUTPUT RULES:
 
       // Wait 66 seconds before retry
       logger.info(`⏳ Waiting 66 seconds before retry ${retryCount}...`);
-      await new Promise((resolve) => setTimeout(resolve, 66000));
+      await new Promise((resolve) => setTimeout(resolve, 6000));
 
       try {
         const retryChatCompletion = await groq.chat.completions.create({

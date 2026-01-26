@@ -41,75 +41,84 @@ async function testGenuineReelWorkflow() {
 
     // Step 2: Generate genuine audio using Gemini
     console.log("\n🎵 Step 2: Generating genuine audio with Gemini...");
-    console.log("⏭️  Skipping audio generation for now - will use mock audio");
-    // Mock audio for testing
-    const mockAudioBase64 = Buffer.from(
-      "RIFF\x24\x08\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x08\x00\x00",
-    ).toString("base64");
-    const audioBuffer = Buffer.from(mockAudioBase64, "base64");
+    const audioResponse = await axios.post(
+      "http://localhost:3000/audio/generate",
+      {
+        script: scriptData.script,
+      },
+    );
+    const audioData = audioResponse.data;
+    // Assuming the audio service returns base64 encoded audio
+    const audioBuffer = Buffer.from(audioData.audio, "base64");
     fs.writeFileSync(AUDIO_CACHE, audioBuffer);
+    console.log("💾 Audio saved to cache");
+    console.log("✅ Audio generated successfully");
+    console.log(`📏 Audio size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
     console.log("💾 Mock audio saved to cache");
     console.log("✅ Mock audio ready");
     console.log(`📏 Audio size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
 
     // Step 3: Generate subtitles from script (instead of audio)
     console.log("\n📝 Step 3: Generating subtitles from script...");
-    
+
     // Function to generate subtitles from script text
     function generateSubtitlesFromScript(scriptText) {
-      const words = scriptText.split(' ');
+      const words = scriptText.split(" ");
       const wordsPerMinute = 150; // Average speaking rate
       const wordsPerSecond = wordsPerMinute / 60;
       const secondsPerWord = 1 / wordsPerSecond;
-      
+
       const subtitles = [];
       let currentTime = 0;
       let subtitleId = 1;
-      let currentText = '';
+      let currentText = "";
       let wordCount = 0;
-      
+
       // Target 4-6 words per subtitle (roughly 3-4 seconds)
       const targetWordsPerSubtitle = 5;
-      
+
       for (let i = 0; i < words.length; i++) {
-        currentText += (currentText ? ' ' : '') + words[i];
+        currentText += (currentText ? " " : "") + words[i];
         wordCount++;
-        
+
         // Create subtitle when we reach target word count or punctuation
-        if (wordCount >= targetWordsPerSubtitle || 
-            words[i].includes('.') || words[i].includes('!') || words[i].includes('?') ||
-            i === words.length - 1) {
-          
+        if (
+          wordCount >= targetWordsPerSubtitle ||
+          words[i].includes(".") ||
+          words[i].includes("!") ||
+          words[i].includes("?") ||
+          i === words.length - 1
+        ) {
           const duration = wordCount * secondsPerWord;
           const startTime = currentTime;
           const endTime = currentTime + duration;
-          
+
           // Format timestamps as SRT format (HH:MM:SS,mmm)
           const formatTime = (seconds) => {
             const hours = Math.floor(seconds / 3600);
             const minutes = Math.floor((seconds % 3600) / 60);
             const secs = Math.floor(seconds % 60);
             const ms = Math.floor((seconds % 1) * 1000);
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+            return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
           };
-          
+
           subtitles.push({
             id: subtitleId,
             startTime: formatTime(startTime),
             endTime: formatTime(endTime),
-            text: currentText.trim()
+            text: currentText.trim(),
           });
-          
+
           currentTime = endTime;
-          currentText = '';
+          currentText = "";
           wordCount = 0;
           subtitleId++;
         }
       }
-      
+
       return { subtitles };
     }
-    
+
     const scriptSubtitles = generateSubtitlesFromScript(scriptData.script);
     fs.writeFileSync(SRT_CACHE, JSON.stringify(scriptSubtitles, null, 2));
     console.log("💾 Script-based subtitles saved to cache");
