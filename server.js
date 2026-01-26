@@ -15,8 +15,7 @@ const scriptRoutes = require("./src/routes/script");
 const audioRoutes = require("./src/routes/audio");
 const imageRoutes = require("./src/routes/images");
 const videoRoutes = require("./src/routes/video");
-const postsWorkflowRoutes = require("./src/routes/postsWorkflow");
-const carouselRoutes = require("./src/routes/carousel");
+const reelRoutes = require("./src/routes/reel");
 const testFFmpegRouter = require("./src/routes/testFFmpeg");
 
 const app = express();
@@ -39,8 +38,7 @@ app.use("/script", scriptRoutes);
 app.use("/audio", audioRoutes);
 app.use("/images", imageRoutes);
 app.use("/video", videoRoutes);
-app.use("/posts-workflow", postsWorkflowRoutes);
-app.use("/api/carousel", carouselRoutes);
+app.use("/reel", reelRoutes);
 app.use(testFFmpegRouter);
 
 // Health check endpoint
@@ -61,11 +59,9 @@ app.get("/", (req, res) => {
         "/workflow/auto - Pull from Google Sheets and process automatically",
       manual_workflow:
         "/workflow/run - Manual content creation with title/description",
-      posts_workflow:
-        "/posts-workflow - Create carousel posts for Instagram and Facebook",
-      carousel_workflow:
-        "/api/carousel/generate-and-post - Generate slides and post carousel to social media",
-      carousel_status: "/api/carousel/status - Check carousel system status",
+      reel_generate: "/reel/generate - Generate reel content from topic",
+      reel_status: "/reel/status/:taskId - Check reel generation status",
+      reel_download: "/reel/download/:taskId - Download generated reel",
       status: "/workflow/status - Get current workflow status",
       script: "/script/generate - Generate conversation script only",
       audio: "/audio/generate - Generate audio from script only",

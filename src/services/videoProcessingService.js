@@ -33,9 +33,9 @@ const validateVideoFile = async (videoPath) => {
         reject(
           new Error(
             `Video file is too small (${(stats.size / 1024 / 1024).toFixed(
-              2
-            )} MB). Minimum required: ${minSizeMB} MB`
-          )
+              2,
+            )} MB). Minimum required: ${minSizeMB} MB`,
+          ),
         );
         return;
       }
@@ -51,8 +51,8 @@ const validateVideoFile = async (videoPath) => {
       if (header !== "ftyp" && header !== "moov") {
         reject(
           new Error(
-            `File does not appear to be a valid MP4 video: ${videoPath}`
-          )
+            `File does not appear to be a valid MP4 video: ${videoPath}`,
+          ),
         );
         return;
       }
@@ -62,7 +62,7 @@ const validateVideoFile = async (videoPath) => {
           stats.size /
           1024 /
           1024
-        ).toFixed(2)} MB)`
+        ).toFixed(2)} MB)`,
       );
       resolve(true);
     } catch (error) {
@@ -91,7 +91,7 @@ const getBaseVideo = async () => {
           (file) =>
             file.toLowerCase().includes("base") ||
             file.toLowerCase().includes("background") ||
-            file.toLowerCase().includes("template")
+            file.toLowerCase().includes("template"),
         );
 
       if (videoFiles.length > 0) {
@@ -101,7 +101,7 @@ const getBaseVideo = async () => {
         // In CI, wait a bit for LFS files to be fully downloaded
         if (isCI) {
           logger.info(
-            "🔄 CI environment detected, waiting for LFS file download..."
+            "🔄 CI environment detected, waiting for LFS file download...",
           );
           await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds
         }
@@ -113,7 +113,7 @@ const getBaseVideo = async () => {
         } catch (validationError) {
           if (isCI) {
             logger.error(
-              `❌ CI: Video file validation failed: ${validationError.message}`
+              `❌ CI: Video file validation failed: ${validationError.message}`,
             );
             logger.info("🔄 CI: Attempting to pull LFS files...");
             // Try to pull LFS files in CI
@@ -126,12 +126,12 @@ const getBaseVideo = async () => {
             } catch (lfsError) {
               logger.error(`❌ LFS pull failed: ${lfsError.message}`);
               throw new Error(
-                `CI video file unavailable: ${validationError.message}`
+                `CI video file unavailable: ${validationError.message}`,
               );
             }
           } else {
             logger.warn(
-              `⚠️ Local video file is invalid: ${validationError.message}`
+              `⚠️ Local video file is invalid: ${validationError.message}`,
             );
             logger.info("🔄 Creating placeholder video as fallback...");
             return await createPlaceholderVideo();
@@ -143,11 +143,11 @@ const getBaseVideo = async () => {
     // No local base video found
     if (isCI) {
       throw new Error(
-        "CI: No base video found in repository. Ensure video files are committed and LFS is working."
+        "CI: No base video found in repository. Ensure video files are committed and LFS is working.",
       );
     } else {
       logger.warn(
-        "⚠️ No base video found in videos folder, creating placeholder"
+        "⚠️ No base video found in videos folder, creating placeholder",
       );
       return await createPlaceholderVideo();
     }
@@ -196,7 +196,7 @@ const composeVideo = async (
   audioPath,
   images,
   subtitlesPath,
-  title
+  title,
 ) => {
   try {
     logger.info("🎬 Starting final video composition...");
@@ -205,7 +205,7 @@ const composeVideo = async (
     const finalVideoFolder = "final_video";
     const timestamp = Date.now();
     const outputPath = path.resolve(
-      path.join(finalVideoFolder, `final_video_${timestamp}.mp4`)
+      path.join(finalVideoFolder, `final_video_${timestamp}.mp4`),
     );
 
     // Ensure final_video folder exists
@@ -245,7 +245,7 @@ const composeVideo = async (
 
       // Filter out images that don't exist and add valid image inputs
       const validImages = images.filter((image) =>
-        fs.existsSync(image.filename)
+        fs.existsSync(image.filename),
       );
 
       // Add image inputs (inputs 2, 3, 4, 5, 6 for images)
@@ -258,7 +258,7 @@ const composeVideo = async (
 
       // Scale base video to 1080:1920 with black padding
       filterParts.push(
-        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]"
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]",
       );
 
       // Handle single title image overlay (stays throughout video)
@@ -269,12 +269,12 @@ const composeVideo = async (
 
         // Scale to 9:8 aspect ratio (810x720 for 1080x1920 video)
         filterParts.push(
-          `[${inputIndex}:v]scale=810:720:force_original_aspect_ratio=decrease[titleImg]`
+          `[${inputIndex}:v]scale=810:720:force_original_aspect_ratio=decrease[titleImg]`,
         );
 
         // Overlay title image at 5% from top (96px from top for 1920px height), stays throughout entire video
         filterParts.push(
-          `${currentVideo}[titleImg]overlay=(W-w)/2:96[videoWithTitle]`
+          `${currentVideo}[titleImg]overlay=(W-w)/2:96[videoWithTitle]`,
         );
         currentVideo = "[videoWithTitle]";
       }
@@ -350,7 +350,7 @@ const composeVideo = async (
         .on("progress", (progress) => {
           if (progress.percent) {
             logger.info(
-              `⏳ Video composition progress: ${Math.round(progress.percent)}%`
+              `⏳ Video composition progress: ${Math.round(progress.percent)}%`,
             );
           }
         })
@@ -387,10 +387,10 @@ const getVideoMetadata = async (videoPath) => {
         reject(error);
       } else {
         const videoStream = metadata.streams.find(
-          (stream) => stream.codec_type === "video"
+          (stream) => stream.codec_type === "video",
         );
         const audioStream = metadata.streams.find(
-          (stream) => stream.codec_type === "audio"
+          (stream) => stream.codec_type === "audio",
         );
 
         resolve({
@@ -427,7 +427,7 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
     const optimizedOutputPath = videoPath.replace(".mp4", "_optimized.mp4");
 
     logger.info(
-      `🎬 Creating single optimized video for both platforms: ${optimizedOutputPath}`
+      `🎬 Creating single optimized video for both platforms: ${optimizedOutputPath}`,
     );
 
     await new Promise((resolve, reject) => {
@@ -452,13 +452,13 @@ const createPlatformOptimized = async (videoPath, platform = "both") => {
         .on("progress", (progress) => {
           if (progress.percent) {
             logger.info(
-              `⏳ Optimization progress: ${Math.round(progress.percent)}%`
+              `⏳ Optimization progress: ${Math.round(progress.percent)}%`,
             );
           }
         })
         .on("end", () => {
           logger.info(
-            `✅ Single optimized video created: ${optimizedOutputPath}`
+            `✅ Single optimized video created: ${optimizedOutputPath}`,
           );
           resolve(optimizedOutputPath);
         })
@@ -494,9 +494,172 @@ const timeToSeconds = (timeString) => {
   );
 };
 
+/**
+ * Compose reel video with subtitles and background music
+ */
+const composeReelVideo = async (options) => {
+  const {
+    baseVideo,
+    subtitles,
+    backgroundMusic,
+    outputPath,
+    subtitleSettings = {
+      fontSize: 32,
+      fontFamily: "Inter",
+      color: "#FFFFFF",
+      bgColor: "rgba(0,0,0,0.8)",
+      paddingX: 16,
+      paddingY: 8,
+    },
+  } = options;
+
+  try {
+    logger.info("🎬 Starting reel video composition...");
+
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    logger.info(`📹 Base video: ${baseVideo}`);
+    logger.info(`📝 Subtitles: ${subtitles}`);
+    logger.info(`🎵 Background music: ${backgroundMusic || "none"}`);
+    logger.info(`📁 Output: ${outputPath}`);
+
+    // Validate input files exist
+    if (!fs.existsSync(baseVideo)) {
+      throw new Error(`Base video file not found: ${baseVideo}`);
+    }
+    if (subtitles && !fs.existsSync(subtitles)) {
+      throw new Error(`Subtitles file not found: ${subtitles}`);
+    }
+    if (backgroundMusic && !fs.existsSync(backgroundMusic)) {
+      throw new Error(`Background music file not found: ${backgroundMusic}`);
+    }
+
+    return new Promise((resolve, reject) => {
+      let command = ffmpeg().input(baseVideo); // Input 0: base video
+
+      // Add background music input if provided
+      if (backgroundMusic) {
+        command = command.input(backgroundMusic); // Input 1: background music
+      }
+
+      // Build filter for subtitles
+      let filterParts = [];
+
+      // Scale base video to 1080:1920 with black padding
+      filterParts.push(
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black[base]",
+      );
+
+      let currentVideo = "[base]";
+
+      // Handle subtitles
+      if (subtitles && fs.existsSync(subtitles)) {
+        // Use custom subtitle styling
+        const fontFilePath = path.resolve("fonts/IBMPlexSerif-Regular.ttf"); // Use available font
+        const safeFontPath = fontFilePath
+          .replace(/\\/g, "\\\\")
+          .replace(/:/g, "\\:");
+
+        const safeSubtitlePath = subtitles
+          .replace(/\\/g, "\\\\")
+          .replace(/:/g, "\\:")
+          .replace(/'/g, "\\'");
+
+        // Convert color from hex to ASS format
+        const colorMatch = subtitleSettings.color.match(/^#([A-Fa-f0-9]{6})$/);
+        const primaryColour = colorMatch
+          ? `&H${colorMatch[1].slice(4, 6)}${colorMatch[1].slice(2, 4)}${colorMatch[1].slice(0, 2)}&`
+          : "&HFFFFFF&";
+
+        const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=${subtitleSettings.fontSize},PrimaryColour=${primaryColour},OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[final]`;
+        filterParts.push(subtitleFilter);
+      } else {
+        filterParts.push(`${currentVideo}copy[final]`);
+      }
+
+      // Set up output options
+      const outputOptions = [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "25",
+        "-maxrate",
+        "3500k",
+        "-bufsize",
+        "7000k",
+        "-movflags",
+        "+faststart",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+        "-t",
+        "59", // Limit to 59 seconds
+      ];
+
+      // Map video stream
+      outputOptions.push("-map", "[final]");
+
+      // Map audio stream
+      if (backgroundMusic) {
+        outputOptions.push("-map", "1:a");
+        outputOptions.push("-c:a", "aac");
+        outputOptions.push("-b:a", "160k");
+      } else {
+        // Use audio from base video
+        outputOptions.push("-map", "0:a");
+        outputOptions.push("-c:a", "copy");
+      }
+
+      outputOptions.push("-shortest");
+
+      command
+        .complexFilter(filterParts.join(";"))
+        .outputOptions(outputOptions)
+        .output(outputPath)
+        .on("start", (commandLine) => {
+          logger.info("🔄 FFmpeg reel composition started");
+          logger.info("Filter:", filterParts.join(";"));
+        })
+        .on("progress", (progress) => {
+          if (progress.percent) {
+            logger.info(
+              `⏳ Reel composition progress: ${Math.round(progress.percent)}%`,
+            );
+          }
+        })
+        .on("end", () => {
+          logger.info(`✅ Reel video composed successfully: ${outputPath}`);
+          resolve({
+            success: true,
+            videoPath: outputPath,
+            duration: null,
+            format: "mp4",
+            resolution: "1080x1920",
+          });
+        })
+        .on("error", (error) => {
+          logger.error("❌ Reel composition failed:", error.message);
+          reject(error);
+        })
+        .run();
+    });
+  } catch (error) {
+    logger.error("❌ Reel composition process failed:", error);
+    throw error;
+  }
+};
+
 module.exports = {
   getBaseVideo,
   composeVideo,
+  composeReelVideo,
   createPlaceholderVideo,
   getVideoMetadata,
   createPlatformOptimized,

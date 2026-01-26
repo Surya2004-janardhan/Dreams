@@ -79,6 +79,30 @@ A comprehensive AI-powered content automation platform that creates and posts ed
 
 ---
 
+### 2. Reel Generation Workflow (`/reel/generate`)
+
+**Purpose**: AI-powered reel creation with SRT subtitles and customizable styling
+
+**Process Flow**:
+
+1. **Topic Input** → Receive topic and optional customization settings
+2. **SRT Generation** → Extract audio from base video and generate SRT subtitles using Gemini AI
+3. **Content Generation** → AI creates engaging content based on topic and transcript
+4. **Video Composition** → Compose final reel with subtitles, background music, and custom styling
+5. **Status Tracking** → Real-time progress monitoring with task-based architecture
+6. **Download Ready** → Final video available for download
+
+**Key Features**:
+
+- Single base video for all outputs
+- AI-powered SRT subtitle generation
+- Customizable subtitle styling (font, color, size)
+- Background music integration
+- Real-time progress tracking
+- Async processing with task IDs
+
+---
+
 ## Microservices Architecture
 
 ## Microservices Architecture
@@ -171,6 +195,9 @@ NOTIFICATION_EMAIL=...
 ```
 GET  /health              # System health check
 POST /workflow/auto       # Trigger full video workflow
+POST /reel/generate       # Generate reel content from topic
+GET  /reel/status/:taskId # Check reel generation status
+GET  /reel/download/:taskId # Download generated reel
 GET  /audio/:file         # Serve audio files
 GET  /images/:file        # Serve image files
 GET  /videos/:file        # Serve video files
@@ -225,6 +252,30 @@ python app.py
 ```bash
 # Test video workflow
 curl -X POST http://localhost:3000/workflow/auto
+
+# Test reel generation
+curl -X POST http://localhost:3000/reel/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic": "The Future of Artificial Intelligence",
+    "apiKey": "your-gemini-api-key",
+    "modelName": "gemini-1.5-flash",
+    "backgroundMusic": "path/to/music.mp3",
+    "subtitleSettings": {
+      "fontSize": 32,
+      "fontFamily": "Inter",
+      "color": "#FFFFFF",
+      "bgColor": "rgba(0,0,0,0.8)",
+      "paddingX": 16,
+      "paddingY": 8
+    }
+  }'
+
+# Check reel status
+curl http://localhost:3000/reel/status/task_123456
+
+# Download completed reel
+curl http://localhost:3000/reel/download/task_123456 -o reel.mp4
 
 # Check service health
 curl http://localhost:3000/health
