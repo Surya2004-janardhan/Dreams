@@ -111,7 +111,7 @@ const generateSRTFromAudio = async (audioPath) => {
     );
   }
 
-  const genAI = new GoogleGenAI(apiKey);
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   // Read audio file
@@ -182,23 +182,32 @@ const generateSRTFromAudio = async (audioPath) => {
 
 // Generate reel content using the new service
 const generateReelContent = async (topic, srtContent, apiKey) => {
-  const genAI = new GoogleGenAI(apiKey);
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  const prompt = `You are a creative video content generator. Based on the topic "${topic}" and the following SRT transcript, create engaging HTML content for a video reel.
+  const prompt = `Create an educational video animation that complements a single-narrator explanation about: "${topic}"
 
-SRT Transcript:
+SRT SUBTITLE TRANSCRIPT (from the narrator's speech):
 ${srtContent}
 
-Create an animated HTML page that:
-1. Has a black background
-2. Uses modern animations (GSAP preferred)
-3. Includes text overlays that sync with the transcript timing
-4. Has engaging visual effects
-5. Is optimized for mobile viewing
-6. Uses the transcript text as subtitle content
+VIDEO ANIMATION REQUIREMENTS:
+1. Single-narrator educational format - visuals should support and enhance the spoken explanation
+2. Dynamic background: Use day-based color schemes (check current day for appropriate colors)
+3. Text overlays: Display subtitle text in sync with speech timing
+4. Visual elements: Add relevant icons, diagrams, or animations that illustrate key concepts
+5. Typography: Use Montserrat Bold font for professional Instagram appearance
+6. Layout: Clean, modern design optimized for mobile viewing
+7. Animations: Smooth GSAP animations that highlight important concepts
+8. Flow: Visual progression that matches the educational narrative structure
 
-Return ONLY valid HTML with embedded CSS and JavaScript. Make it visually appealing and professional.`;
+TECHNICAL SPECS:
+- HTML5 with embedded CSS and JavaScript
+- GSAP animations for smooth transitions
+- Responsive design for various screen sizes
+- Black background with colored accents
+- Professional educational aesthetic
+
+Return ONLY valid HTML with embedded CSS and JavaScript. The animation should educate visually while the narrator explains verbally.`;
 
   const result = await model.generateContent(prompt);
   return result.response.text();

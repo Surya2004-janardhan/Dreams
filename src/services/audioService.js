@@ -1,10 +1,7 @@
-const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
-
-// Initialize Google GenAI client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
 // Define audio directory
 const audioDir = "audio";
@@ -213,67 +210,50 @@ const saveWaveFile = async (
 //   }
 // };
 
-// Main audio generation function - Multi-speaker support (single attempt)
+// Main audio generation function - Single-speaker explanation
 const generateAudioWithBatchingStrategy = async (script) => {
   try {
-    logger.info(`🎭 Generating multi-speaker conversation audio`);
+    logger.info(`🎭 Generating single-speaker explanation audio`);
 
-    const dialogues = parseScriptDialogues(script);
-    const audioSegments = [];
+    // Initialize Google GenAI client
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
-    if (dialogues.length === 0) {
-      throw new Error("No dialogues found in script");
-    }
+    // Create optimized prompt for single-speaker educational video narration
+    const prompt = `Convert this educational script to natural speech audio. This is for a video explanation where the narrator (Raj) speaks conversationally in Indian English to explain a technical topic to viewers.
 
-    // Prepare the conversation text with speaker labels
-    const conversationText = dialogues
-      .map((dialogue) => `${dialogue.speaker}: ${dialogue.text}`)
-      .join("\n");
+SCRIPT TO CONVERT:
+${script}
 
-    // Create prompt in the exact format as reference
-    const prompt = `TTS the following conversation between Rani and Raj in natural Indian English:
-${conversationText}`;
+VOICE REQUIREMENTS:
+- Single male narrator with warm, knowledgeable tone
+- Natural Indian English pronunciation and rhythm
+- Conversational pace, not too fast or slow
+- Clear articulation for subtitle generation
+- Engaging and enthusiastic delivery
+- Professional but approachable tone
 
+OUTPUT: Generate high-quality speech audio that will be used to create video subtitles and final educational content.`;
+
+    logger.info(`📝 Sending TTS request for ${script.length} characters`);
+    logger.info(`📝 Script text: "${script}"`);
     logger.info(
-      `📝 Sending TTS request for ${conversationText.length} characters`,
-    );
-    logger.info(`📝 Conversation text: "${conversationText}"`);
-    logger.info(
-      `📊 Text analysis: ${conversationText.length} total chars, ${
-        conversationText.replace(/\s/g, "").length
-      } letters, ${conversationText.split(/\s+/).length} words`,
+      `📊 Text analysis: ${script.length} total chars, ${
+        script.replace(/\s/g, "").length
+      } letters, ${script.split(/\s+/).length} words`,
     );
 
-    const response = await genAI.models.generateContent({
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: prompt }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          multiSpeakerVoiceConfig: {
-            speakerVoiceConfigs: [
-              {
-                speaker: "Rani",
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Kore" },
-                },
-              },
-              {
-                speaker: "Raj",
-                voiceConfig: {
-                  prebuiltVoiceConfig: { voiceName: "Puck" },
-                },
-              },
-            ],
-          },
-          // Add slower speech rate for more natural pacing
-          speakingRate: 0.85, // 15% slower than default
-        },
-      },
     });
 
+    const result = await model.generateContent([
+      {
+        text: prompt,
+      },
+    ]);
+
     const audioData =
-      response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      result.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
     if (!audioData) {
       logger.error("❌ API Response Debug:", {

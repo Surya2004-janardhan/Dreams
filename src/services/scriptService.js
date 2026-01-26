@@ -28,28 +28,23 @@ const generateScript = async (topic, description = "") => {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  const prompt = `Create an engaging educational dialogue in Indian English between Raj (knowledgeable expert) and Rani (curious learner) about: ${topic}
+  const prompt = `Create a compelling educational video script for: ${topic}
 
 ${description ? `Additional Context: ${description}` : ""}
 
-REQUIREMENTS:
-- Rani asks very brief, curious questions (1-2 lines each, minimum 5 words maximum 10 words)
-- Raj provides detailed, clear, educational answers (most of the content)
-- Use authentic Indian English expressions: "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me"
-- Keep conversation natural like friends chatting, not formal or robotic
-- Exactly 2-3 exchanges only
-- Total word count: STRICTLY 110-120 words
-- Focus on deeper technical concepts, not surface-level information
-- Output ONLY the dialogue lines, no extra comments or explanations
+VIDEO SCRIPT REQUIREMENTS:
+- Single expert narrator explaining the topic conversationally
+- Use natural Indian English with expressions like "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me"
+- Structure: Introduction → Key concepts → Examples → Conclusion
+- Educational depth: Explain technical concepts accessibly but accurately
+- Engaging tone: Like explaining to a curious friend who wants to learn
+- Word count: STRICTLY 110-120 words (this fits ~60-70 seconds of speech)
+- Flow: Natural progression that builds understanding step by step
 
-EXAMPLE FORMAT:
-Rani: Yaar, can you explain [topic]?
-Raj: Actually, see... [detailed educational explanation with Indian English fillers]
-Rani: Oh really? Tell me more na?
-Raj: No yaar, its more complex server running inside the docker... [more detailed explanation]
+EXAMPLE STRUCTURE:
+"Actually yaar, let me break down artificial intelligence for you. See, AI is basically computer systems that can learn and make decisions like humans do. You know, it uses complex algorithms and massive amounts of data to recognize patterns we might miss. Right now, we're seeing AI in self-driving cars, medical diagnosis, and even creative work like writing and art. But na, the real magic happens with machine learning and neural networks that process information in incredible ways. Tell me, it's transforming healthcare, education, and so many fields!"
 
-IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words. Make it educational, engaging, and perfect for a 70-second video script.
-`;
+OUTPUT: Only the script text, no formatting, no speaker labels, no extra comments. Just the continuous explanation that will be converted to speech and video.`;
 
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -57,14 +52,14 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
         {
           role: "system",
           content:
-            "You are an expert educational content creator specializing in natural Indian English conversations.",
+            "You are an expert educational content creator specializing in natural Indian English explanations.",
         },
         {
           role: "user",
           content: prompt,
         },
       ],
-      model: "llama3-8b-8192", // Using Llama 3 8B model which is good for text generation
+      model: "llama-3.1-8b-instant", // Using current Groq model
       temperature: 0.8,
       max_tokens: 2048,
       top_p: 0.95,
@@ -99,16 +94,16 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
             {
               role: "system",
               content:
-                "You are an expert educational content creator specializing in natural Indian English conversations.",
+                "You are an expert educational content creator specializing in natural Indian English explanations.",
             },
             {
               role: "user",
-              content: `The previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
+              content: `The previous explanation had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same explanation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
                 description ? `Original description: ${description}` : ""
-              }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.\n\n${prompt}`,
+              }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the explanation length to meet the word count requirement.\n\n${prompt}`,
             },
           ],
-          model: "llama3-8b-8192",
+          model: "llama-3.1-8b-instant",
           temperature: 0.7,
           max_tokens: 2048,
           top_p: 0.95,

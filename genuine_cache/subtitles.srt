@@ -1,0 +1,16 @@
+{
+  "subtitles": [
+    {
+      "id": 1,
+      "startTime": "00:00:00,000",
+      "endTime": "00:00:05,000",
+      "text": "Actually yaar, let me explain about artificial intelligence."
+    },
+    {
+      "id": 2,
+      "startTime": "00:00:05,000",
+      "endTime": "00:00:10,000",
+      "text": "See, AI is basically a technology that allows machines to learn and make decisions like humans."
+    }
+  ]
+}
