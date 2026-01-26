@@ -1,4 +1,4 @@
-const axios = require("axios");
+const Groq = require("groq-sdk");
 const logger = require("../config/logger");
 
 // future safer side shift to gen ai sdk instead of raw api calls to models
@@ -16,15 +16,16 @@ const logger = require("../config/logger");
 // }
 
 // await main();
-// Gemini API configuration
-const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent";
+// Groq API configuration
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
 const generateScript = async (topic, description = "") => {
-  const apiKey = process.env.GEMINI_API_KEY_FOR_T2T;
+  const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY_FOR_T2T environment variable is required");
+    throw new Error("GROQ_API_KEY environment variable is required");
   }
 
   const prompt = `Create an engaging educational dialogue in Indian English between Raj (knowledgeable expert) and Rani (curious learner) about: ${topic}
@@ -51,52 +52,26 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
 `;
 
   try {
-    const response = await axios.post(
-      `${GEMINI_API_URL}?key=${apiKey}`,
-      {
-        contents: [
-          {
-            parts: [
-              {
-                text: `You are an expert educational content creator specializing in natural Indian English conversations.\n\n${prompt}`,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.8,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
+    const chatCompletion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert educational content creator specializing in natural Indian English conversations.",
         },
-        safetySettings: [
-          {
-            category: "HARM_CATEGORY_HARASSMENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_HATE_SPEECH",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-          {
-            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-            threshold: "BLOCK_MEDIUM_AND_ABOVE",
-          },
-        ],
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
+        {
+          role: "user",
+          content: prompt,
         },
-      }
-    );
+      ],
+      model: "llama3-8b-8192", // Using Llama 3 8B model which is good for text generation
+      temperature: 0.8,
+      max_tokens: 2048,
+      top_p: 0.95,
+    });
 
-    logger.info("✓ Multi-speaker Q&A script generated via Gemini API");
-    let script = response.data.candidates[0].content.parts[0].text;
+    logger.info("✓ Multi-speaker Q&A script generated via Groq API");
+    let script = chatCompletion.choices[0].message.content;
 
     // Count words and ensure it's within range
     const wordCount = script
@@ -111,7 +86,7 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
     while ((wordCount < 105 || wordCount > 120) && retryCount < maxRetries) {
       retryCount++;
       logger.warn(
-        `⚠️ Script word count ${wordCount} is outside 110-120 range, retrying... (attempt ${retryCount}/${maxRetries})`
+        `⚠️ Script word count ${wordCount} is outside 110-120 range, retrying... (attempt ${retryCount}/${maxRetries})`,
       );
 
       // Wait 66 seconds before retry
@@ -119,53 +94,27 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
       await new Promise((resolve) => setTimeout(resolve, 66000));
 
       try {
-        const retryResponse = await axios.post(
-          `${GEMINI_API_URL}?key=${apiKey}`,
-          {
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `You are an expert educational content creator specializing in natural Indian English conversations.\n\nThe previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
-                      description ? `Original description: ${description}` : ""
-                    }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.\n\n${prompt}`,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 2048,
+        const retryChatCompletion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert educational content creator specializing in natural Indian English conversations.",
             },
-            safetySettings: [
-              {
-                category: "HARM_CATEGORY_HARASSMENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_HATE_SPEECH",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-            ],
-          },
-          {
-            headers: {
-              "Content-Type": "application/json",
+            {
+              role: "user",
+              content: `The previous script had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same conversation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
+                description ? `Original description: ${description}` : ""
+              }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the conversation length to meet the word count requirement.\n\n${prompt}`,
             },
-          }
-        );
+          ],
+          model: "llama3-8b-8192",
+          temperature: 0.7,
+          max_tokens: 2048,
+          top_p: 0.95,
+        });
 
-        script = retryResponse.data.candidates[0].content.parts[0].text;
+        script = retryChatCompletion.choices[0].message.content;
         const newWordCount = script
           .split(/\s+/)
           .filter((word) => word.length > 0).length;
@@ -186,7 +135,7 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
         .split(/\s+/)
         .filter((word) => word.length > 0).length;
       logger.warn(
-        `⚠️ Could not achieve target word count after ${maxRetries} retries. Using script with ${finalWordCount} words.`
+        `⚠️ Could not achieve target word count after ${maxRetries} retries. Using script with ${finalWordCount} words.`,
       );
     }
 
@@ -198,11 +147,11 @@ IMPORTANT: Count every word carefully and ensure total is exactly 110-120 words.
       apiResponse: error.response?.data,
       topic: topic,
       description: description,
-      api: "Gemini",
+      api: "Groq",
       timestamp: new Date().toISOString(),
     });
     throw new Error(
-      `Failed to generate script with Gemini API: ${error.message}`
+      `Failed to generate script with Groq API: ${error.message}`,
     );
   }
 };
