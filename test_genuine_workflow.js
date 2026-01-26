@@ -52,32 +52,69 @@ async function testGenuineReelWorkflow() {
     console.log("✅ Mock audio ready");
     console.log(`📏 Audio size: ${(audioBuffer.length / 1024).toFixed(2)} KB`);
 
-    // Step 3: Generate genuine subtitles from audio
-    console.log("\n📝 Step 3: Generating genuine subtitles from audio...");
-    console.log(
-      "⏭️  Skipping subtitle generation for now - will use mock subtitles",
-    );
-    // Mock subtitles for testing
-    const mockSubtitles = {
-      subtitles: [
-        {
-          id: 1,
-          startTime: "00:00:00,000",
-          endTime: "00:00:05,000",
-          text: "Actually yaar, let me explain about artificial intelligence.",
-        },
-        {
-          id: 2,
-          startTime: "00:00:05,000",
-          endTime: "00:00:10,000",
-          text: "See, AI is basically a technology that allows machines to learn and make decisions like humans.",
-        },
-      ],
-    };
-    fs.writeFileSync(SRT_CACHE, JSON.stringify(mockSubtitles, null, 2));
-    console.log("💾 Mock subtitles saved to cache");
-    console.log("✅ Mock subtitles ready");
-    console.log(`📝 Subtitles: ${mockSubtitles.subtitles.length} entries`);
+    // Step 3: Generate subtitles from script (instead of audio)
+    console.log("\n📝 Step 3: Generating subtitles from script...");
+    
+    // Function to generate subtitles from script text
+    function generateSubtitlesFromScript(scriptText) {
+      const words = scriptText.split(' ');
+      const wordsPerMinute = 150; // Average speaking rate
+      const wordsPerSecond = wordsPerMinute / 60;
+      const secondsPerWord = 1 / wordsPerSecond;
+      
+      const subtitles = [];
+      let currentTime = 0;
+      let subtitleId = 1;
+      let currentText = '';
+      let wordCount = 0;
+      
+      // Target 4-6 words per subtitle (roughly 3-4 seconds)
+      const targetWordsPerSubtitle = 5;
+      
+      for (let i = 0; i < words.length; i++) {
+        currentText += (currentText ? ' ' : '') + words[i];
+        wordCount++;
+        
+        // Create subtitle when we reach target word count or punctuation
+        if (wordCount >= targetWordsPerSubtitle || 
+            words[i].includes('.') || words[i].includes('!') || words[i].includes('?') ||
+            i === words.length - 1) {
+          
+          const duration = wordCount * secondsPerWord;
+          const startTime = currentTime;
+          const endTime = currentTime + duration;
+          
+          // Format timestamps as SRT format (HH:MM:SS,mmm)
+          const formatTime = (seconds) => {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 1000);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
+          };
+          
+          subtitles.push({
+            id: subtitleId,
+            startTime: formatTime(startTime),
+            endTime: formatTime(endTime),
+            text: currentText.trim()
+          });
+          
+          currentTime = endTime;
+          currentText = '';
+          wordCount = 0;
+          subtitleId++;
+        }
+      }
+      
+      return { subtitles };
+    }
+    
+    const scriptSubtitles = generateSubtitlesFromScript(scriptData.script);
+    fs.writeFileSync(SRT_CACHE, JSON.stringify(scriptSubtitles, null, 2));
+    console.log("💾 Script-based subtitles saved to cache");
+    console.log("✅ Subtitles generated from script");
+    console.log(`📝 Subtitles: ${scriptSubtitles.subtitles.length} entries`);
 
     // Step 4: Use base video
     console.log("\n🎬 Step 4: Using base video: Base-vedio.mp4");

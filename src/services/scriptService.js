@@ -28,23 +28,30 @@ const generateScript = async (topic, description = "") => {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  const prompt = `Create a compelling educational video script for: ${topic}
+  const prompt = `Generate a single-speaker educational video script on: ${topic}
 
-${description ? `Additional Context: ${description}` : ""}
+${description ? `Context: ${description}` : ""}
 
-VIDEO SCRIPT REQUIREMENTS:
-- Single expert narrator explaining the topic conversationally
-- Use natural Indian English with expressions like "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me"
-- Structure: Introduction → Key concepts → Examples → Conclusion
-- Educational depth: Explain technical concepts accessibly but accurately
-- Engaging tone: Like explaining to a curious friend who wants to learn
-- Word count: STRICTLY 110-120 words (this fits ~60-70 seconds of speech)
-- Flow: Natural progression that builds understanding step by step
+TECHNICAL REQUIREMENTS:
+- Narration voice: Single expert educator
+- Language style: Natural Indian English (include casual discourse markers such as "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me")
+- Structure order (strict):
+  1. Hook (attention-grabbing opening)
+  2. Core concept explanation (clear and logically sequenced)
+  3. Practical examples or real-world applications
+  4. Concluding impact statement
+- Educational depth: Simplify complex concepts without losing factual accuracy
+- Word count constraint: STRICTLY between 110 and 120 words
+- Flow requirement: Smooth cognitive progression; each sentence must build on the previous one
+- Tone: Enthusiastic teacher addressing curious learners
+- Clarity: Optimized for speech synthesis and accurate subtitle generation
 
-EXAMPLE STRUCTURE:
-"Actually yaar, let me break down artificial intelligence for you. See, AI is basically computer systems that can learn and make decisions like humans do. You know, it uses complex algorithms and massive amounts of data to recognize patterns we might miss. Right now, we're seeing AI in self-driving cars, medical diagnosis, and even creative work like writing and art. But na, the real magic happens with machine learning and neural networks that process information in incredible ways. Tell me, it's transforming healthcare, education, and so many fields!"
-
-OUTPUT: Only the script text, no formatting, no speaker labels, no extra comments. Just the continuous explanation that will be converted to speech and video.`;
+OUTPUT RULES:
+- Return ONLY the raw script text
+- No headings, labels, formatting, or metadata
+- No timestamps
+- No extra commentary
+- Must strictly stay within 110–120 words`;
 
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -59,7 +66,7 @@ OUTPUT: Only the script text, no formatting, no speaker labels, no extra comment
           content: prompt,
         },
       ],
-      model: "llama-3.1-8b-instant", // Using current Groq model
+      model: "llama-3.3-70b-versatile", // Using available Groq model
       temperature: 0.8,
       max_tokens: 2048,
       top_p: 0.95,
@@ -103,7 +110,7 @@ OUTPUT: Only the script text, no formatting, no speaker labels, no extra comment
               }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the explanation length to meet the word count requirement.\n\n${prompt}`,
             },
           ],
-          model: "llama-3.1-8b-instant",
+          model: "llama-3.3-70b-versatile",
           temperature: 0.7,
           max_tokens: 2048,
           top_p: 0.95,
