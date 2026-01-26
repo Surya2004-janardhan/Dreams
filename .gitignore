@@ -77,6 +77,9 @@ build/
 *.tmp
 *.temp
 
+# Test cache (expensive API results)
+test_cache/
+
 new/
 BASE-VEDIO.mp4
 # Video files are tracked with Git LFS (see .gitattributes)

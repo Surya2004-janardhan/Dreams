@@ -1,12 +1,10 @@
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/genai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
 
 // Initialize Google GenAI client
-const genAI = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
 // Define audio directory
 const audioDir = "audio";
@@ -22,7 +20,7 @@ const saveWaveFile = async (
   pcmData,
   channels = 1,
   rate = 24000,
-  sampleWidth = 2
+  sampleWidth = 2,
 ) => {
   return new Promise((resolve, reject) => {
     try {
@@ -39,7 +37,7 @@ const saveWaveFile = async (
               reject(err);
             } else {
               console.log(
-                `✅ WAV file written successfully: ${filename} (${pcmData.length} bytes)`
+                `✅ WAV file written successfully: ${filename} (${pcmData.length} bytes)`,
               );
               resolve(filename); // Return the filename
             }
@@ -57,7 +55,7 @@ const saveWaveFile = async (
           `🔍 First 4 bytes of audio data: ${firstBytes
             .map((b) => b.toString(16).padStart(2, "0"))
             .join(" ")
-            .toUpperCase()}`
+            .toUpperCase()}`,
         );
 
         const isMP3 =
@@ -79,7 +77,7 @@ const saveWaveFile = async (
               reject(err);
             } else {
               console.log(
-                `✅ MP3 file written: ${mp3Filename} (${pcmData.length} bytes)`
+                `✅ MP3 file written: ${mp3Filename} (${pcmData.length} bytes)`,
               );
               resolve(mp3Filename);
             }
@@ -122,7 +120,7 @@ const saveWaveFile = async (
               fs.unlinkSync(tempRawFile);
             } catch (cleanupErr) {
               console.warn(
-                `⚠️ Could not delete temp file: ${cleanupErr.message}`
+                `⚠️ Could not delete temp file: ${cleanupErr.message}`,
               );
             }
             resolve(filename);
@@ -237,13 +235,13 @@ const generateAudioWithBatchingStrategy = async (script) => {
 ${conversationText}`;
 
     logger.info(
-      `📝 Sending TTS request for ${conversationText.length} characters`
+      `📝 Sending TTS request for ${conversationText.length} characters`,
     );
     logger.info(`📝 Conversation text: "${conversationText}"`);
     logger.info(
       `📊 Text analysis: ${conversationText.length} total chars, ${
         conversationText.replace(/\s/g, "").length
-      } letters, ${conversationText.split(/\s+/).length} words`
+      } letters, ${conversationText.split(/\s+/).length} words`,
     );
 
     const response = await genAI.models.generateContent({
@@ -309,7 +307,7 @@ ${conversationText}`;
     logger.info(`🔊 Audio buffer size: ${buffer.length} bytes`);
 
     const conversationFile = path.resolve(
-      path.join(audioDir, `conversation_${Date.now()}.wav`)
+      path.join(audioDir, `conversation_${Date.now()}.wav`),
     );
 
     const actualFile = await saveWaveFile(
@@ -317,7 +315,7 @@ ${conversationText}`;
       buffer,
       1,
       24000,
-      2
+      2,
     );
 
     // Validate that the file was actually created and has content
@@ -331,7 +329,7 @@ ${conversationText}`;
     }
 
     logger.info(
-      `✅ Audio file created successfully: ${actualFile} (${stats.size} bytes)`
+      `✅ Audio file created successfully: ${actualFile} (${stats.size} bytes)`,
     );
 
     // Since we're doing a single API call, create a single segment
@@ -354,7 +352,7 @@ ${conversationText}`;
     logger.error("❌ Audio generation failed:", error.message || error);
     logger.error(
       "Full error details:",
-      JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+      JSON.stringify(error, Object.getOwnPropertyNames(error), 2),
     );
     throw error;
   }

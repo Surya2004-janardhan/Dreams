@@ -38,7 +38,7 @@ const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
-const { GoogleGenAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Helper function to convert seconds to SRT timestamp format
 const formatSRTTimestamp = (seconds) => {
@@ -58,7 +58,7 @@ const generateGeminiTTS = async (text, voice = "male") => {
     );
   }
 
-  const genAI = new GoogleGenAI(apiKey);
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash-preview-tts",
   });
