@@ -495,6 +495,32 @@ const timeToSeconds = (timeString) => {
 };
 
 /**
+ * Get day-based color scheme for subtitles (7-day rotation)
+ */
+const getDayBasedColors = () => {
+  const dayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+
+  const colorSchemes = [
+    // Sunday - Warm Orange Theme
+    { textColor: "#FF6B35", bgColor: "#1a1a1a", name: "Warm Orange" },
+    // Monday - Cool Blue Theme
+    { textColor: "#4A90E2", bgColor: "#1a1a1a", name: "Cool Blue" },
+    // Tuesday - Fresh Green Theme
+    { textColor: "#50C878", bgColor: "#1a1a1a", name: "Fresh Green" },
+    // Wednesday - Vibrant Purple Theme
+    { textColor: "#9B59B6", bgColor: "#1a1a1a", name: "Vibrant Purple" },
+    // Thursday - Energetic Red Theme
+    { textColor: "#E74C3C", bgColor: "#1a1a1a", name: "Energetic Red" },
+    // Friday - Golden Yellow Theme
+    { textColor: "#F1C40F", bgColor: "#1a1a1a", name: "Golden Yellow" },
+    // Saturday - Pink Theme
+    { textColor: "#E91E63", bgColor: "#1a1a1a", name: "Pink" },
+  ];
+
+  return colorSchemes[dayOfWeek];
+};
+
+/**
  * Compose reel video with subtitles and background music
  */
 const composeReelVideo = async (options) => {
@@ -558,8 +584,8 @@ const composeReelVideo = async (options) => {
 
       // Handle subtitles
       if (subtitles && fs.existsSync(subtitles)) {
-        // Use custom subtitle styling
-        const fontFilePath = path.resolve("fonts/IBMPlexSerif-Regular.ttf"); // Use available font
+        // Use Montserrat Bold for Instagram-optimized look
+        const fontFilePath = path.resolve("fonts/Montserrat-Bold.ttf");
         const safeFontPath = fontFilePath
           .replace(/\\/g, "\\\\")
           .replace(/:/g, "\\:");
@@ -569,11 +595,11 @@ const composeReelVideo = async (options) => {
           .replace(/:/g, "\\:")
           .replace(/'/g, "\\'");
 
-        // Convert color from hex to ASS format
-        const colorMatch = subtitleSettings.color.match(/^#([A-Fa-f0-9]{6})$/);
-        const primaryColour = colorMatch
-          ? `&H${colorMatch[1].slice(4, 6)}${colorMatch[1].slice(2, 4)}${colorMatch[1].slice(0, 2)}&`
-          : "&HFFFFFF&";
+        // Get day-based color scheme
+        const dayColors = getDayBasedColors();
+        const primaryColour = `&H${dayColors.textColor.slice(5, 7)}${dayColors.textColor.slice(3, 5)}${dayColors.textColor.slice(1, 3)}&`;
+
+        logger.info(`🎨 Using ${dayColors.name} color scheme for subtitles`);
 
         const subtitleFilter = `${currentVideo}subtitles='${safeSubtitlePath}':force_style='FontFile=${safeFontPath},FontSize=${subtitleSettings.fontSize},PrimaryColour=${primaryColour},OutlineColour=&H00000000,BorderStyle=3,BackColour=&H80000000,Bold=1,Alignment=2,MarginV=125,Outline=3,Spacing=0'[final]`;
         filterParts.push(subtitleFilter);
@@ -660,6 +686,7 @@ module.exports = {
   getBaseVideo,
   composeVideo,
   composeReelVideo,
+  getDayBasedColors,
   createPlaceholderVideo,
   getVideoMetadata,
   createPlatformOptimized,

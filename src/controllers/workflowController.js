@@ -6,6 +6,7 @@ const { generateTitleImage } = require("../services/imageService");
 const {
   getBaseVideo,
   composeVideo,
+  composeReelVideo,
   createPlatformOptimized,
 } = require("../services/videoProcessingService");
 const {
@@ -37,6 +38,172 @@ const logger = require("../config/logger");
 const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
+const { GoogleGenAI } = require("@google/generative-ai");
+
+// Helper function to convert seconds to SRT timestamp format
+const formatSRTTimestamp = (seconds) => {
+  const date = new Date(0);
+  date.setMilliseconds(seconds * 1000);
+  const iso = date.toISOString();
+  const timePart = iso.substr(11, 12).replace(".", ",");
+  return timePart;
+};
+
+// Generate TTS audio using Gemini
+const generateGeminiTTS = async (text, voice = "male") => {
+  const apiKey = process.env.GEMINI_API_KEY_FOR_AUDIO;
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY_FOR_AUDIO not found in environment variables",
+    );
+  }
+
+  const genAI = new GoogleGenAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-preview-tts",
+  });
+
+  // Map to Gemini Voices - Male: Charon, Female: Kore
+  const voiceName = voice === "female" ? "Kore" : "Charon";
+
+  try {
+    const result = await model.generateContent({
+      contents: [{ parts: [{ text }] }],
+      generationConfig: {
+        responseModalities: ["audio"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName },
+          },
+        },
+      },
+    });
+
+    const base64Audio =
+      result.response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+      throw new Error("No audio data returned from Gemini TTS");
+    }
+
+    // Convert Base64 to buffer
+    const audioBuffer = Buffer.from(base64Audio, "base64");
+
+    // Save as WAV file
+    const audioPath = path.join("audio", `tts_${Date.now()}.wav`);
+    fs.writeFileSync(audioPath, audioBuffer);
+
+    return {
+      audioPath,
+      duration: null, // We'll get this from FFmpeg later if needed
+    };
+  } catch (error) {
+    logger.error("Gemini TTS generation failed:", error);
+    throw error;
+  }
+};
+
+// Generate SRT from audio using Gemini
+const generateSRTFromAudio = async (audioPath) => {
+  const apiKey = process.env.GEMINI_API_KEY_FOR_AUDIO;
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY_FOR_AUDIO not found in environment variables",
+    );
+  }
+
+  const genAI = new GoogleGenAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+  // Read audio file
+  const audioBuffer = fs.readFileSync(audioPath);
+  const audioBase64 = audioBuffer.toString("base64");
+
+  const subtitleSchema = {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        start: { type: "number", description: "Start time in seconds" },
+        end: { type: "number", description: "End time in seconds" },
+        text: { type: "string", description: "The spoken text" },
+      },
+      required: ["start", "end", "text"],
+    },
+  };
+
+  try {
+    const result = await model.generateContent(
+      [
+        {
+          inlineData: {
+            mimeType: "audio/wav",
+            data: audioBase64,
+          },
+        },
+        {
+          text: `Extract the transcript from this audio with precise timing. Break text into naturally spoken chunks (max 3-5 words per chunk). Return as JSON array with start, end, and text fields.`,
+        },
+      ],
+      {
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: subtitleSchema,
+        },
+      },
+    );
+
+    const segments = JSON.parse(result.response.text());
+
+    // Convert to SRT format
+    let srtContent = "";
+    segments.forEach((seg, index) => {
+      const id = index + 1;
+      const startTime = formatSRTTimestamp(seg.start);
+      const endTime = formatSRTTimestamp(seg.end);
+      const text = seg.text.trim();
+
+      srtContent += `${id}\n${startTime} --> ${endTime}\n${text}\n\n`;
+    });
+
+    // Save SRT file
+    const srtPath = path.join("subtitles", `subtitles_${Date.now()}.srt`);
+    fs.writeFileSync(srtPath, srtContent.trim());
+
+    return {
+      srtPath,
+      srtContent: srtContent.trim(),
+      segments,
+    };
+  } catch (error) {
+    logger.error("SRT generation failed:", error);
+    throw error;
+  }
+};
+
+// Generate reel content using the new service
+const generateReelContent = async (topic, srtContent, apiKey) => {
+  const genAI = new GoogleGenAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+  const prompt = `You are a creative video content generator. Based on the topic "${topic}" and the following SRT transcript, create engaging HTML content for a video reel.
+
+SRT Transcript:
+${srtContent}
+
+Create an animated HTML page that:
+1. Has a black background
+2. Uses modern animations (GSAP preferred)
+3. Includes text overlays that sync with the transcript timing
+4. Has engaging visual effects
+5. Is optimized for mobile viewing
+6. Uses the transcript text as subtitle content
+
+Return ONLY valid HTML with embedded CSS and JavaScript. Make it visually appealing and professional.`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+};
+
 let currentWorkflow = {
   taskId: null,
   status: "idle",
@@ -77,151 +244,80 @@ const runCompleteWorkflow = async (taskData) => {
     currentWorkflow.results.scriptFilePath = scriptFilePath;
     logger.info(`✓ Script generated and saved`);
 
-    // Step 2: Generate audio
-    logger.info("🎵 Step 2: Generating audio");
+    // Step 2: Generate audio using Gemini TTS (single male voice)
+    logger.info("🎵 Step 2: Generating audio with Gemini TTS");
     currentWorkflow.currentStep = "audio/generate";
-    const audioFiles = await generateAudioWithBatchingStrategy(script);
-    currentWorkflow.results.audioFiles = audioFiles;
-    logger.info("✓ Audio generated");
+    const ttsResult = await generateGeminiTTS(script, "male");
+    currentWorkflow.results.audioPath = ttsResult.audioPath;
+    logger.info(`✓ Audio generated: ${ttsResult.audioPath}`);
 
-    // Step 3: Generate subtitles
-    logger.info("📝 Step 3: Generating subtitles");
+    // Step 3: Generate SRT from audio
+    logger.info("📝 Step 3: Generating SRT subtitles");
     currentWorkflow.currentStep = "subtitles/generate";
-    const subtitlesResult = await createSubtitlesFromAudio(
-      audioFiles.conversationFile
-    );
-    const subtitlesPath = subtitlesResult.subtitlesPath;
-    currentWorkflow.results.subtitles = subtitlesPath;
-    logger.info("✓ Subtitles generated");
+    const srtResult = await generateSRTFromAudio(ttsResult.audioPath);
+    currentWorkflow.results.subtitles = srtResult.srtPath;
+    currentWorkflow.results.srtContent = srtResult.srtContent;
+    logger.info(`✓ SRT generated: ${srtResult.srtPath}`);
 
-    // Step 4: Generate image prompts
-    logger.info("🤖 Step 4: Generating image prompts");
-    currentWorkflow.currentStep = "images/prompts";
+    // Step 4: Get base video (without audio)
+    logger.info("🎬 Step 4: Preparing base video");
+    currentWorkflow.currentStep = "video/prepare";
+    const baseVideoPath = path.join("videos", "Base-vedio.mp4");
+    if (!fs.existsSync(baseVideoPath)) {
+      throw new Error("Base video not found: videos/Base-vedio.mp4");
+    }
+    currentWorkflow.results.baseVideoPath = baseVideoPath;
+    logger.info(`✓ Base video ready: ${baseVideoPath}`);
 
-    // Step 5: Generate title image
-    logger.info("🖼️ Step 5: Generating title image");
-    currentWorkflow.currentStep = "images/generate";
-
-    let images = [];
-    try {
-      // Generate single title image from the idea/title
-      const titleImageResult = await generateTitleImage(taskData.idea);
-
-      if (titleImageResult.success && titleImageResult.imagePath) {
-        logger.info(
-          `✓ Title image generated successfully: ${titleImageResult.imagePath}`
-        );
-        logger.info(`📝 Used fallback: ${titleImageResult.usedDefault}`);
-
-        // Create image structure for video processing (single image, stays throughout video)
-        images = [
-          {
-            index: 1,
-            filename: titleImageResult.imagePath,
-            concept: taskData.idea,
-            timing: {
-              startTime: 0, // Start from beginning
-              endTime: 59, // Stay until end of video (59 seconds for Instagram limit)
-            },
-          },
-        ];
-      } else {
-        throw new Error(titleImageResult.error || "Image generation failed");
-      }
-    } catch (error) {
-      logger.warn(`⚠️ Title image generation failed: ${error.message}`);
-      logger.info(
-        "🔄 Trying to use an image from images folder as fallback..."
+    // Step 5: Generate reel content with visuals and animations
+    logger.info("🎨 Step 5: Generating reel content with AI visuals");
+    currentWorkflow.currentStep = "reel/generate";
+    const visualsApiKey = process.env.GEMINI_API_KEY_FOR_VISUALS;
+    if (!visualsApiKey) {
+      throw new Error(
+        "GEMINI_API_KEY_FOR_VISUALS not found in environment variables",
       );
-
-      // Try to use any image from images folder
-      const imagesDir = path.join(__dirname, "../../images");
-      let fallbackImagePath = null;
-      if (fs.existsSync(imagesDir)) {
-        const imageFiles = fs
-          .readdirSync(imagesDir)
-          .filter((f) => f.match(/\.(jpg|jpeg|png)$/i));
-        if (imageFiles.length > 0) {
-          // Use the most recent image (by mtime)
-          const sorted = imageFiles
-            .map((f) => ({
-              file: f,
-              mtime: fs.statSync(path.join(imagesDir, f)).mtime.getTime(),
-            }))
-            .sort((a, b) => b.mtime - a.mtime);
-          fallbackImagePath = path.join(imagesDir, sorted[0].file);
-          logger.info(`✓ Using image from images folder: ${fallbackImagePath}`);
-        }
-      }
-      if (fallbackImagePath && fs.existsSync(fallbackImagePath)) {
-        images = [
-          {
-            index: 1,
-            filename: fallbackImagePath,
-            concept: taskData.idea,
-            timing: {
-              startTime: 0,
-              endTime: 59,
-            },
-          },
-        ];
-        logger.info("✓ Fallback image from images folder set");
-      } else {
-        // Use default image as last resort
-        const defaultImagePath = path.join("videos", "default-image.jpg");
-        if (fs.existsSync(defaultImagePath)) {
-          images = [
-            {
-              index: 1,
-              filename: defaultImagePath,
-              concept: taskData.idea,
-              timing: {
-                startTime: 0,
-                endTime: 59,
-              },
-            },
-          ];
-          logger.info("✓ Default image set as fallback");
-        } else {
-          logger.warn("⚠️ No fallback image available");
-          images = [];
-        }
-      }
     }
 
-    currentWorkflow.results.images = images;
-    logger.info(`📸 Using ${images.length} image(s) for video composition`);
-
-    // Step 6: Merge video
-    logger.info("🎬 Step 6: Merging video");
-    currentWorkflow.currentStep = "video/merge";
-
-    // Get base video for merging
-    const baseVideoPath = await getBaseVideo();
-    currentWorkflow.results.baseVideoPath = baseVideoPath;
-
-    const finalVideo = await composeVideo(
-      baseVideoPath,
-      audioFiles.conversationFile,
-      images,
-      subtitlesPath,
-      taskData.idea
+    const reelContent = await generateReelContent(
+      taskData.idea,
+      srtResult.srtContent,
+      visualsApiKey,
     );
-    currentWorkflow.results.finalVideo = finalVideo.videoPath;
+    currentWorkflow.results.reelContent = reelContent;
+    logger.info(`✓ Reel content generated with stunning animations`);
 
-    logger.info("✓ Video merged successfully");
-    logger.info(`📁 Final video stored at: ${finalVideo.videoPath}`);
+    // Step 6: Compose final video with reel content
+    logger.info("🎬 Step 6: Composing final video with reel animations");
+    currentWorkflow.currentStep = "video/compose";
+
+    const outputPath = path.join("final_video", `reel_${taskId}.mp4`);
+    await composeReelVideo({
+      baseVideo: baseVideoPath,
+      subtitles: srtResult.srtPath,
+      backgroundMusic: null, // No background music for now
+      outputPath,
+      subtitleSettings: {
+        fontSize: 32,
+        fontFamily: "Inter",
+        color: "#FFFFFF",
+        bgColor: "rgba(0,0,0,0.8)",
+        paddingX: 16,
+        paddingY: 8,
+      },
+    });
+
+    currentWorkflow.results.finalVideo = outputPath;
+    logger.info(`✓ Final video composed: ${outputPath}`);
 
     // Step 7: Upload to platforms
     logger.info("📤 Step 7: Uploading to platforms");
     currentWorkflow.currentStep = "upload/platforms";
 
-    // Use the video from final_video folder for uploads
-    const uploadVideoPath = currentWorkflow.results.finalVideo;
     const uploadResult = await uploadToBothPlatforms(
-      uploadVideoPath,
+      outputPath,
       taskData.idea,
-      script
+      script,
     );
 
     // Convert the result format to match expected structure
@@ -248,66 +344,65 @@ const runCompleteWorkflow = async (taskData) => {
         success: false,
         error: "Not attempted",
       },
-      youtubeUrl: uploadResult.youtube?.url || "",
-      instagramUrl: uploadResult.instagram?.url || "",
-      facebookUrl: uploadResult.facebook?.url || "",
     };
 
     currentWorkflow.results.uploadResult = formattedUploadResult;
 
     // Check upload results and handle different scenarios
-    const successfulUploads = uploadResult.successfulCount;
-    const totalUploads = uploadResult.totalCount;
+    const successfulUploads = formattedUploadResult.successfulCount;
+    const totalUploads = formattedUploadResult.totalCount;
 
     logger.info(
-      `📊 Upload Results: ${successfulUploads}/${totalUploads} platforms succeeded`
+      `📊 Upload Results: ${successfulUploads}/${totalUploads} platforms succeeded`,
     );
 
-    if (uploadResult.youtube.success) {
-      logger.info(`📺 YouTube: ${uploadResult.youtubeUrl}`);
+    if (formattedUploadResult.youtube.success) {
+      logger.info(`📺 YouTube: ${formattedUploadResult.youtubeUrl}`);
     } else {
-      logger.warn(`📺 YouTube failed: ${uploadResult.youtube.error}`);
+      logger.warn(`📺 YouTube failed: ${formattedUploadResult.youtube.error}`);
     }
 
-    if (uploadResult.instagram.success) {
-      logger.info(`📱 Instagram: ${uploadResult.instagramUrl}`);
+    if (formattedUploadResult.instagram.success) {
+      logger.info(`📱 Instagram: ${formattedUploadResult.instagramUrl}`);
     } else {
-      logger.warn(`📱 Instagram failed: ${uploadResult.instagram.error}`);
+      logger.warn(
+        `📱 Instagram failed: ${formattedUploadResult.instagram.error}`,
+      );
     }
 
-    if (uploadResult.facebook.success) {
-      logger.info(`📘 Facebook: ${uploadResult.facebookUrl}`);
+    if (formattedUploadResult.facebook.success) {
+      logger.info(`📘 Facebook: ${formattedUploadResult.facebookUrl}`);
     } else {
-      logger.warn(`📘 Facebook failed: ${uploadResult.facebook.error}`);
+      logger.warn(
+        `📘 Facebook failed: ${formattedUploadResult.facebook.error}`,
+      );
     }
 
-    // Step 8: Mark as posted and update sheets (always attempt this)
+    // Step 8: Mark as posted and update sheets
     logger.info("📊 Step 8: Updating status and sheets");
     currentWorkflow.currentStep = "sheets/update";
 
     const updateTimestamp = new Date().toISOString();
-    const youtubeUrl = uploadResult.youtubeUrl || "";
-    const instagramUrl = uploadResult.instagramUrl || "";
-    const facebookUrl = uploadResult.facebookUrl || "";
+    const youtubeUrl = formattedUploadResult.youtubeUrl || "";
+    const instagramUrl = formattedUploadResult.instagramUrl || "";
+    const facebookUrl = formattedUploadResult.facebookUrl || "";
 
-    // Always update sheets with whatever links we have (empty for failed uploads)
+    // Always update sheets with whatever links we have
     await updateSheetStatus(
       taskData.rowId,
       "Posted",
       youtubeUrl,
       instagramUrl,
-      facebookUrl
+      facebookUrl,
     );
     logger.info(
-      `✓ Marked as "Posted" in sheets with ${successfulUploads} successful links and timestamp: ${updateTimestamp}`
+      `✓ Marked as "Posted" in sheets with ${successfulUploads} successful links and timestamp: ${updateTimestamp}`,
     );
 
     // Handle different success scenarios
-    if (uploadResult.success) {
+    if (formattedUploadResult.success) {
       // ALL uploads succeeded - complete success
-      logger.info(
-        "🎉 COMPLETE SUCCESS: All 3 platforms uploaded successfully!"
-      );
+      logger.info("🎉 COMPLETE SUCCESS: All platforms uploaded successfully!");
       currentWorkflow.status = "completed";
 
       // Step 9: Cleanup
@@ -317,7 +412,7 @@ const runCompleteWorkflow = async (taskData) => {
 
       // Step 10: Success notification
       logger.info("📧 Step 10: Sending success notification");
-      await sendSuccessNotification(taskData, uploadResult);
+      await sendSuccessNotification(taskData, formattedUploadResult);
       logger.info("✅ Success notification email sent");
 
       // Step 11: Clean final video folder
@@ -325,63 +420,27 @@ const runCompleteWorkflow = async (taskData) => {
       const { cleanupFinalVideoFolder } = require("../services/cleanupService");
       await cleanupFinalVideoFolder();
       logger.info("✓ Final video folder cleanup completed");
-    } else if (uploadResult.partialSuccess) {
-      // PARTIAL success - some succeeded, some failed
+    } else {
+      // Some uploads failed - mark as partial success
       logger.info(
-        `⚠️ PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} platforms succeeded`
+        `⚠️ PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} platforms succeeded`,
       );
       currentWorkflow.status = "partial_success";
       currentWorkflow.error = `Partial upload success: ${successfulUploads}/${totalUploads} platforms`;
 
-      // Keep Supabase video for potential retry
-      logger.info(
-        "📁 Keeping Supabase video for potential retry of failed uploads"
-      );
-
-      // Send semi-success notification
-      logger.info("📧 Sending semi-success notification");
+      // Send notification
+      logger.info("📧 Sending partial success notification");
       await sendErrorNotification(
         taskData,
         new Error(
-          `PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} uploads succeeded. YouTube: ${
-            uploadResult.youtube.success
-              ? "Success"
-              : uploadResult.youtube.error
-          }, Instagram: ${
-            uploadResult.instagram.success
-              ? "Success"
-              : uploadResult.instagram.error
-          }, Facebook: ${
-            uploadResult.facebook.success
-              ? "Success"
-              : uploadResult.facebook.error
-          }`
+          `PARTIAL SUCCESS: ${successfulUploads}/${totalUploads} uploads succeeded`,
         ),
-        currentWorkflow.currentStep
+        currentWorkflow.currentStep,
       );
-      logger.info("✅ Semi-success notification sent");
-    } else {
-      // ALL uploads failed
-      logger.error("❌ ALL UPLOADS FAILED: No platforms succeeded");
-      currentWorkflow.status = "failed";
-      currentWorkflow.error = "All uploads failed";
-
-      // Keep Supabase video for retry
-      logger.info("📁 Keeping Supabase video for retry of all failed uploads");
-
-      // Emergency cleanup (but keep Supabase video)
-      await cleanupOnError();
-
-      // Send error notification
-      await sendErrorNotification(
-        taskData,
-        new Error(
-          `ALL FAILED: YouTube: ${uploadResult.youtube.error}, Instagram: ${uploadResult.instagram.error}, Facebook: ${uploadResult.facebook.error}`
-        ),
-        currentWorkflow.currentStep
-      );
-      throw new Error("All uploads failed");
+      logger.info("✅ Partial success notification sent");
     }
+
+    logger.info(`✅ Workflow completed successfully for: ${taskData.idea}`);
   } catch (error) {
     logger.error("❌ Workflow failed:", {
       error: error.message,
@@ -398,9 +457,8 @@ const runCompleteWorkflow = async (taskData) => {
     // Emergency cleanup on error
     await cleanupOnError();
 
-    // Note: Error notification is already sent by runCompleteWorkflow
-    // No need to send duplicate notification here
-    logger.info("ℹ️ Error notification already sent by runCompleteWorkflow");
+    // Send error notification
+    await sendErrorNotification(taskData, error, currentWorkflow.currentStep);
 
     throw error;
   }
@@ -424,7 +482,7 @@ const runAutomatedWorkflow = async (req, res) => {
     try {
       taskData = await getNextTask();
       logger.info(
-        `📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`
+        `📋 Task retrieved: ${taskData.idea} (Row ${taskData.rowId})`,
       );
     } catch (taskError) {
       if (taskError.message.includes("No 'Not Posted' tasks found")) {
@@ -446,7 +504,7 @@ const runAutomatedWorkflow = async (req, res) => {
             "Checked At": new Date().toLocaleString(),
             "Next Steps":
               "Add new content ideas to your Google Sheet with status 'Not Posted'",
-          }
+          },
         );
 
         return; // Exit early
@@ -494,7 +552,7 @@ const runAutomatedWorkflow = async (req, res) => {
       await sendErrorNotification(
         fallbackTaskData,
         error,
-        "automated-workflow"
+        "automated-workflow",
       );
 
       // Also send a status update notification
@@ -505,7 +563,7 @@ const runAutomatedWorkflow = async (req, res) => {
           "Checked At": new Date().toLocaleString(),
           Suggestion:
             "Add new content ideas to your Google Sheet with status 'Not Posted'",
-        }
+        },
       );
     }
   }
@@ -561,7 +619,7 @@ const runWorkflow = async (req, res) => {
           file.startsWith("conversation_") &&
           (file.endsWith(".wav") ||
             file.endsWith(".mp3") ||
-            file.endsWith(".raw"))
+            file.endsWith(".raw")),
       );
 
       if (conversationFiles.length > 0) {
@@ -616,7 +674,7 @@ const runWorkflow = async (req, res) => {
       logger.info(
         `🖼️ Found ${existingImages.length}/5 images, generating remaining ${
           5 - existingImages.length
-        }`
+        }`,
       );
       currentWorkflow.currentStep = "images/generate";
       images = await generateImages(null, script);
@@ -631,7 +689,7 @@ const runWorkflow = async (req, res) => {
       baseVideoPath,
       images,
       audioFiles,
-      script
+      script,
     );
     currentWorkflow.results.finalVideo = finalVideo.videoPath;
     currentWorkflow.results.rootCopyPath = finalVideo.rootCopyPath;
@@ -862,7 +920,7 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
   // Check if audioFiles is the new single-file format
   if (audioFiles && audioFiles.conversationFile) {
     logger.info(
-      `→ Using single conversation file: ${audioFiles.conversationFile}`
+      `→ Using single conversation file: ${audioFiles.conversationFile}`,
     );
 
     const sourceFile = audioFiles.conversationFile;
@@ -878,7 +936,7 @@ const combineAudioFiles = async (audioFiles, outputPath) => {
   // Fallback to old format if needed
   if (Array.isArray(audioFiles) && audioFiles.length > 0) {
     logger.info(
-      `→ Combining ${audioFiles.length} audio files into ${outputPath}`
+      `→ Combining ${audioFiles.length} audio files into ${outputPath}`,
     );
 
     return new Promise((resolve, reject) => {

@@ -1,4 +1,4 @@
-const { GoogleGenAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
@@ -58,7 +58,7 @@ const generateSRTFromBaseVideo = async (apiKey) => {
     const audioBuffer = fs.readFileSync(audioPath);
     const audioBase64 = audioBuffer.toString("base64");
 
-    const genAI = new GoogleGenAI(apiKey);
+    const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const result = await model.generateContent([
@@ -120,7 +120,7 @@ const generateReelContentAI = async (
   apiKey,
   modelName = "gemini-1.5-flash",
 ) => {
-  const genAI = new GoogleGenAI(apiKey);
+  const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model });
 
   const prompt = `You are a creative video content generator. Based on the topic "${topic}" and the following SRT transcript, create engaging HTML content for a video reel.
