@@ -77,7 +77,7 @@ build/
 *.tmp
 *.temp
 
-test*
+# test*
 new/
 temp*
 
