@@ -77,10 +77,12 @@ build/
 *.tmp
 *.temp
 
+
+reel-composer/
 # test*
 new/
 temp*
-
+final_v*
 audio/
 automation_log*
 # Test cache (expensive API results)

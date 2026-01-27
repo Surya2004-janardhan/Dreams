@@ -4,7 +4,7 @@ const fs = require('fs');
 const { generateScript, generateVisualPrompt } = require('./src/services/scriptService');
 const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
 const { generateSRT, generateReelContent } = require('./src/services/newFeaturesService');
-const { renderHTMLToVideo } = require('./src/services/puppeteerRenderService');
+const { startDevServer, saveContentBridge, renderFramesFromReactApp, compositeFramesWithVideo } = require('./src/services/reactRenderService');
 const { getRandomTheme } = require('./src/config/styles');
 
 async function main() {
@@ -120,6 +120,11 @@ async function main() {
         }
         log(`SRT Generated/Loaded. Segments: ${segments.length}`);
 
+        // Export as raw .srt file for standard use
+        fs.writeFileSync('subtitles.srt', srt);
+        fs.writeFileSync(path.resolve('./new/public/subtitles.srt'), srt);
+        log(`Standard SRT file saved to root and public folder.`);
+
         // --- STEP 4: VISUALS ---
         log(`🎨 Step 4: Generating Visual Concept & Theme...`);
         let visualPrompt;
@@ -162,49 +167,105 @@ async function main() {
         fs.writeFileSync(htmlPath, content.html);
         log(`HTML Saved: ${htmlPath}`);
 
-        // --- STEP 6: RENDER OVERLAY ---
-        log(`🎬 Step 6: Rendering Overlay...`);
-        const lastSegment = segments[segments.length - 1];
-        // For testing, LIMIT DURATION TO 5 SECONDS
-        const fullDuration = lastSegment ? lastSegment.end + 2 : 10;
-        const duration = 5; // Hardcap for testing speed
-        log(`Render Duration Limited to ${duration}s (Full Audio: ${fullDuration}s)`);
+        // --- STEP 6: CHECK/START REACT DEV SERVER ---
+        log(`🚀 Step 6: Checking React Dev Server...`);
+        const reactProjectDir = path.resolve('./new');
+        let devServer;
+        const defaultUrl = 'http://localhost:3000';
         
-        const overlayPath = path.resolve(`temp_overlay_${timestamp}.webm`);
-        
-        // Use 15 FPS for faster testing
-        await renderHTMLToVideo(content.html, overlayPath, duration, 15);
-        log(`Overlay Rendered.`);
+        // Check if server is already running
+        try {
+            const http = require('http');
+            await new Promise((resolve, reject) => {
+                const req = http.get(defaultUrl, (res) => {
+                    log(`✅ Dev server already running at ${defaultUrl}`);
+                    devServer = { url: defaultUrl, external: true };
+                    resolve();
+                });
+                req.on('error', () => {
+                    log(`Server not running, attempting to start...`);
+                    reject();
+                });
+                req.setTimeout(2000, () => {
+                    req.destroy();
+                    reject();
+                });
+            });
+        } catch {
+            // Server not running, try to start it
+            try {
+                devServer = await startDevServer(reactProjectDir);
+                log(`React server started at ${devServer.url}`);
+            } catch (err) {
+                log(`⚠️ Failed to start dev server: ${err.message}`);
+                log(`Please start manually: cd new && npm run dev`);
+            }
+        }
 
-        // --- STEP 7: FINAL COMPOSITE ---
-        log(`💿 Step 7: Creating Final Video...`);
+        // --- STEP 7: SAVE HTML TO PUBLIC FOLDER ---
+        log(`📦 Step 7: Saving HTML to public folder...`);
+        const publicHTMLPath = path.resolve('./new/public/render.html');
+        
+        // Add visibility CSS to fix opacity:0 issues
+        const visibilityFix = `
+<style id="visibility-override">
+/* Override any opacity:0 that prevents visibility */
+body, body *:not(script):not(style) { 
+    opacity: 1 !important; 
+    visibility: visible !important; 
+}
+/* Ensure text is visible and not hidden by code display */
+script, style { display: none !important; }
+/* Ensure text elements have color */
+div, span, p, h1, h2, h3, h4, h5, h6 { color: white !important; }
+/* Background for contrast */
+body:not(:has(#stage)) { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; }
+</style>`;
+        
+        const htmlWithFix = content.html.replace('</head>', `${visibilityFix}</head>`);
+        fs.writeFileSync(publicHTMLPath, htmlWithFix);
+        log(`HTML saved to: ${publicHTMLPath}`);
+        
+        // --- STEP 8: RENDER FRAMES FROM REACT APP ---
+        log(`🎬 Step 8: Recording frames from React server...`);
+        const lastSegment = segments[segments.length - 1];
+        const fullDuration = lastSegment ? lastSegment.end + 2 : 10;
+        const duration = 5; // Test with 5 seconds
+        log(`Recording ${duration}s (Full: ${fullDuration}s)`);
+        
+        const fps = 15;
+        const framesDir = path.resolve(`temp_frames_${timestamp}`);
+        
+        if (devServer) {
+            const renderUrl = `${devServer.url}/render.html`;
+            log(`Recording from: ${renderUrl}`);
+            await renderFramesFromReactApp(renderUrl, framesDir, duration, fps);
+        } else {
+            log(`❌ No dev server running, cannot record.`);
+            throw new Error('Dev server required for recording');
+        }
+        
+        log(`✅ Frames rendered to: ${framesDir}`);
+
+        // --- STEP 9: COMPOSITE FINAL VIDEO ---
+        log(`💿 Step 9: Creating Final Video...`);
         const finalPath = path.resolve(`final_video_${timestamp}.mp4`);
         
-        // Composite Overlay onto the ALREADY MERGED video
-        const ffmpeg = require('fluent-ffmpeg');
-        await new Promise((resolve, reject) => {
-            ffmpeg(MERGED_VIDEO_PATH)
-                .input(overlayPath)
-                .complexFilter([
-                    "[1:v]scale=1080:1920[overlay]", // Ensure overlay is scaled
-                    "[0:v][overlay]overlay[outv]"
-                ])
-                .outputOptions([
-                    "-map [outv]",
-                    "-map 0:a", // Use audio from merged video
-                    "-c:v libx264",
-                    "-c:a copy"
-                ])
-                .output(finalPath)
-                .on('end', resolve)
-                .on('error', reject)
-                .run();
-        });
+        await compositeFramesWithVideo(BASE_VIDEO_PATH, framesDir, audioPath, finalPath, fps);
         
-        log(`✅ SUCCESS! Output: ${finalPath}`);
+        log(`✅ SUCCESS! Final video: ${finalPath}`);
 
-        // Cleanup merged base file, keep final
+        // Cleanup
+        if (devServer && devServer.process && !devServer.external) {
+            log('Stopping dev server...');
+            devServer.process.kill();
+        } else if (devServer && devServer.external) {
+            log('Keeping external dev server running...');
+        }
+        
         if (fs.existsSync(MERGED_VIDEO_PATH)) fs.unlinkSync(MERGED_VIDEO_PATH);
+        // Keep frames for debugging: comment out cleanup
+        // fs.rmSync(framesDir, { recursive: true, force: true });
 
     } catch (error) {
         log(`❌ FAILED: ${error.message}`);

@@ -34,7 +34,7 @@ ${description ? `Context: ${description}` : ""}
 
 TECHNICAL REQUIREMENTS:
 - Narration voice: Single expert educator
-- Language style: Natural Indian English (include casual discourse markers such as "yaar", "actually", "see", "you know", "right?", "na", "basically", "tell me")
+- Language style: Natural Indian English 
 - Structure order (strict):
   1. Hook (attention-grabbing opening)
   2. Core concept explanation (clear and logically sequenced)
