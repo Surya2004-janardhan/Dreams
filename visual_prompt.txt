@@ -1,4 +1,0 @@
-Modern tech theme with minimal overlays and smooth transitions. 
-Layout splitout must be 0.5. 
-Simple coding elements and AI-inspired graphics will be used.
-Clean and futuristic design with efficient animations.
