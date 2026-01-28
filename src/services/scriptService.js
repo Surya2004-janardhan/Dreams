@@ -41,7 +41,7 @@ CONSTRAINTS:
 - STYLE: Zero fluff. No "bush beating". No filler words (like "very", "basically", "actually").
 - TONE: Authoritative Technical Expert. Straight to the point.
 - LANGUAGE: Sharp Indian English (professional/tech-focused).
-- WORD COUNT: STRICTLY 110-120 words.
+- WORD COUNT: STRICTLY 90-110 words. If you need more length, add more technical specs or architecture details.
 - FORMAT: Raw text only. No labels like "Hook:" or "Body:".`;
 
   try {
@@ -75,10 +75,10 @@ CONSTRAINTS:
     let retryCount = 0;
     const maxRetries = 1;
 
-    while ((wordCount < 105 || wordCount > 120) && retryCount < maxRetries) {
+    while ((wordCount < 85 || wordCount > 115) && retryCount < maxRetries) {
       retryCount++;
       logger.warn(
-        `⚠️ Script word count ${wordCount} is outside 110-120 range, retrying... (attempt ${retryCount}/${maxRetries})`,
+        `⚠️ Script word count ${wordCount} is outside 90-110 range, retrying... (attempt ${retryCount}/${maxRetries})`,
       );
 
       // Wait 66 seconds before retry
