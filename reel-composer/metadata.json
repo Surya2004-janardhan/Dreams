@@ -1,0 +1,5 @@
+{
+  "name": "Reel Composer",
+  "description": "A frontend tool to compose Instagram Reels from video and SRT files using AI-generated dynamic HTML overlays and layouts.",
+  "requestFramePermissions": []
+}
