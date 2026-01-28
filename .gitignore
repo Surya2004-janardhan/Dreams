@@ -78,7 +78,7 @@ build/
 *.temp
 server.js
 
-# reel-composer/
+reel-composer/
 # test*
 new/
 temp*

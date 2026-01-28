@@ -11,7 +11,6 @@
     "fluent-ffmpeg": "^2.1.2",
     "googleapis": "^170.1.0",
     "groq-sdk": "^0.3.3",
-    "supabase": "^2.72.8",
     "winston": "^3.11.0"
   },
   "devDependencies": {
