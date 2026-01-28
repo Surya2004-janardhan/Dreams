@@ -5,6 +5,7 @@
   "main": "test_full_automation.js",
   "dependencies": {
     "@google/genai": "^1.34.0",
+    "@supabase/supabase-js": "^2.93.2",
     "axios": "^1.6.7",
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",
@@ -12,6 +13,7 @@
     "googleapis": "^170.1.0",
     "groq-sdk": "^0.3.3",
     "supabase": "^2.72.8",
+    "wait-on": "^9.0.3",
     "winston": "^3.11.0"
   },
   "devDependencies": {

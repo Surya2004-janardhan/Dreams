@@ -28,38 +28,28 @@ const generateScript = async (topic, description = "") => {
     throw new Error("GROQ_API_KEY environment variable is required");
   }
 
-  const prompt = `Generate a single-speaker educational video script on: ${topic}
-
+  const prompt = `Topic: ${topic}
 ${description ? `Context: ${description}` : ""}
 
-TECHNICAL REQUIREMENTS:
-- Narration voice: Single expert educator
-- Language style: Natural Indian English 
-- Structure order (strict):
-  1. Hook (attention-grabbing opening)
-  2. Core concept explanation (clear and logically sequenced)
-  3. Practical examples or real-world applications
-  4. Concluding impact statement
-- Educational depth: Simplify complex concepts without losing factual accuracy
-- Word count constraint: STRICTLY between 110 and 120 words
-- Flow requirement: Smooth cognitive progression; each sentence must build on the previous one
-- Tone: Enthusiastic teacher addressing curious learners
-- Clarity: Optimized for speech synthesis and accurate subtitle generation
+STRICT CONTENT ARCHITECTURE:
+1. THE FAST HOOK (0-5s): Start with a high-stakes technical fact or a surprising capability. No "Hello everyone" or "In this video".
+2. TECHNICAL CORE: Explain exactly HOW it works or why it matters technically. Use industry-standard terminology. 
+3. UTILITY/EXECUTION: One sentence on practical implementation or real-world technical impact.
+4. THE LEAVE: End with a sharp, punchy insight.
 
-OUTPUT RULES:
-- Return ONLY the raw script text
-- No headings, labels, formatting, or metadata
-- No timestamps
-- No extra commentary
-- Must strictly stay within 110–120 words`;
+CONSTRAINTS:
+- STYLE: Zero fluff. No "bush beating". No filler words (like "very", "basically", "actually").
+- TONE: Authoritative Technical Expert. Straight to the point.
+- LANGUAGE: Sharp Indian English (professional/tech-focused).
+- WORD COUNT: STRICTLY 110-120 words.
+- FORMAT: Raw text only. No labels like "Hook:" or "Body:".`;
 
   try {
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
           role: "system",
-          content:
-            "You are an expert educational content creator specializing in natural Indian English explanations.",
+          content: "You are a senior technical architect and content strategist. You write high-velocity, information-dense scripts for tech professionals. You hate fluff and marketing speak.",
         },
         {
           role: "user",

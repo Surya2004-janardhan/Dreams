@@ -1,0 +1,5 @@
+Here are 4 lines for a GSAP animation related to observability:
+Layout splitout must be 0.5 to ensure seamless transition of observability data.
+The animation will zoom in on system performance metrics at a scale of 1.2.
+By utilizing GSAP, we can create a smooth and interactive visualization of system behavior.
+With a duration of 2 seconds and ease: Power2, the observability dashboard will come to life.

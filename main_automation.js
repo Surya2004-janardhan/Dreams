@@ -81,9 +81,19 @@ async function main() {
         console.log("✅ SRT ready");
 
         // Step 5: Visual Prompt
-        console.log("🎨 Step 5: Animation prompt...");
+        console.log("🎨 Step 5: Generating technical animation prompt...");
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const groqPrompt = `Based on: ${script}. Topic: ${TOPIC}. Generate 4 lines for GSAP animation. MUST include: "Layout splitout must be 0.5".`;
+        const groqPrompt = `
+        Draft a technical GSAP animation storyboard for: ${TOPIC}
+        Context: ${script}
+        
+        VISUAL RULES:
+        - Style: Cyber-technical, data-driven, clean Swiss typography.
+        - Components: Dynamic graphs, code snippets, or architecture diagrams.
+        - Constraint: ALWAYS include "Layout splitout must be 0.5".
+        - Motion: Sharp, rhythmic transitions. No generic sweeps.
+        - Output: Exactly 3-4 professional lines.
+        `;
         const completion = await groq.chat.completions.create({
             messages: [{ role: "user", content: groqPrompt }],
             model: "llama-3.3-70b-versatile",
