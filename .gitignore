@@ -76,7 +76,7 @@ build/
 # Temporary files
 *.tmp
 *.temp
-
+server.js
 
 reel-composer/
 # test*
