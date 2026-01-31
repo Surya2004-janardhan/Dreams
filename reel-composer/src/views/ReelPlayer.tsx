@@ -446,7 +446,29 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     let jitter = 0;
     const draw = () => {
       if (video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Calculate "cover" logic manually for the canvas drawing
+        const canvasAspect = canvas.width / canvas.height;
+        const videoAspect = video.videoWidth / video.videoHeight;
+
+        let drawWidth = canvas.width;
+        let drawHeight = canvas.height;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (videoAspect > canvasAspect) {
+          // Video is wider than canvas (Horizontal -> Letterbox)
+          drawWidth = canvas.width;
+          drawHeight = canvas.width / videoAspect;
+          offsetY = (canvas.height - drawHeight) / 2;
+        } else {
+          // Video is taller than canvas (Tall -> Pillarbox)
+          drawHeight = canvas.height;
+          drawWidth = canvas.height * videoAspect;
+          offsetX = (canvas.width - drawWidth) / 2;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
         // Jitter Hack: Forces the browser to see a "change" in current pixels
         // prevents the encoder from sleeping on static video frames.
@@ -592,7 +614,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             key={videoUrl}
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-contain"
             playsInline
             muted={false}
             onEnded={stopRecording}

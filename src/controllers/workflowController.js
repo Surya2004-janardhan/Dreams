@@ -60,7 +60,7 @@ const generateGeminiTTS = async (text, voice = "male") => {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-preview-tts",
+    model: "gemini-1.5-flash",
   });
 
   // Map to Gemini Voices - Male: Charon, Female: Kore
@@ -112,7 +112,7 @@ const generateSRTFromAudio = async (audioPath) => {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   // Read audio file
   const audioBuffer = fs.readFileSync(audioPath);

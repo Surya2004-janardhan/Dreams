@@ -36,7 +36,7 @@ const generateSRT = async (audioPath, apiKey) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-1.5-flash',
       contents: {
         parts: [
           {
@@ -122,8 +122,8 @@ Return JSON with keys: "html", "layoutConfig".
 const generateReelContent = async (
   srtText,
   topicContext,
-  apiKey,
-  modelName = "gemini-2.5-flash",
+  apiKey = process.env.GEMINI_API_KEY_FOR_VISUALS || process.env.GEMINI_API_KEY,
+  modelName = "gemini-1.5-flash",
   visualPrompt = "Dynamic and modern",
   theme = { primary: "#00f3ff", accent: "#ff0055", background: "#050505", name: "Default" }
 ) => {

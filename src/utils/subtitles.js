@@ -180,27 +180,46 @@ const createSubtitlesFromAudio = async (audioFilePath, outputPath = null) => {
   }
 };
 
-// Function to upload a local file to the AssemblyAI API
 const upload_file = async (api_token, filePath) => {
-  const data = fs.readFileSync(filePath);
-  const url = "https://api.assemblyai.com/v2/upload";
-
   try {
-    const response = await axios.post(url, data, {
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File does not exist for upload: ${filePath}`);
+      return null;
+    }
+
+    const stats = fs.statSync(filePath);
+    console.log(`📤 Uploading file: ${path.basename(filePath)} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
+
+    const fileStream = fs.createReadStream(filePath);
+    const url = "https://api.assemblyai.com/v2/upload";
+
+    const response = await axios.post(url, fileStream, {
       headers: {
         "Content-Type": "application/octet-stream",
-        Authorization: api_token,
+        "Authorization": api_token,
       },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      timeout: 300000, // 5 minute timeout for upload
     });
 
     if (response.status === 200) {
       return response.data["upload_url"];
     } else {
-      console.error(`Error: ${response.status} - ${response.statusText}`);
+      console.error(`❌ Upload failed with status: ${response.status} - ${response.statusText}`);
       return null;
     }
   } catch (error) {
-    console.error(`Error: ${error}`);
+    if (error.response) {
+      console.error(`❌ AssemblyAI Upload API Error [${error.response.status}]:`, error.response.data);
+    } else if (error.request) {
+      console.error(`❌ AssemblyAI Upload Network Error (No response):`, error.message);
+      if (error.message.includes('AggregateError')) {
+         console.warn("💡 Pro-tip: This usually means a connection issue. Check your internet or if api.assemblyai.com is blocked.");
+      }
+    } else {
+      console.error(`❌ AssemblyAI Upload Setup Error:`, error.message);
+    }
     return null;
   }
 };

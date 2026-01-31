@@ -75,6 +75,10 @@ build/
 
 # Temporary files
 *.tmp
+inshot*
+
+final_*
+merged_output.mp4
 *.temp
 server.js
 

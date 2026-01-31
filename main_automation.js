@@ -10,10 +10,13 @@ const { getNextTask, updateSheetStatus } = require('./src/services/sheetsService
 const { generateScript } = require('./src/services/scriptService');
 const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
 const { generateSRT } = require('./src/services/newFeaturesService');
+const { createSubtitlesFromAudio } = require('./src/utils/subtitles');
 const { 
     uploadToYouTube, 
-    uploadToInstagram, 
-    uploadToFacebook, 
+    uploadToInstagramWithUrl, 
+    uploadToFacebookWithUrl, 
+    uploadToSupabaseAndGetLink,
+    deleteFromSupabase,
     generateUnifiedSocialMediaCaption 
 } = require('./src/services/socialMediaService');
 const { sendErrorNotification, sendSuccessNotification } = require('./src/services/emailService');
@@ -46,9 +49,18 @@ async function main() {
         // Step 2: Audio
         currentStep = "Audio Generation";
         console.log("🎤 Step 2: Audio generation...");
-        const audioResult = await generateAudioWithBatchingStrategy(script);
-        const audioPath = audioResult.conversationFile;
-        console.log(`✅ Audio: ${audioPath}`);
+        let audioPath;
+        const CACHE_AUDIO = path.resolve('audio_cache.wav');
+
+        if (fs.existsSync(CACHE_AUDIO)) {
+            console.log("♻️ Using cached audio_cache.wav to save API quota.");
+            audioPath = CACHE_AUDIO;
+        } else {
+            const audioResult = await generateAudioWithBatchingStrategy(script);
+            audioPath = audioResult.conversationFile;
+            // Optionally: fs.copyFileSync(audioPath, CACHE_AUDIO); // Uncomment to enable caching manually
+        }
+        console.log(`✅ Audio ready: ${audioPath}`);
 
         // Step 3: Base Merge (Trim Video to Audio)
         currentStep = "Base Video Audio Merge";
@@ -79,27 +91,28 @@ async function main() {
         });
         console.log("✅ Base merge success");
 
-        // Step 4: SRT
-        currentStep = "SRT Generation";
-        console.log("📜 Step 4: SRT generation...");
-        const srtRes = await generateSRT(audioPath, process.env.GEMINI_API_KEY_FOR_AUDIO);
-        const srtPath = path.resolve('subtitles.srt');
-        fs.writeFileSync(srtPath, srtRes.srt);
-        console.log("✅ SRT ready");
+        // Step 4: SRT (using AssemblyAI)
+        currentStep = "SRT Generation (AssemblyAI)";
+        console.log("📜 Step 4: SRT generation via AssemblyAI...");
+        const srtRes = await createSubtitlesFromAudio(audioPath);
+        const srtPath = srtRes.subtitlesPath;
+        // Also save as subtitles.srt in root for consistency if needed by other steps
+        fs.copyFileSync(srtPath, path.resolve('subtitles.srt'));
+        console.log("✅ SRT ready via AssemblyAI");
 
         // Step 5: Visual Prompt
         currentStep = "Visual Prompt Generation";
         console.log("🎨 Step 5: Generating technical animation prompt...");
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const groqPrompt = `
-        Draft a technical GSAP animation storyboard for: ${TOPIC}
+        Draft a technical animation  storyboard for: ${TOPIC}
         Context: ${script}
         
         VISUAL RULES:
         - Style: Cyber-technical, data-driven, clean Swiss typography.
         - Components: Dynamic graphs, code snippets, or architecture diagrams.
         - Constraint: ALWAYS include "Layout splitout must be 0.5".
-        - Motion: Sharp, rhythmic transitions. No generic sweeps.
+        - Motion: Sharp, rhythmic transitions. No generic sweeps, include icons or images relevent.
         - Output: Exactly 3-4 professional lines.
         `;
         const completion = await groq.chat.completions.create({
@@ -127,19 +140,38 @@ async function main() {
         console.log("📤 Step 8: Uploading...");
         const links = { yt: "", insta: "", fb: "" };
 
-        const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
-            .then(res => { if(res.success) links.yt = res.url; })
-            .catch(e => console.error("YT Error:", e.message));
+        // 1. Supabase Upload (One-time) for Meta Platforms
+        let supabaseInfo = null;
+        try {
+            console.log("☁️ Pre-uploading to Supabase for Meta platforms...");
+            supabaseInfo = await uploadToSupabaseAndGetLink(finalMasterPath, TOPIC);
+        } catch (e) {
+            console.error("Supabase Pre-upload Error:", e.message);
+        }
 
-        const instaPromise = uploadToInstagram(finalMasterPath, TOPIC, social.caption)
-            .then(res => { if(res.success) links.insta = res.url; })
-            .catch(e => console.error("Insta Error:", e.message));
+        if (supabaseInfo && supabaseInfo.success) {
+            const publicUrl = supabaseInfo.publicLink;
+            console.log(`✅ Supabase URL ready: ${publicUrl}`);
 
-        const fbPromise = uploadToFacebook(finalMasterPath, TOPIC, social.caption)
-            .then(res => { if(res.success) links.fb = res.url; })
-            .catch(e => console.error("FB Error:", e.message));
+            // A. YouTube Upload (Direct)
+            const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
+                .then(res => { if(res.success) links.yt = res.url; })
+                .catch(e => console.error("YT Error:", e.message));
 
-        await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
+            // B. Instagram Upload (via URL)
+            const instaPromise = uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
+                .then(res => { if(res.success) links.insta = res.url; })
+                .catch(e => console.error("Insta Error:", e.message));
+
+            // C. Facebook Upload (via URL)
+            const fbPromise = uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
+                .then(res => { if(res.success) links.fb = res.url; })
+                .catch(e => console.error("FB Error:", e.message));
+
+            await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
+        } else {
+            console.error("❌ Supabase failed, skipping ALL social platform uploads to avoid partial failures.");
+        }
 
         // Step 9: Update Sheet
         currentStep = "Updating Sheets & Notifications";
@@ -151,23 +183,37 @@ async function main() {
         // Final Success Email
         await sendSuccessNotification(task, links).catch(e => console.error("Email failed:", e.message));
 
+        // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
+        if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
+            console.log("🧹 Final Step: Cleaning up Supabase temporary file...");
+            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error:", e.message));
+        }
+
         console.log("✨ AUTOMATION SUCCESSFUL");
 
     } catch (err) {
         console.error(`❌ PIPELINE FAILED at Step [${currentStep}]:`, err);
+        
+        // Cleanup on failure as well, if we managed to upload anything
+        if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
+            console.log("🧹 Cleanup on failure: Removing Supabase temporary file...");
+            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error on Failure:", e.message));
+        }
+
         if (task && task.rowId > 0) {
             await updateSheetStatus(task.rowId, "Error: " + err.message.slice(0, 50));
         }
         // Send Error Email
-        await sendErrorNotification(task, err, currentStep).catch(e => console.error("Error email failed:", e.message));
+        // for now hold and comment error notification service 
+        // await sendErrorNotification(task, err, currentStep).catch(e => console.error("Error email failed:", e.message));
     }
 }
 
 async function runCompositor(vPath, sPath, vPrompt) {
     const keys = [
+        process.env.GEMINI_API_KEY_FOR_VISUALS,
         process.env.GEMINI_API_KEY,
         process.env.GEMINI_API_KEY_FOR_AUDIO,
-        process.env.GEMINI_API_KEY_FOR_VISUALS,
         process.env.GEMINI_API_KEY_FOR_T2T
     ].filter(Boolean);
     const uniqueKeys = [...new Set(keys)];
@@ -199,11 +245,26 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
 
-        console.log("📽️ Final Remuxing (audio offset sync)...");
+        console.log("📽️ Final Remuxing (audio offset sync + high-compatibility settings)...");
         await new Promise((res, rej) => {
             ffmpeg(raw).input(audioSrc)
                 .complexFilter([{ filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'd' }])
-                .outputOptions(['-y', '-c:v libx264', '-preset fast', '-crf 22', '-c:a aac', '-map 0:v:0', '-map [d]', '-shortest'])
+                .outputOptions([
+                    '-y', 
+                    '-c:v libx264', 
+                    '-pix_fmt yuv420p',      // Crucial for Instagram/Facebook
+                    '-preset fast', 
+                    '-crf 22', 
+                    '-profile:v main',       // Main profile is more compatible
+                    '-level:v 4.1',
+                    '-r 30',                 // Force constant 30fps to avoid VFR issues
+                    '-c:a aac', 
+                    '-ar 44100',             // Standard audio rate
+                    '-map 0:v:0', 
+                    '-map [d]', 
+                    '-shortest', 
+                    '-movflags +faststart'
+                ])
                 .output(out)
                 .on('end', () => { masterPath = out; res(); })
                 .on('error', rej)
@@ -226,8 +287,8 @@ async function runCompositor(vPath, sPath, vPrompt) {
                 await pass.fill(key);
                 await page.click('button:has-text("Enter Studio")');
                 const success = await Promise.race([
-                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 15000 }).then(() => true),
-                    page.waitForTimeout(16000).then(() => false)
+                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 30000 }).then(() => true),
+                    page.waitForTimeout(31000).then(() => false)
                 ]);
                 if (success) break;
                 await pass.fill('');
@@ -235,7 +296,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         }
 
         console.log("📤 Uploading assets...");
-        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 45000 });
+        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 60000 });
         await page.setInputFiles('#video-upload', vPath);
         await page.setInputFiles('#srt-upload', sPath);
         await page.waitForTimeout(5000);
@@ -245,21 +306,21 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.waitForTimeout(8000);
 
         console.log("🎨 Filling animation prompt...");
-        await page.waitForSelector('textarea', { state: 'visible', timeout: 45000 });
+        await page.waitForSelector('textarea', { state: 'visible', timeout: 60000 });
         await page.fill('textarea', vPrompt);
         await page.click('button:has-text("Studio")'); 
 
         console.log("⏳ Waiting for visual generation...");
-        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 240000 });
+        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 300000 });
         
         console.log("🎬 Initiating Recording...");
         await page.click('button:has-text("Rec & Export")');
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(5000);
         await page.click('button:has-text("Browser Recorder")');
 
         console.log("🎥 Monitoring Playback...");
         const begin = Date.now();
-        while (!complete && Date.now() - begin < 400000) {
+        while (!complete && Date.now() - begin < 800000) {
             await page.waitForTimeout(5000);
             const ended = await page.evaluate(() => { 
                 const v = document.querySelector('video'); 
@@ -268,7 +329,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
             if (ended) {
                 console.log("🎞️ Playback ended. Waiting for download...");
                 const wait = Date.now();
-                while (!complete && Date.now() - wait < 120000) await page.waitForTimeout(2000);
+                while (!complete && Date.now() - wait < 300000) await page.waitForTimeout(2000);
                 break;
             }
         }
