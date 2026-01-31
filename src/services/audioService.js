@@ -249,25 +249,30 @@ const generateAudioWithBatchingStrategy = async (script) => {
       apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
     });
 
-    // Correct model for TTS
-    const model = "gemini-2.5-flash-preview-tts";
+    // Reference from doc: Gemini 2.5 Flash Preview TTS is the standard for high-quality audio
+    const modelName = "gemini-2.5-flash-preview-tts";
+    const voiceName = "Puck"; // Upbeat base voice for natural energy and pitch peaks
 
-    // Map to Gemini Voices - using male voice
-    const voiceName = "Charon"; // Male voice
+    // Construct the refined "Dynamic Tech Global" persona
+    const styledPrompt = `
+      Role: Expert Global Tech Educator.
+      Tone: High energy, authoritative, and extremely confident.
+      Speaking Style: Dynamic with natural pitch peaks and valleys (highs and lows). 
+      Accent: Modern, neutral International English with a minimal, professional Indian touch.
+      Pace: Brisk and energetic delivery 
+      Instructions: Use varied intonation to emphasize key technical points. Sound like a world-class conference speaker. Clean, dry studio sound.
 
-    logger.info(`📝 Sending TTS request for ${script.length} characters`);
-    logger.info(`📝 Script text: "${script}"`);
-    logger.info(
-      `📊 Text analysis: ${script.length} total chars, ${
-        script.replace(/\s/g, "").length
-      } letters, ${script.split(/\s+/).length} words`,
-    );
+      Script:
+      ${script}
+    `.trim();
 
+    logger.info(`📝 Sending High-Energy/Brisk TTS request with "Puck" base`);
+    
     const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts: [{ text: script }] },
+      model: modelName,
+      contents: [{ role: "user", parts: [{ text: styledPrompt }] }],
       config: {
-        responseModalities: [Modality.AUDIO],
+        responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName },
@@ -281,7 +286,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
     
     if (!base64Audio) {
         console.log("Full Response:", JSON.stringify(response, null, 2));
-        throw new Error("No audio data returned");
+        throw new Error("No audio data returned from Gemini TTS");
     }
 
     // Convert Base64 to Buffer (PCM Data)

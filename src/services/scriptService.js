@@ -30,19 +30,31 @@ const generateScript = async (topic, description = "") => {
 
   const prompt = `Topic: ${topic}
 ${description ? `Context: ${description}` : ""}
+Generate a 60-second Instagram Reel script about [TOPIC].
 
-STRICT CONTENT ARCHITECTURE:
-1. THE FAST HOOK (0-5s): Start with a high-stakes technical fact or a surprising capability. No "Hello everyone" or "In this video".
-2. TECHNICAL CORE: Explain exactly HOW it works or why it matters technically. Use industry-standard terminology. 
-3. UTILITY/EXECUTION: One sentence on practical implementation or real-world technical impact.
-4. THE LEAVE: End with a sharp, punchy insight.
+Style: Simple English, short punchy sentences, easy to understand for students and beginners.
 
-CONSTRAINTS:
-- STYLE: Zero fluff. No "bush beating". No filler words (like "very", "basically", "actually").
-- TONE: Authoritative Technical Expert. Straight to the point.
-- LANGUAGE: Sharp Indian English (professional/tech-focused).
-- WORD COUNT: STRICTLY 90-110 words. If you need more length, add more technical specs or architecture details.
-- FORMAT: Raw text only. No labels like "Hook:" or "Body:".`;
+Structure must follow this format:
+
+Strong hook in first 3 seconds (curiosity or bold statement).
+
+Identify a common mistake or myth related to the topic.
+
+Explain the concept in very simple words (no complex jargon).
+
+Give 2–3 practical points or examples.
+
+End with a powerful takeaway line.
+
+Tone: Confident young tech educator. Calm. No overacting.
+
+Sentences should be short and spaced line by line (for subtitles).
+
+Avoid complicated words.
+
+Make it emotionally engaging and slightly thought-provoking.
+
+Total length: around 90–110 spoken words.`;
 
   try {
     const chatCompletion = await groq.chat.completions.create({

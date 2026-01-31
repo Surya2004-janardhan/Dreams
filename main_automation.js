@@ -17,7 +17,8 @@ const {
     uploadToFacebookWithUrl, 
     uploadToSupabaseAndGetLink,
     deleteFromSupabase,
-    generateUnifiedSocialMediaCaption 
+    generateUnifiedSocialMediaCaption,
+    
 } = require('./src/services/socialMediaService');
 const { sendErrorNotification, sendSuccessNotification } = require('./src/services/emailService');
 const Groq = require("groq-sdk");

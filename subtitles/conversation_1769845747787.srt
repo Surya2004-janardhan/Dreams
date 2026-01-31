@@ -1,0 +1,40 @@
+1
+00:00:01,280 --> 00:00:05,360
+AI in 2026 will change everything. Many think
+
+2
+00:00:05,860 --> 00:00:09,200
+AI is only for experts. But AI is just a computer
+
+3
+00:00:09,700 --> 00:00:12,880
+program. It helps us with tasks like image recognition.
+
+4
+00:00:13,360 --> 00:00:16,880
+For example, AI can help with self driving cars.
+
+5
+00:00:17,120 --> 00:00:20,000
+Or AI can assist with medical diagnoses.
+
+6
+00:00:20,320 --> 00:00:23,200
+AI can even generate human like text and art.
+
+7
+00:00:23,600 --> 00:00:26,080
+The key is to understand AI's possibilities.
+
+8
+00:00:26,940 --> 00:00:30,460
+Start learning AI basics today and explore its applications.
+
+9
+00:00:30,940 --> 00:00:33,660
+Remember, AI is a tool to enhance our lives.
+
+10
+00:00:34,300 --> 00:00:37,740
+Embrace AI and shape your future. It's an exciting time.
+
