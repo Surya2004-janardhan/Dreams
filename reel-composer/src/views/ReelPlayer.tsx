@@ -614,7 +614,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             key={videoUrl}
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover object-bottom"
             playsInline
             muted={false}
             onEnded={stopRecording}

@@ -1,6 +1,6 @@
-Here is a 60-second visual animation storyboard for the technical reel:
-Animate a swirling vortex of code symbols, transitioning into a robotic arm icon with glowing blue circuits, as the script introduces AI in 2026. 
-Morph the robotic arm into a stethoscope icon with a pulsing ECG waveform, highlighting AI's role in medical diagnosis, such as disease detection.
-Transition to a self-driving car icon with spinning wheels and a navigation map, illustrating AI-assisted transportation, as the script mentions self-driving cars.
-Dissolve the car icon into a network of interconnected nodes with flashing neon lines, symbolizing AI's potential to enhance our lives and make them smarter. 
-Conclude with a rotating 3D brain icon surrounded by orbiting code fragments, emphasizing AI as a powerful tool that complements human intelligence.
+Here's a high-fidelity visual animation storyboard:
+Animate a pulsing circuit board with wires morphing into a robotic arm, symbolizing AI's presence.
+Transition to a swirling cloud of code symbols, forming a virtual assistant icon with a microphone.
+Reveal a self-driving car icon with rotating wheels, surrounded by a network of location pins and map lines.
+Animate a revolving 3D brain scan with highlighted disease markers, transitioning into a doctor's clipboard with a diagnosis report.
+Finish with a glowing globe icon, surrounded by orbiting satellites and data streams, as the words "AI Leads" appear briefly.
