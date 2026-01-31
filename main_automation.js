@@ -106,15 +106,23 @@ async function main() {
         console.log("🎨 Step 5: Generating technical animation prompt...");
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const groqPrompt = `
-        Draft a technical animation  storyboard for: ${TOPIC}
-        Context: ${script}
+        Topic: ${TOPIC}
+        Script: ${script}
         
-        VISUAL RULES:
-        - Style: Cyber-technical, data-driven, clean Swiss typography.
-        - Components: Dynamic graphs, code snippets, or architecture diagrams.
-        - Constraint: ALWAYS include "Layout splitout must be 0.5".
-        - Motion: Sharp, rhythmic transitions. No generic sweeps, include icons or images relevent.
-        - Output: Exactly 3-4 professional lines.
+        Task: Create a high-fidelity visual animation storyboard for a 60-second technical reel.
+        
+        VISUAL STRATEGY:
+        - STYLE: Clean, futuristic, icon-driven animation. 
+        - VISUALS: Use a continuous stream of relevant technical icons, symbols, and minimalist diagrams that morph and transition rhythmically.
+        - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
+        - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script.
+        - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
+        - COLOR: Professional, cohesive color palette (e.g., Deep Blues, Neons, or Tech Grays).
+        
+        OUTPUT FORMAT:
+        - Exactly 4-5 descriptive lines detailing the visual progression.
+        - Focus on ACTION and SPECIFIC ICONS. 
+        - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
         `;
         const completion = await groq.chat.completions.create({
             messages: [{ role: "user", content: groqPrompt }],
