@@ -10,8 +10,8 @@ export const validateGeminiConnection = async (apiKey: string, modelName: string
   try {
     // Simple verification call
     await ai.models.generateContent({
-        model: modelName,
-        contents: "Test connection.",
+      model: modelName,
+      contents: "Test connection.",
     });
     return true;
   } catch (e) {
@@ -44,12 +44,12 @@ export const generateSRT = async (
 
   if (mediaFile.type.startsWith('video/')) {
     try {
-        console.log("Extracting audio from video for better transcription accuracy...");
-        const audioBlob = await extractAudioBlob(mediaFile as File);
-        fileToProcess = audioBlob;
-        mimeType = 'audio/wav';
+      console.log("Extracting audio from video for better transcription accuracy...");
+      const audioBlob = await extractAudioBlob(mediaFile as File);
+      fileToProcess = audioBlob;
+      mimeType = 'audio/wav';
     } catch (e) {
-        console.warn("Audio extraction failed, falling back to video processing.", e);
+      console.warn("Audio extraction failed, falling back to video processing.", e);
     }
   }
 
@@ -107,12 +107,12 @@ export const generateSRT = async (
     // Convert JSON segments to SRT String
     let srtOutput = "";
     segments.forEach((seg: any, index: number) => {
-       const id = index + 1;
-       const startTime = formatSRTTimestamp(seg.start);
-       const endTime = formatSRTTimestamp(seg.end);
-       const text = seg.text.trim();
+      const id = index + 1;
+      const startTime = formatSRTTimestamp(seg.start);
+      const endTime = formatSRTTimestamp(seg.end);
+      const text = seg.text.trim();
 
-       srtOutput += `${id}\n${startTime} --> ${endTime}\n${text}\n\n`;
+      srtOutput += `${id}\n${startTime} --> ${endTime}\n${text}\n\n`;
     });
 
     return srtOutput.trim();
@@ -188,12 +188,15 @@ export const generateReelContent = async (
     You are a world-class Motion Graphics Designer and Creative Technologist for high-retention social media video (Reels/TikTok).
     Your goal is to generate or refine a visual composition that transforms a raw transcript into an immersive, "edutainment" style video experience.
 
-    ### DESIGN SYSTEM & AESTHETIC
+    ### DESIGN SYSTEM & AESTEHTIC (PREMIUM TECH STYLE)
     You must output high-fidelity, polished UI/UX animation.
-    1. **Color Palette**: Use CSS variables. Dark background (#050505), Neon accents.
-       - \`:root { --bg-deep: #050505; --primary: #00f3ff; --success: #00ff9d; --warning: #ffd700; --danger: #ff0055; --white: #ffffff; }\`
-    2. **Typography**: Mix 'Oswald' (Headers) and 'JetBrains Mono' (Data/Code).
-    3. **Animation Style (GSAP)**: No static slides. Things must pulse, float, or glow.
+    1. **Color Palette**: Dark mode (#050505), Neon accents (Cyan/Magenta).
+    2. **Animation Style (GSAP - SMOOTH & STAGED)**:
+       - **NO COLLISIONS:** Elements MUST NOT overlap or collide. Use CSS Flexbox/Grid for layout and animate within distinct containers.
+       - **ICON-DRIVEN STORYTELLING:** Use technical SVG icons (e.g., Lucide-style) or minimalist 3D-effect shapes.
+       - **CONTINUOUS SECONDARY MOTION:** Visuals must never be static. Use subtle background pulses, floating particles, or rotating symbols.
+       - **STAGED TRANSITIONS:** Use GSAP stagger and clear entrance/exit animations for every scene. Elements should animate IN, stay active, and then animate OUT before the next scene starts.
+       - **MINIMAL TEXT:** Display ONLY 1-3 critical keywords to emphasize the audio.
 
     ### JAVASCRIPT ROBUSTNESS RULES (CRITICAL)
     To prevent "Uncaught TypeError" and "SyntaxError" loops, you MUST strictly follow these patterns:
@@ -241,7 +244,7 @@ export const generateReelContent = async (
   let prompt = constructPrompt(topicContext, srtText);
 
   if (existingHtml && existingLayout) {
-      prompt = `
+    prompt = `
       I have an existing HTML animation and Layout Config that I want to REFINE.
 
       *** CRITICAL FIX INSTRUCTIONS ***
@@ -303,7 +306,7 @@ export const generateReelContent = async (
     // --- REEL HELPER API INJECTION ---
     // Instead of just a shim, we inject a robust helper library to prevent common AI mistakes.
     if (result.html) {
-        const reelHelperScript = `<script>
+      const reelHelperScript = `<script>
             /* REEL COMPOSER STANDARD LIBRARY */
             (function() {
                 // 1. Polyfill Collection Methods (Shim)
@@ -331,8 +334,8 @@ export const generateReelContent = async (
             })();
         </script>`;
 
-        // Inject immediately after <head> for earliest execution
-        result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
+      // Inject immediately after <head> for earliest execution
+      result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
     }
     // -----------------------------
 

@@ -184,11 +184,13 @@ Please provide two separate pieces of code following the Reference Example's qua
 Create a stunning, self-contained HTML file.
 - **Libraries:** You MUST use GSAP (GreenSock) for animations.
 - **Syncing:** The app sends 'timeupdate', 'play', 'pause' events via window.postMessage. The JS must listen to these to stay perfectly synced with the SRT.
-- **Visual Strategy:** 
-    - **ICON-DRIVEN:** Use technical icons (SVG/Lucide-style) and minimalist 2D/3D shapes to tell the story visually.
-    - **CONTINUOUS MOTION:** The visuals should never be static. Use subtle background pulses, floating elements, and rhythmic transitions.
-    - **MINIMAL TEXT:** Avoid long paragraphs. Use only high-impact keywords (1-2 words) that pop onto the screen to emphasize the audio.
-    - **DESIGN:** Dark mode, Neon accents (Cyan/Magenta), futuristic tech aesthetic. 9:16 Portrait aspect ratio.
+- **Visual Strategy (Icon-First & Anti-Collision):** 
+    - **NO OVERLAPS:** Design layouts using Flexbox/Grid. Elements must NOT collide or overlap. Each visual element must have its own breathing room.
+    - **STAGED ANIMATION:** Use clear entrance (e.g., scale up + fade in) and exit (e.g., fade out + slide) animations. Scene A must exit smoothly before Scene B enters.
+    - **ICON-DRIVEN:** Use technical SVGs, Lucide-style icons, and minimalist graphs to represent concepts.
+    - **CONTINUOUS FLOW:** Use subtle GSAP loops for background elements (pulses, rotations) so the screen is never "frozen."
+    - **MINIMAL TEXT:** Use maximum 1-3 high-impact words per scene. Let the icons do the talking.
+    - **DESIGN:** Premium Dark Mode, Neon Cyan/Magenta accents, 9:16 Portrait.
 - **Code Structure:** NO unescaped newlines in strings. Use template literals.
 
 ### 2. Layout Configuration (JSON)
@@ -203,5 +205,4 @@ Structure:
   }
 ]
 `;
-    `;
 };

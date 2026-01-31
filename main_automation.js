@@ -178,30 +178,31 @@ async function main() {
                 .catch(e => console.error("FB Error:", e.message));
 
             await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
+            
+            // Step 9: Update Sheet
+            currentStep = "Updating Sheets & Notifications";
+            if (task.rowId > 0) {
+                console.log("📊 Step 9: Updating sheet...");
+                await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
+            }
+
+            // Final Success Email
+            await sendSuccessNotification(task, links).catch(e => console.error("Email failed:", e.message));
+
+            // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
+            if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
+                console.log("🧹 Final Step: Cleaning up Supabase temporary file...");
+                // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error:", e.message));
+            }
+
+            console.log("✨ AUTOMATION SUCCESSFUL");
         } else {
-            console.error("❌ Supabase failed, skipping ALL social platform uploads to avoid partial failures.");
+            throw new Error("Supabase pre-upload failed. Skipping social platform uploads to avoid partial failures.");
         }
-
-        // Step 9: Update Sheet
-        currentStep = "Updating Sheets & Notifications";
-        if (task.rowId > 0) {
-            console.log("📊 Step 9: Updating sheet...");
-            await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
-        }
-
-        // Final Success Email
-        await sendSuccessNotification(task, links).catch(e => console.error("Email failed:", e.message));
-
-        // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
-        if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
-            console.log("🧹 Final Step: Cleaning up Supabase temporary file...");
-            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error:", e.message));
-        }
-
-        console.log("✨ AUTOMATION SUCCESSFUL");
 
     } catch (err) {
-        console.error(`❌ PIPELINE FAILED at Step [${currentStep}]:`, err);
+        console.error(`❌ PIPELINE FAILED at Step [${currentStep}]:`, err.message);
+        console.log("🚨 AUTOMATION FAILED");
         
         // Cleanup on failure as well, if we managed to upload anything
         if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
@@ -212,9 +213,9 @@ async function main() {
         if (task && task.rowId > 0) {
             await updateSheetStatus(task.rowId, "Error: " + err.message.slice(0, 50));
         }
-        // Send Error Email
-        // for now hold and comment error notification service 
-        // await sendErrorNotification(task, err, currentStep).catch(e => console.error("Error email failed:", e.message));
+
+        // Send Error Email - NOW ENABLED
+        await sendErrorNotification(task, err, currentStep).catch(e => console.error("Error email failed:", e.message));
     }
 }
 

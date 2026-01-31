@@ -1,0 +1,32 @@
+1
+00:00:00,400 --> 00:00:03,520
+Here's AI is changing everything. Many think
+
+2
+00:00:04,020 --> 00:00:07,520
+it's too complex to understand. But AI is just a computer program.
+
+3
+00:00:07,920 --> 00:00:11,200
+It learns from data and makes decisions. For example,
+
+4
+00:00:11,360 --> 00:00:14,560
+virtual assistants, image recognition and self driving
+
+5
+00:00:15,060 --> 00:00:18,680
+cars. AI is improving our lives. It's making things easier
+
+6
+00:00:19,180 --> 00:00:22,640
+and faster. Remember, AI is not replacing humans,
+
+7
+00:00:23,140 --> 00:00:26,560
+it's assisting us. Let's embrace AI and explore its possibilities.
+
+8
+00:00:26,960 --> 00:00:30,000
+The future is here, and it's time to get started with AI.
+

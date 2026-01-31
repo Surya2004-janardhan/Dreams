@@ -1,0 +1,32 @@
+1
+00:00:00,400 --> 00:00:03,520
+AI is the future. And it's here now.
+
+2
+00:00:04,000 --> 00:00:07,520
+Many think AI will replace humans, but that's a myth.
+
+3
+00:00:07,840 --> 00:00:11,400
+AI is simply a computer program that learns and
+
+4
+00:00:11,900 --> 00:00:16,080
+improves. It helps us with tasks like image recognition and language translation.
+
+5
+00:00:16,480 --> 00:00:19,840
+AI assists in healthcare, finance, and education too.
+
+6
+00:00:20,240 --> 00:00:23,600
+Remember, AI is a tool to augment human capabilities,
+
+7
+00:00:24,000 --> 00:00:27,640
+not replace them. It's time to embrace AI and explore
+
+8
+00:00:28,140 --> 00:00:30,000
+its possibilities. The future is now.
+

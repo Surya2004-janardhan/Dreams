@@ -1,29 +1,6 @@
-**Technical Animation Storyboard for AI in 2026**
-
-1. **Introduction to AI** (0s-3s)
-Layout splitout: 0.5
-Visuals: A clean, minimalist background with a dynamic graph illustrating AI's growth, overlaid with code snippets in a Swiss typography font.
-Text: "AI is changing everything."
-Motion: Sharp, rhythmic transition to the next scene.
-
-2. **Simplifying AI** (4s-6s)
-Layout splitout: 0.5
-Visuals: An architecture diagram showcasing AI's basic components, with icons representing virtual assistants and self-driving cars.
-Text: "It's actually simple. AI learns from data and makes decisions."
-Motion: Rhythmic transition with a brief pause to emphasize the simplicity of AI.
-
-3. **Exploring AI** (7s-10s)
-Layout splitout: 0.5
-Visuals: A split-screen display with a dynamic graph on one side and an image of a person interacting with a virtual assistant on the other.
-Text: "Let's explore and learn about AI together. The possibilities are endless."
-Motion: Sharp, rhythmic transition to the final scene.
-
-4. **Conclusion** (11s-12s)
-Layout splitout: 0.5
-Visuals: A clean, minimalist background with a Swiss typography font displaying the text.
-Text: "The future is here, and AI is leading the way. Join the journey."
-Output:
-AI is revolutionizing industries.
-It's making life easier and more fun.
-The future is here, and it's exciting.
-AI's possibilities are endless.
+Here is a 60-second visual animation storyboard for the technical reel:
+Animate a swirling vortex of code symbols, transitioning into a robotic arm icon with glowing blue circuits, as the script introduces AI in 2026. 
+Morph the robotic arm into a stethoscope icon with a pulsing ECG waveform, highlighting AI's role in medical diagnosis, such as disease detection.
+Transition to a self-driving car icon with spinning wheels and a navigation map, illustrating AI-assisted transportation, as the script mentions self-driving cars.
+Dissolve the car icon into a network of interconnected nodes with flashing neon lines, symbolizing AI's potential to enhance our lives and make them smarter. 
+Conclude with a rotating 3D brain icon surrounded by orbiting code fragments, emphasizing AI as a powerful tool that complements human intelligence.

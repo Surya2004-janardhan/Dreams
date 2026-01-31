@@ -224,7 +224,6 @@ const sendErrorNotification = async (taskData, error, step) => {
 
     await transporter.sendMail(mailOptions);
     logger.info(`✅ Error notification email sent for failed task`);
-    await clearLogFiles();
   } catch (emailError) {
     logger.error("Failed to send error notification:", emailError);
   }
