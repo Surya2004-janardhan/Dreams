@@ -1,17 +1,17 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {FileUpload} from '@/src/components/FileUpload.tsx';
-import {WelcomeScreen} from '@/src/components/WelcomeScreen.tsx';
-import {MobileBlocker} from '@/src/components/MobileBlocker.tsx';
-import {AppHeader} from '@/src/components/AppHeader.tsx';
-import {GeneratingScreen} from '@/src/components/GeneratingScreen.tsx';
-import {EditorView} from '@/src/views/EditorView.tsx';
-import {Snackbar} from '@/src/components/Snackbar.tsx';
-import {ReplaceSceneDialog} from '@/src/components/ReplaceSceneDialog.tsx';
-import {parseSRT} from '@/src/utils/srtParser.ts';
-import {AppState, GeneratedContent, SRTItem} from '../types.ts';
-import {generateReelContent} from '@/src/services/geminiService.ts';
-import {APP_CONFIG} from '../config.ts';
-import {constructPrompt, EXAMPLE_HTML, EXAMPLE_JSON, EXAMPLE_SRT, EXAMPLE_TOPIC} from '@/src/utils/promptTemplates.ts';
+import React, { useEffect, useRef, useState } from 'react';
+import { FileUpload } from '@/src/components/FileUpload.tsx';
+import { WelcomeScreen } from '@/src/components/WelcomeScreen.tsx';
+import { MobileBlocker } from '@/src/components/MobileBlocker.tsx';
+import { AppHeader } from '@/src/components/AppHeader.tsx';
+import { GeneratingScreen } from '@/src/components/GeneratingScreen.tsx';
+import { EditorView } from '@/src/views/EditorView.tsx';
+import { Snackbar } from '@/src/components/Snackbar.tsx';
+import { ReplaceSceneDialog } from '@/src/components/ReplaceSceneDialog.tsx';
+import { parseSRT } from '@/src/utils/srtParser.ts';
+import { AppState, GeneratedContent, SRTItem } from '../types.ts';
+import { generateReelContent } from '@/src/services/geminiService.ts';
+import { APP_CONFIG } from '../config.ts';
+import { constructPrompt, EXAMPLE_HTML, EXAMPLE_JSON, EXAMPLE_SRT, EXAMPLE_TOPIC } from '@/src/utils/promptTemplates.ts';
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(() => {
@@ -60,10 +60,10 @@ const App: React.FC = () => {
   const [bgMusicVolume, setBgMusicVolume] = useState(0.2);
 
   // Subtitle Style State
-  const [subtitleFontSize, setSubtitleFontSize] = useState(32);
+  const [subtitleFontSize, setSubtitleFontSize] = useState(14);
   const [subtitleFontFamily, setSubtitleFontFamily] = useState('Inter');
-  const [subtitleColor, setSubtitleColor] = useState('#FFFFFF');
-  const [subtitleBgColor, setSubtitleBgColor] = useState('rgba(0,0,0,0.8)');
+  const [subtitleColor, setSubtitleColor] = useState('#fbbf24');
+  const [subtitleBgColor, setSubtitleBgColor] = useState('rgba(60, 60, 60, 0.8)');
   const [subtitlePaddingX, setSubtitlePaddingX] = useState(16);
   const [subtitlePaddingY, setSubtitlePaddingY] = useState(8);
 
@@ -300,12 +300,12 @@ const App: React.FC = () => {
 
   return (
     <>
-      <MobileBlocker/>
+      <MobileBlocker />
 
       {/* Main App Container - Only rendered on Desktop (md+) */}
       <div className="hidden md:contents">
         {appState === AppState.WELCOME ? (
-          <WelcomeScreen onComplete={handleWelcomeComplete}/>
+          <WelcomeScreen onComplete={handleWelcomeComplete} />
         ) : (
           <div className="w-full h-screen flex flex-col bg-gray-950 text-white overflow-hidden relative">
             {/* Header */}

@@ -30,10 +30,10 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   toggleFullScreen,
   bgMusicUrl,
   bgMusicVolume = 0.2,
-  subtitleFontSize = 32,
+  subtitleFontSize = 14,
   subtitleFontFamily = 'Inter',
-  subtitleColor = '#FFFFFF',
-  subtitleBgColor = 'rgba(0,0,0,0.8)',
+  subtitleColor = '#fbbf24',
+  subtitleBgColor = 'rgba(60, 60, 60, 0.8)',
   subtitlePaddingX = 16,
   subtitlePaddingY = 8
 }) => {
