@@ -91,6 +91,8 @@ audio/
 automation_log*
 # Test cache (expensive API results)
 test_cache/
+archive/
+genuine_cache/
 
 # new/
 BASE-VEDIO.mp4
