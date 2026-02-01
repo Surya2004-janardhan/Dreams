@@ -1,6 +1,6 @@
-Here's a high-fidelity visual animation storyboard:
-Animate a pulsing circuit board with wires morphing into a robotic arm, symbolizing AI's presence.
-Transition to a swirling cloud of code symbols, forming a virtual assistant icon with a microphone.
-Reveal a self-driving car icon with rotating wheels, surrounded by a network of location pins and map lines.
-Animate a revolving 3D brain scan with highlighted disease markers, transitioning into a doctor's clipboard with a diagnosis report.
-Finish with a glowing globe icon, surrounded by orbiting satellites and data streams, as the words "AI Leads" appear briefly.
+Here is a high-fidelity visual animation storyboard for the 60-second technical reel:
+Animate a revolving 3D CPU icon with data pulse lines, transitioning into a swarm of miniature robotic arms assembling a circuit board. 
+As "AI" text appears, morph the circuit board into a neural network diagram with glowing blue synapses. 
+A spinning globe icon emerges, surrounded by code snippets and server icons, highlighting AI's global reach and computational power. 
+A stylized robot arm holds a pencil, scribbling equations on a digital blackboard, symbolizing AI's assistive capabilities in schoolwork and daily tasks. 
+Finally, a pulsing lightbulb icon explodes into a kaleidoscope of connected gears, representing AI's potential to change lives for the better.

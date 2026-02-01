@@ -52,6 +52,7 @@ jobs:
       - name: Run Reels Automation Pipeline
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" node main_automation.js
         env:
+          
           PORT: 3000
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
