@@ -1,6 +1,6 @@
-Here is a high-fidelity visual animation storyboard for the 60-second technical reel:
-Animate a revolving 3D CPU icon with data pulse lines, transitioning into a swarm of miniature robotic arms assembling a circuit board. 
-As "AI" text appears, morph the circuit board into a neural network diagram with glowing blue synapses. 
-A spinning globe icon emerges, surrounded by code snippets and server icons, highlighting AI's global reach and computational power. 
-A stylized robot arm holds a pencil, scribbling equations on a digital blackboard, symbolizing AI's assistive capabilities in schoolwork and daily tasks. 
-Finally, a pulsing lightbulb icon explodes into a kaleidoscope of connected gears, representing AI's potential to change lives for the better.
+Here's a 60-second technical reel storyboard:
+Animate a revolving 3D CPU icon with data pulse lines, transitioning into a neural network diagram with flashing nodes.
+Icons of virtual assistants and self-driving cars morph into a cityscape with autonomous vehicles and AI-powered buildings.
+A minimalist diagram of a decision tree branches out, with code snippets and data visualizations streaming through it.
+A futuristic robotic arm assembles a puzzle, symbolizing AI's problem-solving capabilities, as a neon-lit "AI" label appears.
+A swirling vortex of 1s and 0s coalesces into a globe, representing AI's global impact, with a subtle "Future" label emerging.

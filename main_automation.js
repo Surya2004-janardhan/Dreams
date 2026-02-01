@@ -29,6 +29,7 @@ async function main() {
     
     let task = null;
     let currentStep = "Initialization";
+    let supabaseInfo = null;
     try {
         // Step 0: Fetch task
         currentStep = "Fetching Task from Sheets";
@@ -150,7 +151,6 @@ async function main() {
         const links = { yt: "", insta: "", fb: "" };
 
         // 1. Supabase Upload (One-time) for Meta Platforms
-        let supabaseInfo = null;
         try {
             console.log("☁️ Pre-uploading to Supabase for Meta platforms...");
             supabaseInfo = await uploadToSupabaseAndGetLink(finalMasterPath, TOPIC);

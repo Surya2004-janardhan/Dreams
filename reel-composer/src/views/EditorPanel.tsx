@@ -193,10 +193,10 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   };
 
   const handleResetSubtitleStyles = () => {
-    onSubtitleFontSizeChange(14);
+    onSubtitleFontSizeChange(17);
     onSubtitleFontFamilyChange('Inter');
     onSubtitleColorChange('#fbbf24');
-    onSubtitleBgColorChange('rgba(60, 60, 60, 0.8)');
+    onSubtitleBgColorChange('rgba(0, 0, 0, 0.8)');
     onSubtitlePaddingXChange(16);
     onSubtitlePaddingYChange(8);
   };
@@ -305,8 +305,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                     onClick={onGenerate}
                     disabled={isGenerating || !apiKey}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded font-bold transition-all mt-2 ${!apiKey
-                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-purple-700 to-pink-700 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-900/20'
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-purple-700 to-pink-700 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-900/20'
                       }`}
                   >
                     {isGenerating ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Sparkles size={14} />}
@@ -551,7 +551,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                         value={subtitleBgColor}
                         onChange={(e) => onSubtitleBgColorChange(e.target.value)}
                         className="flex-1 bg-gray-950 border border-gray-700 rounded px-2 py-1.5 text-xs text-white font-mono focus:border-purple-500 outline-none"
-                        placeholder="rgba(60, 60, 60, 0.8)"
+                        placeholder="rgba(0, 0, 0, 0.8)"
                       />
                     </div>
                   </div>
