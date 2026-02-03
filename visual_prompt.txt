@@ -1,6 +1,6 @@
-Here's a 60-second technical reel storyboard:
-Animate a revolving 3D CPU icon with data pulse lines, transitioning into a neural network diagram with flashing nodes.
-Icons of virtual assistants and self-driving cars morph into a cityscape with autonomous vehicles and AI-powered buildings.
-A minimalist diagram of a decision tree branches out, with code snippets and data visualizations streaming through it.
-A futuristic robotic arm assembles a puzzle, symbolizing AI's problem-solving capabilities, as a neon-lit "AI" label appears.
-A swirling vortex of 1s and 0s coalesces into a globe, representing AI's global impact, with a subtle "Future" label emerging.
+Here's a high-fidelity visual animation storyboard for the 60-second technical reel:
+Animate a futuristic cityscape with neon lights, transitioning into a revolving 3D robot icon with glowing blue circuits. 
+As the script mentions "virtual assistants", morph the robot into a speech bubble icon with a waveform, symbolizing voice commands. 
+When "chatbots" are mentioned, transform the speech bubble into a messaging app icon with scrolling code lines and a sent message animation. 
+As the script concludes with "the future is here", visualize a stylized 3D globe icon with orbiting satellites and pulsing connection lines, embodying a technologically advanced world. 
+Finally, end with a simple, bold "AI" text label, surrounded by a halo of light, signifying the central theme of the reel.
