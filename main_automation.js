@@ -29,15 +29,12 @@ async function main() {
     
     let task = null;
     let currentStep = "Initialization";
-    let supabaseInfo = null;
+    var supabaseInfo = null; 
     try {
         // Step 0: Fetch task
         currentStep = "Fetching Task from Sheets";
         console.log("📊 Step 0: Fetching task from Google Sheets...");
-        task = await getNextTask().catch(err => {
-            console.warn("⚠️ Sheet Service Failed or No Tasks: ", err.message);
-            return { idea: process.env.FALLBACK_TOPIC || "AI in 2026", rowId: 0 };
-        });
+        task = await getNextTask();
         
         const TOPIC = task.idea;
         console.log(`✅ Topic: ${TOPIC}`);
@@ -67,12 +64,12 @@ async function main() {
         // Step 3: Base Merge (Trim Video to Audio)
         currentStep = "Base Video Audio Merge";
         console.log("🎞️ Step 3: Mixing Audio with Base Video (Trimming to sync)...");
-        const BASE_VIDEO = path.resolve('base-vedio.mp4'); 
+        const BASE_VIDEO = path.resolve('Base-vedio.mp4'); 
         const INIT_MERGE = path.resolve('merged_output.mp4');
         
         if (!fs.existsSync(BASE_VIDEO)) {
-            console.error("❌ base-vedio.mp4 not found in root!");
-            throw new Error("Missing base-vedio.mp4");
+            console.error("❌ Base-vedio.mp4 not found in root!");
+            throw new Error("Missing Base-vedio.mp4");
         }
 
         await new Promise((resolve, reject) => {
