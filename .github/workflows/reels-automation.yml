@@ -61,9 +61,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            wav2lip/checkpoints
-            wav2lip/face_detection/detection/sfd
-          key: ${{ runner.os }}-wav2lip-weights-v1
+            wav2lip/checkpoints/wav2lip_gan.pth
+            wav2lip/face_detection/detection/sfd/s3fd.pth
+          key: ${{ runner.os }}-wav2lip-weights-v2
 
       - name: Download Wav2Lip Model Weights
         if: steps.cache-weights.outputs.cache-hit != 'true'
