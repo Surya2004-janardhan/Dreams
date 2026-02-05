@@ -101,3 +101,6 @@ genuine_cache/
 
 # Wav2Lip Weights
 # wav2lip/**/*.pth (Tracked via LFS)
+
+
+# voicebox//
