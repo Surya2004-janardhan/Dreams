@@ -25,8 +25,14 @@ async function syncLip(audioPath, facePath, outputPath) {
         throw new Error(`Wav2Lip directory not found at ${wav2lipDir}`);
     }
 
+    // Ensure temp directory exists inside wav2lip
+    const tempDir = path.join(wav2lipDir, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        logger.info(`📁 Creating missing temp directory: ${tempDir}`);
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
     // Command to run inference
-    // Note: We use the system 'python' command as the venv seems non-standard or missing python.exe
     const command = `python "${inferenceScript}" ` +
                     `--checkpoint_path "${checkpoint}" ` +
                     `--face "${absFacePath}" ` +
@@ -38,21 +44,31 @@ async function syncLip(audioPath, facePath, outputPath) {
     logger.debug(`Command: ${command}`);
 
     return new Promise((resolve, reject) => {
-        const process = exec(command, { cwd: wav2lipDir }, (error, stdout, stderr) => {
+        const proc = exec(command, { cwd: wav2lipDir }, (error, stdout, stderr) => {
             if (error) {
                 logger.error(`❌ Wav2Lip Sync Failed: ${error.message}`);
                 if (stderr) logger.error(`Stderr: ${stderr}`);
                 return reject(error);
             }
-            logger.info(`✅ Wav2Lip Sync Successful: ${outputPath}`);
+
+            // VERIFICATION: Check if output file exists and is not 0 bytes
+            if (!fs.existsSync(absOutputPath)) {
+                return reject(new Error(`Wav2Lip finished but output file was NOT found at: ${absOutputPath}`));
+            }
+
+            const stats = fs.statSync(absOutputPath);
+            if (stats.size === 0) {
+                return reject(new Error(`Wav2Lip generated an EMPTY file at: ${absOutputPath}`));
+            }
+
+            logger.info(`✅ Wav2Lip Sync Successful: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
             resolve(absOutputPath);
         });
 
         // Log progress/output if needed
-        process.stdout.on('data', (data) => {
+        proc.stdout.on('data', (data) => {
             if (data.includes('it/s')) { // Simple progress indicator from tqdm
-                // Too much noise for normal logs, just debug
-                logger.debug(`Wav2Lip: ${data}`);
+                logger.debug(`Wav2Lip: ${data.trim()}`);
             }
         });
     });

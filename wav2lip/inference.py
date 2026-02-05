@@ -272,9 +272,13 @@ def main():
 			out.write(f)
 
 	out.release()
+	
+	# Ensure temp directory exists for result.avi
+	if not os.path.exists('temp'):
+		os.makedirs('temp')
 
 	command = 'ffmpeg -y -i "{}" -i "{}" -strict -2 -q:v 1 "{}"'.format(args.audio, 'temp/result.avi', args.outfile)
-	subprocess.call(command, shell=True)
+	subprocess.check_call(command, shell=True)
 
 if __name__ == '__main__':
 	main()
