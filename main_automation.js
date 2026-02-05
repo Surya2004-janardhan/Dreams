@@ -260,6 +260,8 @@ async function runCompositor(vPath, sPath, vPrompt) {
             '--auto-select-tab-capture-source-by-title=Reel Composer',
             '--enable-usermedia-screen-capturing',
             '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            '--disable-dev-shm-usage',
             '--mute-audio',
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -353,16 +355,57 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.waitForTimeout(5000);
         await page.click('button:has-text("Browser Recorder")');
 
+        // VERIFICATION: Check if recording actually started (Stop button should appear)
+        const isRecordingStarted = await page.waitForSelector('button:has-text("Stop Recording")', { timeout: 15000 }).then(() => true).catch(() => false);
+        if (!isRecordingStarted) {
+            console.warn("⚠️ Recording failed to start automatically. Trying to force play...");
+            await page.evaluate(() => {
+                const v = document.querySelector('video');
+                if (v) v.play();
+            });
+        }
+
         console.log("🎥 Monitoring Playback...");
         const begin = Date.now();
-        while (!complete && Date.now() - begin < 800000) {
+        let lastReport = 0;
+        
+        while (!complete && Date.now() - begin < 900000) { // 15 mins timeout
             await page.waitForTimeout(5000);
-            const ended = await page.evaluate(() => { 
+            
+            const stats = await page.evaluate(() => { 
                 const v = document.querySelector('video'); 
-                return v ? v.ended : false; 
+                return {
+                    ended: v ? v.ended : false,
+                    paused: v ? v.paused : true,
+                    time: v ? v.currentTime : 0,
+                    duration: v ? v.duration : 0
+                };
             });
-            if (ended) {
-                console.log("🎞️ Playback ended. Waiting for download...");
+
+            // Log progress every 15 seconds
+            if (Date.now() - lastReport > 15000) {
+                console.log(`📹 Recording Progress: ${stats.time.toFixed(1)}s / ${stats.duration.toFixed(1)}s (Paused: ${stats.paused}, Ended: ${stats.ended})`);
+                lastReport = Date.now();
+            }
+
+            // Force play if stalled
+            if (stats.paused && !stats.ended && stats.time < stats.duration - 1) {
+                await page.evaluate(() => document.querySelector('video')?.play()).catch(() => {});
+            }
+
+            if (stats.ended || (stats.duration > 0 && stats.time >= stats.duration - 0.5)) {
+                console.log("🎞️ Playback reached end. Stopping recording and waiting for download...");
+                // Explicitly stop recording to trigger download
+                await page.click('button:has-text("Stop Recording")').catch(() => {
+                    // Fallback to calling the function directly if button click fails
+                    return page.evaluate(() => {
+                        if (window.stopRecording) window.stopRecording();
+                        // Find button by other means if necessary
+                        const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Stop'));
+                        if (btn) btn.click();
+                    });
+                });
+                
                 const wait = Date.now();
                 while (!complete && Date.now() - wait < 300000) await page.waitForTimeout(2000);
                 break;
@@ -370,7 +413,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         }
         
         if (!complete) {
-            console.warn("⚠️ Recording/Download timed out but proceeding...");
+            console.error("❌ Recording/Download timed out! Attempting emergency screenshot.");
         }
 
     } catch (e) {
