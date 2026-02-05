@@ -48,10 +48,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
 
-      - name: Install Wav2Lip Dependencies
+      - name: Install Python Dependencies (Wav2Lip & Voicebox)
         run: |
-          cd wav2lip
-          pip install -r requirements.txt
+          pip install -r wav2lip/requirements.txt
+          pip install -r voicebox/requirements.txt
+          # Specific addition from voicebox README if needed
+          # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps

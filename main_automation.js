@@ -24,6 +24,7 @@ const { sendErrorNotification, sendSuccessNotification } = require('./src/servic
 const Groq = require("groq-sdk");
 const logger = require("./src/config/logger");
 const { syncLip } = require('./src/services/wav2lipService');
+const voiceboxService = require('./src/services/voiceboxService');
 
 async function main() {
     logger.info("🚀 STARTING REELS AUTOMATION PIPELINE");
@@ -50,21 +51,44 @@ async function main() {
         const script = await generateScript(TOPIC);
         logger.info(`✅ Step 1 Complete: Script generated in ${((Date.now() - step1Start)/1000).toFixed(2)}s`);
 
-        // Step 2: Audio
-        currentStep = "Audio Generation";
-        logger.info("🎤 Step 2: Generating TTS Audio...");
+        // Step 2: Audio (Cloned via Voicebox)
+        currentStep = "Audio Generation (Voicebox)";
+        logger.info("🎤 Step 2: Generating Cloned Audio via Voicebox...");
         const step2Start = Date.now();
         let audioPath;
-        const CACHE_AUDIO = path.resolve('audio_cache.wav');
+        
+        // Configuration for Cloned Voice
+        const REF_AUDIO = path.resolve('Base-audio.mp3'); 
+        const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
+        
+        if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
+            fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
+        }
 
+        if (!fs.existsSync(REF_AUDIO)) {
+            logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
+            const audioResult = await generateAudioWithBatchingStrategy(script);
+            audioPath = audioResult.conversationFile;
+        } else {
+            try {
+                // Generate audio using our local Voicebox Service
+                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO);
+            } catch (vError) {
+                logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
+                const audioResult = await generateAudioWithBatchingStrategy(script);
+                audioPath = audioResult.conversationFile;
+            }
+        }
+        
+        /* GEMINI TTS FALLBACK (Commented out)
         if (fs.existsSync(CACHE_AUDIO)) {
             logger.info("♻️ Using cached audio_cache.wav to save API quota.");
             audioPath = CACHE_AUDIO;
         } else {
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
-            // Optionally: fs.copyFileSync(audioPath, CACHE_AUDIO); // Uncomment to enable caching manually
         }
+        */
         logger.info(`✅ Step 2 Complete: Audio ready at ${audioPath} (${((Date.now() - step2Start)/1000).toFixed(2)}s)`);
 
         // Step 3: Wav2Lip Sync (Dynamic Talking Head)
