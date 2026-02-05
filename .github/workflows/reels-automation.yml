@@ -45,7 +45,7 @@ jobs:
       - name: Install System Dependencies for Wav2Lip & OpenCV
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libgl1-mesa-glx libglib2.0-0
+          sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
 
       - name: Install Wav2Lip Dependencies
         run: |
