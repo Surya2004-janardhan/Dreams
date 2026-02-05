@@ -98,3 +98,6 @@ genuine_cache/
 # BASE-VEDIO.mp4
 # Video files are tracked with Git LFS (see .gitattributes)
 # Large video files should be committed with Git LFS to avoid size limits
+
+# Wav2Lip Weights
+wav2lip/**/*.pth

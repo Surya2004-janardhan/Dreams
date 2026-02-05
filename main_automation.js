@@ -23,6 +23,7 @@ const {
 const { sendErrorNotification, sendSuccessNotification } = require('./src/services/emailService');
 const Groq = require("groq-sdk");
 const logger = require("./src/config/logger");
+const { syncLip } = require('./src/services/wav2lipService');
 
 async function main() {
     console.log("🚀 STARTING REELS AUTOMATION PIPELINE");
@@ -61,34 +62,26 @@ async function main() {
         }
         console.log(`✅ Audio ready: ${audioPath}`);
 
-        // Step 3: Base Merge (Trim Video to Audio)
-        currentStep = "Base Video Audio Merge";
-        console.log("🎞️ Step 3: Mixing Audio with Base Video (Trimming to sync)...");
-        const BASE_VIDEO = path.resolve('Base-vedio.mp4'); 
+        // Step 3: Wav2Lip Sync (Dynamic Talking Head)
+        currentStep = "Wav2Lip Lip-Syncing";
+        console.log("👄 Step 3: Generating Synced Talking Head via Wav2Lip...");
+        
+        // Priority: face_image.jpg (new) -> Video_Generation_of_Tech_Enthusiast.mp4 (fallback)
+        let WAV2LIP_BASE = path.resolve('wav2lip/temp/face_image.jpg');
+        if (!fs.existsSync(WAV2LIP_BASE)) {
+            WAV2LIP_BASE = path.resolve('wav2lip/temp/Video_Generation_of_Tech_Enthusiast.mp4');
+        }
+        
         const INIT_MERGE = path.resolve('merged_output.mp4');
         
-        if (!fs.existsSync(BASE_VIDEO)) {
-            console.error("❌ Base-vedio.mp4 not found in root!");
-            throw new Error("Missing Base-vedio.mp4");
+        if (!fs.existsSync(WAV2LIP_BASE)) {
+            console.error("❌ Wav2Lip Base source not found!");
+            throw new Error(`Missing Wav2Lip base source (checked image and video fallback)`);
         }
 
-        await new Promise((resolve, reject) => {
-            ffmpeg(BASE_VIDEO)
-                .input(audioPath)
-                .outputOptions([
-                    '-y',
-                    '-c:v copy',
-                    '-c:a aac',
-                    '-map 0:v:0',
-                    '-map 1:a:0',
-                    '-shortest' 
-                ])
-                .output(INIT_MERGE)
-                .on('end', resolve)
-                .on('error', reject)
-                .run();
-        });
-        console.log("✅ Base merge success");
+        console.log(`🎬 Using Wav2Lip Base: ${path.basename(WAV2LIP_BASE)}`);
+        await syncLip(audioPath, WAV2LIP_BASE, INIT_MERGE);
+        console.log("✅ Wav2Lip sync success: merged_output.mp4 created");
 
         // Step 4: SRT (using AssemblyAI)
         currentStep = "SRT Generation (AssemblyAI)";

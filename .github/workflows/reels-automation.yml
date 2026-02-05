@@ -14,7 +14,7 @@ on:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Code
@@ -36,13 +36,37 @@ jobs:
           cd reel-composer
           npm install
 
-      - name: Install FFmpeg
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install System Dependencies for Wav2Lip & OpenCV
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Wav2Lip Dependencies
+        run: |
+          cd wav2lip
+          pip install -r requirements.txt
 
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps
+
+      - name: Download Wav2Lip Model Weights
+        run: |
+          mkdir -p wav2lip/checkpoints
+          if [ ! -f wav2lip/checkpoints/wav2lip_gan.pth ]; then
+            echo "📥 Downloading Wav2Lip weights..."
+            curl -L -o wav2lip/checkpoints/wav2lip_gan.pth https://huggingface.co/collections/HuggingFaceH4/wav2lip-65bb71c/resolve/main/wav2lip_gan.pth
+          fi
+          mkdir -p wav2lip/face_detection/detection/sfd
+          if [ ! -f wav2lip/face_detection/detection/sfd/s3fd.pth ]; then
+            echo "📥 Downloading SFD weights..."
+            curl -L -o wav2lip/face_detection/detection/sfd/s3fd.pth https://huggingface.co/collections/HuggingFaceH4/wav2lip-65bb71c/resolve/main/s3fd.pth
+          fi
 
       - name: Start Frontend App
         run: |
