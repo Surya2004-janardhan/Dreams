@@ -1,90 +1,91 @@
-# 🎥 AI Reels Automation Pipeline v3.0
+# 🎬 AI Reels Automation: The Talking Head Edition
 
-The ultimate automated system for generating and distributing professional tech reels. This system integrates high-velocity technical scripting, GSAP-powered browser visualizers, and multi-platform social media distribution.
+Welcome to the ultimate "Ghost Creator" pipeline. This isn't just a video generator; it's a fully automated digital twin that reads technical topics from a spreadsheet, writes high-velocity scripts, generates professional voiceovers, and literally **lip-syncs** a face to the audio before posting it to your socials.
 
-## 🚀 Overview
-
-This repository automates the entire lifecycle of a tech influencer/educator:
-1.  **Task Pulling**: Fetches technical topics from Google Sheets.
-2.  **Scripting**: Generates zero-fluff, information-dense scripts using Groq (Llama 3.3).
-3.  **Vocal Synthesis**: Synthesizes narration via Gemini Multimodal.
-4.  **Visual Composition**: Automates a GSAP-based frontend at `reel-composer` to record premium visuals.
-5.  **Multi-Social Upload**: Simultaneously posts to YouTube Shorts, Instagram Reels, and Facebook.
-6.  **Reporting**: Emails the owner success logs or error post-mortems.
+No cameras, no microphones, no manual editing. Just pure automation.
 
 ---
 
-## 🏗️ Project Structure
+## 🚀 The workflow (What actually happens?)
+
+Here’s the step-by-step journey of a single reel, from a cell in a Google Sheet to a viral post:
+
+1.  **The Idea**: The system wakes up (on a schedule or manual trigger) and grabs a technical topic from your **Google Sheet**.
+2.  **The Script**: It sends that topic to **Llama 3.3 (via Groq)**. It’s been prompted to be "Zero Fluff"—meaning it skips the "Hey guys" and jumps straight into high-density technical value.
+3.  **The Voice**: The script is narrated by **Gemini Multimodal**. We don't use robotic voices; we use a curated AI persona that sounds like a tech lead explaining a complex concept.
+4.  **The Lip-Sync (Wav2Lip)**: This is the magic part. The system takes your `Base-vedio.mp4` (a person talking) and the new AI audio. It uses a neural network to **re-animate the person's mouth** to match the audio word-for-word.
+5.  **The Design**: While the video encodes, the **GSAP-powered React app** (`reel-composer`) generates futuristic, Swiss-style typography and technical icons that pulsate in sync with the audio.
+6.  **The Merge**: Everything is flattened into a high-bitrate (50Mbps) vertical MP4. 
+7.  **The Distribution**: The final reel is uploaded simultaneously to **YouTube Shorts, Instagram, and Facebook**.
+8.  **The Report**: You get an email with the links to the posts or a detailed error report if something went wrong.
+
+---
+
+## 🏗️ Project Anatomy
 
 ```text
-├── main_automation.js     # Master Entry Point (Sheet -> Post)
-├── automate_frontend.js   # (Legacy) Visual compositor logic
-├── base-vedio.mp4         # Target background for reels
-├── reel-composer/         # GSAP Visualizer App (Run: npm run dev)
+├── main_automation.js      # The "Brain" - orchestrates the entire pipeline
+├── wav2lip/                # AI Lip-sync engine (Python based)
+├── reel-composer/          # The "Face" - React/GSAP app for visual overlays
+├── Base-vedio.mp4          # The "Actor" - The base video used for lip-syncing
 ├── src/
 │   ├── services/
-│   │   ├── sheetsService.js    # Google Sheets Integration
-│   │   ├── scriptService.js    # Groq-powered technical scripting
-│   │   ├── audioService.js     # Gemini-powered voice synthesis
-│   │   ├── socialMediaService.js # YouTube, Insta, FB Uploaders
-│   │   └── emailService.js     # SMTP Error & Success alerts
-│   └── routes/                 # API Endpoints (via server.js)
-├── .github/workflows/         # Scheduled automation (8am/8pm IST)
-├── archive/                   # Legacy tests and old scripts
-└── final_video/               # Directory for exported masters
+│   │   ├── wav2lipService.js   # Bridges Node.js with the Python AI
+│   │   ├── audioService.js     # Voice synthesis via Gemini
+│   │   ├── scriptService.js    # Script writing via Groq
+│   │   └── socialMediaService.js # The multi-platform uploader
+└── .github/workflows/      # The "24/7 Employee" - GitHub Actions config
 ```
 
 ---
 
-## 🛠️ Getting Started
+## 🛠️ Setting it up (Locally)
 
-### 1. Installation
-Install root dependencies and Playwright browsers:
+If you want to run this on your own machine:
+
+### 1. The Basics
 ```bash
 npm install
 npx playwright install chromium --with-deps
 ```
 
-Install Frontend dependencies:
+### 2. The AI (Wav2Lip)
+You'll need Python 3.10 and the AI weights:
 ```bash
-cd reel-composer
-npm install
+cd wav2lip
+pip install -r requirements.txt
+# The system will automatically download the heavy model weights on the first run!
 ```
 
-### 2. Environment Setup
-Create a `.env` in the root (see `.env.example` if available) with:
-- `GROQ_API_KEY`, `GEMINI_API_KEY`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`
-- `INSTAGRAM_ACCESS_TOKEN`, `FACEBOOK_ACCESS_TOKEN`
-- `EMAIL_USER`, `EMAIL_APP_PASSWORD`
-- `GOOGLE_SHEET_ID`
+### 3. Your Keys
+Grab the `.env.example` (or create a `.env`) and fill in your API keys for Groq, Gemini, AssemblyAI, and your social tokens.
 
-### 3. Running the Pipeline
-
-**Step 1: Start Visualizer**
+### 4. Let it rip
 ```bash
-cd reel-composer
-npm run dev
-```
+# Start the visualizer
+cd reel-composer && npm run dev
 
-**Step 2: Start Automation**
-```bash
-# In a new terminal
+# In another terminal, run the brain
 node main_automation.js
 ```
 
 ---
 
-## 🤖 GitHub Automation
-The system is configured to run automatically via GitHub Actions:
-- **Triggers**: Every push to `develop` or **Cron Schedule** (8 AM and 8 PM IST).
-- **Environment**: Runs headless Playwright recording on Linux runners.
-- **Artifacts**: Final master videos are saved as workflow artifacts for manual download.
+## 🤖 Cloud Automation (GitHub Actions)
+
+The system is optimized for the cloud. We use **Git LFS** for large files and **Smart Caching** for the 500MB AI models. 
+- **Auto-Sync**: Every time you push to the repo, it tests the pipeline.
+- **Scheduled**: It’s set to post fresh content every day at **8:00 AM and 8:00 PM IST**.
+- **Headless**: It uses a virtual display (Xvfb) on Linux to "record" the browser visualizer.
 
 ---
 
-## 🧠 Strategic Content Philosophy (V3)
-- **Zero Fluff**: No "Hello everyone" or bush-beating.
-- **High Velocity**: 150-200 technical words in ~50 seconds.
-- **Premium Aesthetics**: Swiss typography and cyber-technical GSAP transitions.
-- **Master Quality**: 50Mbps video recording with synchronized HQ audio remuxing.
+## 🧠 Strategic Content Philosophy
+
+- **High Density**: 150-180 words in 55 seconds. No wasted breath.
+- **Visual Rhythm**: Visuals move *with* the speaker's cadence.
+- **Dark Mode Aesthetic**: Deep blues, neons, and sharp typography for a premium "developer" feel.
+
+---
+
+*Built with ❤️ for technical creators who would rather code than edit videos.*
