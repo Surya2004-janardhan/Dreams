@@ -12,8 +12,8 @@ Here’s the step-by-step journey of a single reel, from a cell in a Google Shee
 
 1.  **The Idea**: The system wakes up (on a schedule or manual trigger) and grabs a technical topic from your **Google Sheet**.
 2.  **The Script**: It sends that topic to **Llama 3.3 (via Groq)**. It’s been prompted to be "Zero Fluff"—meaning it skips the "Hey guys" and jumps straight into high-density technical value.
-3.  **The Voice**: The script is narrated by **Gemini Multimodal**. We don't use robotic voices; we use a curated AI persona that sounds like a tech lead explaining a complex concept.
-4.  **The Lip-Sync (Wav2Lip)**: This is the magic part. The system takes your `Base-vedio.mp4` (a person talking) and the new AI audio. It uses a neural network to **re-animate the person's mouth** to match the audio word-for-word.
+3.  **The Voicebox (Cloning)**: Instead of generic voices, we use **Voicebox**. Provide a 30-second `Base-audio.mp3` of your own voice, and the system **clones it** in real-time. The AI tech lead now literally speaks with *your* voice. (Gemini TTS remains as a rock-solid backup).
+4.  **The Lip-Sync (Wav2Lip)**: The magic part. The system takes your `Base-vedio.mp4` (the face) and the newly cloned audio. It uses a neural network to **re-animate the person's mouth** to match your voice word-for-word.
 5.  **The Design**: While the video encodes, the **GSAP-powered React app** (`reel-composer`) generates futuristic, Swiss-style typography and technical icons that pulsate in sync with the audio.
 6.  **The Merge**: Everything is flattened into a high-bitrate (50Mbps) vertical MP4. 
 7.  **The Distribution**: The final reel is uploaded simultaneously to **YouTube Shorts, Instagram, and Facebook**.
@@ -26,15 +26,17 @@ Here’s the step-by-step journey of a single reel, from a cell in a Google Shee
 ```text
 ├── main_automation.js      # The "Brain" - orchestrates the entire pipeline
 ├── wav2lip/                # AI Lip-sync engine (Python based)
+├── voicebox/               # AI Voice Cloning engine (Python based)
 ├── reel-composer/          # The "Face" - React/GSAP app for visual overlays
-├── Base-vedio.mp4          # The "Actor" - The base video used for lip-syncing
+├── Base-vedio.mp4          # The "Actor" - The face used for re-animation
+├── Base-audio.mp3          # The "Source" - The voice sample used for cloning
 ├── src/
 │   ├── services/
-│   │   ├── wav2lipService.js   # Bridges Node.js with the Python AI
-│   │   ├── audioService.js     # Voice synthesis via Gemini
-│   │   ├── scriptService.js    # Script writing via Groq
+│   │   ├── voiceboxService.js  # Audio cloning bridge (Python <-> Node)
+│   │   ├── wav2lipService.js   # Lip-sync bridge (Python <-> Node)
+│   │   ├── scriptService.js    # Script writing via Groq (Llama 3.3)
 │   │   └── socialMediaService.js # The multi-platform uploader
-└── .github/workflows/      # The "24/7 Employee" - GitHub Actions config
+└── .github/workflows/      # The "24/7 Producer" - Scheduled GitHub Actions
 ```
 
 ---
@@ -73,10 +75,12 @@ node main_automation.js
 
 ## 🤖 Cloud Automation (GitHub Actions)
 
-The system is optimized for the cloud. We use **Git LFS** for large files and **Smart Caching** for the 500MB AI models. 
-- **Auto-Sync**: Every time you push to the repo, it tests the pipeline.
-- **Scheduled**: It’s set to post fresh content every day at **8:00 AM and 8:00 PM IST**.
-- **Headless**: It uses a virtual display (Xvfb) on Linux to "record" the browser visualizer.
+The system works autonomously on GitHub's infrastructure:
+- **Zero-Manual Trigger**: No longer runs on every push. It survives only on the **Main Branch**.
+- **Scheduled Hits**: Hardcoded to post fresh reels twice daily:
+    - **8:00 AM IST** (Morning Prime)
+    - **8:00 PM IST** (Evening Prime)
+- **LFS Optimized**: High-resolution models and base assets are managed via Git LFS for uncorrupted cloud pulls.
 
 ---
 
