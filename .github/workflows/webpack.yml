@@ -1,165 +1,165 @@
-name: NodeJS - Scheduled Video Workflows
+# name: NodeJS - Scheduled Video Workflows
 
-# Scheduled automation for video content creation
-# - workflow/auto: Runs at 8:00 AM/PM IST (2:30 AM/PM UTC) - Full video creation with FFmpeg
-# - 18-minute timeout protects against infinite hangs
-# - Proper cleanup ensures resources are freed
+# # Scheduled automation for video content creation
+# # - workflow/auto: Runs at 8:00 AM/PM IST (2:30 AM/PM UTC) - Full video creation with FFmpeg
+# # - 18-minute timeout protects against infinite hangs
+# # - Proper cleanup ensures resources are freed
 
-on:
-  schedule:
-    # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
-    - cron: "30 2 * * *"
-    - cron: "30 14 * * *"
-  workflow_dispatch:
+# on:
+#   schedule:
+#     # workflow/auto timings (8:00 AM & 8:00 PM IST → 2:30 AM & 2:30 PM UTC)
+#     - cron: "30 2 * * *"
+#     - cron: "30 14 * * *"
+#   workflow_dispatch:
 
-jobs:
-  run-workflows:
-    runs-on: ubuntu-latest
-    timeout-minutes: 18
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
+# jobs:
+#   run-workflows:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 18
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           lfs: true
 
-      - name: Pull Git LFS files
-        run: git lfs pull
+#       - name: Pull Git LFS files
+#         run: git lfs pull
 
-      - name: Verify video files
-        run: |
-          if [ -f "videos/Base-vedio.mp4" ]; then
-            FILE_SIZE=$(stat -c%s "videos/Base-vedio.mp4")
-            if [ "$FILE_SIZE" -gt 1000000 ]; then
-              echo "✅ Video file exists and has valid size: $FILE_SIZE bytes"
-            else
-              echo "❌ Video file exists but is too small: $FILE_SIZE bytes"
-              exit 1
-            fi
-          else
-            echo "❌ Video file not found: videos/Base-vedio.mp4"
-            exit 1
-          fi
+#       - name: Verify video files
+#         run: |
+#           if [ -f "videos/Base-vedio.mp4" ]; then
+#             FILE_SIZE=$(stat -c%s "videos/Base-vedio.mp4")
+#             if [ "$FILE_SIZE" -gt 1000000 ]; then
+#               echo "✅ Video file exists and has valid size: $FILE_SIZE bytes"
+#             else
+#               echo "❌ Video file exists but is too small: $FILE_SIZE bytes"
+#               exit 1
+#             fi
+#           else
+#             echo "❌ Video file not found: videos/Base-vedio.mp4"
+#             exit 1
+#           fi
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+#       - name: Use Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 18
 
-      - name: Install dependencies
-        run: npm install
+#       - name: Install dependencies
+#         run: npm install
 
-      - name: Install FFmpeg (for auto workflow only)
-        if: github.event.schedule == '30 2 * * *' || github.event.schedule == '30 14 * * *'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+#       - name: Install FFmpeg (for auto workflow only)
+#         if: github.event.schedule == '30 2 * * *' || github.event.schedule == '30 14 * * *'
+#         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Run server and trigger endpoints
-        run: |
-          # Function to cleanup server
-          cleanup_server() {
-            if [ ! -z "$SERVER_PID" ] && kill -0 $SERVER_PID 2>/dev/null; then
-              echo "Cleaning up server (PID: $SERVER_PID)"
-              kill $SERVER_PID 2>/dev/null || true
-              wait $SERVER_PID 2>/dev/null || true
-            fi
-          }
+#       - name: Run server and trigger endpoints
+#         run: |
+#           # Function to cleanup server
+#           cleanup_server() {
+#             if [ ! -z "$SERVER_PID" ] && kill -0 $SERVER_PID 2>/dev/null; then
+#               echo "Cleaning up server (PID: $SERVER_PID)"
+#               kill $SERVER_PID 2>/dev/null || true
+#               wait $SERVER_PID 2>/dev/null || true
+#             fi
+#           }
 
-          # Set trap to cleanup on exit
-          trap cleanup_server EXIT
+#           # Set trap to cleanup on exit
+#           trap cleanup_server EXIT
 
-          node server.js &
-          SERVER_PID=$!
-          echo "Server started with PID $SERVER_PID"
-          sleep 5
+#           node server.js &
+#           SERVER_PID=$!
+#           echo "Server started with PID $SERVER_PID"
+#           sleep 5
 
-          # Trigger auto workflow at scheduled times (requires FFmpeg)
-          if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
-            echo "Triggering /workflow/auto (with FFmpeg)"
-            RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:${PORT:-3000}/workflow/auto)
-            CURL_EXIT_CODE=$?
+#           # Trigger auto workflow at scheduled times (requires FFmpeg)
+#           if [[ "${{ github.event.schedule }}" == "30 2 * * *" ]] || [[ "${{ github.event.schedule }}" == "30 14 * * *" ]]; then
+#             echo "Triggering /workflow/auto (with FFmpeg)"
+#             RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:${PORT:-3000}/workflow/auto)
+#             CURL_EXIT_CODE=$?
             
-            if [ $CURL_EXIT_CODE -eq 0 ]; then
-              echo "✅ Workflow/auto triggered successfully"
-              TASK_ID=$(echo "$RESPONSE" | jq -r '.taskId // empty' 2>/dev/null)
-              if [ -n "$TASK_ID" ] && [ "$TASK_ID" != "null" ] && [ "$TASK_ID" != "empty" ]; then
-                echo "📋 Task ID: $TASK_ID"
-              else
-                echo "⚠️ No task ID returned, but proceeding with monitoring"
-              fi
-            else
-              echo "❌ Workflow/auto trigger failed (exit code: $CURL_EXIT_CODE)"
-              echo "Response: $RESPONSE"
-              echo "Continuing with monitoring anyway..."
-            fi
+#             if [ $CURL_EXIT_CODE -eq 0 ]; then
+#               echo "✅ Workflow/auto triggered successfully"
+#               TASK_ID=$(echo "$RESPONSE" | jq -r '.taskId // empty' 2>/dev/null)
+#               if [ -n "$TASK_ID" ] && [ "$TASK_ID" != "null" ] && [ "$TASK_ID" != "empty" ]; then
+#                 echo "📋 Task ID: $TASK_ID"
+#               else
+#                 echo "⚠️ No task ID returned, but proceeding with monitoring"
+#               fi
+#             else
+#               echo "❌ Workflow/auto trigger failed (exit code: $CURL_EXIT_CODE)"
+#               echo "Response: $RESPONSE"
+#               echo "Continuing with monitoring anyway..."
+#             fi
             
-            # Simple polling: wait at least 15 minutes, check status every 30 seconds
-            echo "Monitoring workflow for at least 15 minutes..."
-            UNKNOWN_COUNT=0
+#             # Simple polling: wait at least 15 minutes, check status every 30 seconds
+#             echo "Monitoring workflow for at least 15 minutes..."
+#             UNKNOWN_COUNT=0
             
-            for i in {1..30}; do
-              sleep 30
-              # Try to get status with multiple fallback methods
-              STATUS_RESPONSE=$(curl -s --max-time 10 http://localhost:${PORT:-3000}/workflow/status 2>/dev/null)
+#             for i in {1..30}; do
+#               sleep 30
+#               # Try to get status with multiple fallback methods
+#               STATUS_RESPONSE=$(curl -s --max-time 10 http://localhost:${PORT:-3000}/workflow/status 2>/dev/null)
               
-              if [ $? -eq 0 ] && [ -n "$STATUS_RESPONSE" ]; then
-                # Try jq first
-                STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status' 2>/dev/null)
-                if [ $? -ne 0 ] || [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
-                  # Fallback: try grep for status
-                  STATUS=$(echo "$STATUS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
-                  if [ -z "$STATUS" ]; then
-                    STATUS="unknown"
-                  fi
-                fi
-              else
-                STATUS="unknown"
-              fi
+#               if [ $? -eq 0 ] && [ -n "$STATUS_RESPONSE" ]; then
+#                 # Try jq first
+#                 STATUS=$(echo "$STATUS_RESPONSE" | jq -r '.status' 2>/dev/null)
+#                 if [ $? -ne 0 ] || [ -z "$STATUS" ] || [ "$STATUS" = "null" ]; then
+#                   # Fallback: try grep for status
+#                   STATUS=$(echo "$STATUS_RESPONSE" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+#                   if [ -z "$STATUS" ]; then
+#                     STATUS="unknown"
+#                   fi
+#                 fi
+#               else
+#                 STATUS="unknown"
+#               fi
               
-              echo "Status check $i/30: $STATUS"
+#               echo "Status check $i/30: $STATUS"
               
-              # Track consecutive unknown statuses
-              if [[ "$STATUS" == "unknown" ]]; then
-                UNKNOWN_COUNT=$((UNKNOWN_COUNT + 1))
-              else
-                UNKNOWN_COUNT=0
-              fi
+#               # Track consecutive unknown statuses
+#               if [[ "$STATUS" == "unknown" ]]; then
+#                 UNKNOWN_COUNT=$((UNKNOWN_COUNT + 1))
+#               else
+#                 UNKNOWN_COUNT=0
+#               fi
               
-              # Break if workflow clearly completed or failed
-              if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]] || [[ "$STATUS" == "partial_success" ]]; then
-                echo "Workflow finished with status: $STATUS"
-                break
-              fi
+#               # Break if workflow clearly completed or failed
+#               if [[ "$STATUS" == "completed" ]] || [[ "$STATUS" == "failed" ]] || [[ "$STATUS" == "partial_success" ]]; then
+#                 echo "Workflow finished with status: $STATUS"
+#                 break
+#               fi
               
-              # If server is down or status is unknown for 3+ consecutive checks, assume completion
-              if [[ $UNKNOWN_COUNT -ge 3 ]]; then
-                echo "Server not responding consistently (3+ unknown statuses), assuming workflow completed"
-                break
-              fi
-            done
-            echo "Workflow monitoring complete"
-          # Server will be cleaned up automatically by trap
-        env:
-          PORT: ${{ secrets.PORT }}
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          POSTS_SHEET_ID: ${{ secrets.POSTS_SHEET_ID }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          OAUTH_ACCESS_TOKEN: ${{ secrets.OAUTH_ACCESS_TOKEN }}
-          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_FOR_IMAGES_1: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_1 }}
-          GEMINI_API_KEY_FOR_IMAGES_2: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_2 }}
-          GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
-          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
-          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
-          GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
+#               # If server is down or status is unknown for 3+ consecutive checks, assume completion
+#               if [[ $UNKNOWN_COUNT -ge 3 ]]; then
+#                 echo "Server not responding consistently (3+ unknown statuses), assuming workflow completed"
+#                 break
+#               fi
+#             done
+#             echo "Workflow monitoring complete"
+#           # Server will be cleaned up automatically by trap
+#         env:
+#           PORT: ${{ secrets.PORT }}
+#           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+#           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+#           POSTS_SHEET_ID: ${{ secrets.POSTS_SHEET_ID }}
+#           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+#           OAUTH_ACCESS_TOKEN: ${{ secrets.OAUTH_ACCESS_TOKEN }}
+#           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+#           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+#           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+#           GEMINI_API_KEY_FOR_IMAGES_1: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_1 }}
+#           GEMINI_API_KEY_FOR_IMAGES_2: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_2 }}
+#           GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
+#           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+#           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+#           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+#           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+#           EMAIL_USER: ${{ secrets.EMAIL_USER }}
+#           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+#           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+#           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+#           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+#           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+#           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+#           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+#           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+#           GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
