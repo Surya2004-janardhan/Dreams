@@ -66,22 +66,19 @@ async function main() {
         currentStep = "Wav2Lip Lip-Syncing";
         console.log("👄 Step 3: Generating Synced Talking Head via Wav2Lip...");
         
-        // Priority: face_image.jpg (new) -> Video_Generation_of_Tech_Enthusiast.mp4 (fallback)
-        let WAV2LIP_BASE = path.resolve('wav2lip/temp/face_image.jpg');
-        if (!fs.existsSync(WAV2LIP_BASE)) {
-            WAV2LIP_BASE = path.resolve('wav2lip/temp/Video_Generation_of_Tech_Enthusiast.mp4');
-        }
-        
+        // Use Base-vedio.mp4 from root as the source face for lip-syncing
+        const WAV2LIP_BASE = path.resolve('Base-vedio.mp4'); 
         const INIT_MERGE = path.resolve('merged_output.mp4');
         
         if (!fs.existsSync(WAV2LIP_BASE)) {
-            console.error("❌ Wav2Lip Base source not found!");
-            throw new Error(`Missing Wav2Lip base source (checked image and video fallback)`);
+            console.error("❌ Base-vedio.mp4 not found in root!");
+            throw new Error(`Missing base video for Wav2Lip at ${WAV2LIP_BASE}`);
         }
 
-        console.log(`🎬 Using Wav2Lip Base: ${path.basename(WAV2LIP_BASE)}`);
+        console.log(`🎬 Using Root Base Video: ${path.basename(WAV2LIP_BASE)}`);
         await syncLip(audioPath, WAV2LIP_BASE, INIT_MERGE);
         console.log("✅ Wav2Lip sync success: merged_output.mp4 created");
+
 
         // Step 4: SRT (using AssemblyAI)
         currentStep = "SRT Generation (AssemblyAI)";
