@@ -1,190 +1,73 @@
-const Groq = require("groq-sdk");
+const { GoogleGenAI } = require("@google/genai");
 const logger = require("../config/logger");
 
-// future safer side shift to gen ai sdk instead of raw api calls to models
-// use sdk intead for script generation
-// import { GoogleGenAI } from "@google/genai";
+// Initialize Gemini
+const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
-// const ai = new GoogleGenAI({});
-
-// async function main() {
-//   const response = await ai.models.generateContent({
-//     model: "gemini-1.5-flash",
-//     contents: "Explain how AI works in a few words",
-//   });
-//   console.log(response.text);
-// }
-
-// await main();
-// Groq API configuration
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
+/**
+ * Generates a viral, high-retention script for a 55-60 second technical reel.
+ */
 const generateScript = async (topic, description = "") => {
-  const apiKey = process.env.GROQ_API_KEY;
+  const prompt = `
+    TASK: Write a 55-second viral technical reel script.
+    TOPIC: ${topic}
+    ${description ? `CONTEXT: ${description}` : ""}
 
-  if (!apiKey) {
-    throw new Error("GROQ_API_KEY environment variable is required");
-  }
+    VIRAL STRATEGY (CRITICAL):
+    1. THE HOOK (0-3s): Start with a "Pattern Interrupt." Use a negative hook, a bold contradiction, or a "Stop doing X" statement.
+    2. THE GAP (3-10s): Create cognitive dissonance. Why is the status quo wrong? What is the hidden cost?
+    3. THE CORE VALUE (10-45s): Fast-paced, high-density technical insight. Use one continuous flow. Skip "First/Second/Third." Use "The secret is..." or "Which means..." to connect ideas.
+    4. THE INFINITE LOOP (45-55s): The script MUST end with a leading phrase that seamlessly loops back to the very first word of the Hook. 
 
-  const prompt = `Topic: ${topic}
-${description ? `Context: ${description}` : ""}
-Generate a 60-second Instagram Reel script about [TOPIC].
+    TONE: 
+    Confident, slightly edgy tech visionary. Calm but intense. No "Hey guys" or "Welcome back." Jump straight into the jugular.
 
-Style: Simple English, short punchy sentences, easy to understand for students and beginners.
-
-Structure must follow this format:
-
-Strong hook in first 3 seconds (curiosity or bold statement).
-
-Identify a common mistake or myth related to the topic.
-
-Explain the concept in very simple words (no complex jargon).
-
-Give 2–3 practical points or examples.
-
-End with a powerful takeaway line.
-
-Tone: Confident young tech educator. Calm. No overacting.
-
-Sentences should be short and spaced line by line (for subtitles).
-
-Avoid complicated words.
-
-Make it emotionally engaging and slightly thought-provoking.
-
-Total length: around 90–110 spoken words.`;
+    FORMAT:
+    - Short, punchy lines (max 8 words per line).
+    - Use punctuation to force natural pauses (..., !, ?).
+    - TOTAL WORD COUNT: Strictly between 100 and 120 words.
+  `;
 
   try {
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "You are a senior technical architect and content strategist. You write high-velocity, information-dense scripts for tech professionals. You hate fluff and marketing speak.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      model: "llama-3.3-70b-versatile", // Using available Groq model
-      temperature: 0.8,
-      max_tokens: 2048,
-      top_p: 0.95,
-    });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let script = response.text().trim();
 
-    logger.info("✓ Multi-speaker Q&A script generated via Groq API");
-    let script = chatCompletion.choices[0].message.content;
+    // Clean up markdown markers if any
+    script = script.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
 
-    // Count words and ensure it's within range
-    const wordCount = script
-      .split(/\s+/)
-      .filter((word) => word.length > 0).length;
-    logger.info(`📊 Generated script word count: ${wordCount}`);
-
-    // Try up to 3 times to get desired word count
-    let retryCount = 0;
-    const maxRetries = 1;
-
-    while ((wordCount < 85 || wordCount > 115) && retryCount < maxRetries) {
-      retryCount++;
-      logger.warn(
-        `⚠️ Script word count ${wordCount} is outside 90-110 range, retrying... (attempt ${retryCount}/${maxRetries})`,
-      );
-
-      // Wait 66 seconds before retry
-      logger.info(`⏳ Waiting 66 seconds before retry ${retryCount}...`);
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-
-      try {
-        const retryChatCompletion = await groq.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert educational content creator specializing in natural Indian English explanations.",
-            },
-            {
-              role: "user",
-              content: `The previous explanation had ${wordCount} words, which is not between 110-120 words. Please regenerate the exact same explanation but ensure the total word count is strictly between 110-120 words.\n\nOriginal topic: ${topic}\n${
-                description ? `Original description: ${description}` : ""
-              }\n\nCRITICAL: Count every single word and ensure total is 110-120 words exactly. Do not add or remove content, just adjust the explanation length to meet the word count requirement.\n\n${prompt}`,
-            },
-          ],
-          model: "llama-3.3-70b-versatile",
-          temperature: 0.7,
-          max_tokens: 2048,
-          top_p: 0.95,
-        });
-
-        script = retryChatCompletion.choices[0].message.content;
-        const newWordCount = script
-          .split(/\s+/)
-          .filter((word) => word.length > 0).length;
-        logger.info(`📊 Retry ${retryCount} word count: ${newWordCount}`);
-
-        if (newWordCount >= 105 && newWordCount <= 120) {
-          logger.info(`✅ Word count now within range: ${newWordCount} words`);
-          break;
-        }
-      } catch (retryError) {
-        logger.error(`❌ Retry ${retryCount} failed:`, retryError.message);
-        // Continue to next retry attempt
-      }
-    }
-
-    if (retryCount >= maxRetries) {
-      const finalWordCount = script
-        .split(/\s+/)
-        .filter((word) => word.length > 0).length;
-      logger.warn(
-        `⚠️ Could not achieve target word count after ${maxRetries} retries. Using script with ${finalWordCount} words.`,
-      );
-    }
-
+    const wordCount = script.split(/\s+/).filter(w => w.length > 0).length;
+    logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
+    
     return script;
   } catch (error) {
-    logger.error("❌ Script generation error:", {
-      error: error.message,
-      stack: error.stack,
-      apiResponse: error.response?.data,
-      topic: topic,
-      description: description,
-      api: "Groq",
-      timestamp: new Date().toISOString(),
-    });
-    throw new Error(
-      `Failed to generate script with Groq API: ${error.message}`,
-    );
+    logger.error("❌ Gemini Script generation error:", error.message);
+    throw new Error(`Failed to generate viral script: ${error.message}`);
   }
 };
 
+/**
+ * Generates a visual style prompt for the compositor based on the script.
+ */
 const generateVisualPrompt = async (script) => {
     const prompt = `
-    Based on the following video script, describe a Visual Style and Motion Graphics Concept in exactly 3 lines.
-    Focus on colors, shapes, and movement. Do NOT describe the speaker. Focus on the overlay graphics.
+    Analyze this technical script and describe a Motion Graphics style in exactly 3 lines.
+    Focus on: Brand colors (Neon/Cyber/Blueprint), Dynamic movement (Data streams, Glitches, Pulsating icons), and Layout.
+    Do NOT mention the speaker.
     
-    SCRIPT:
-    "${script}"
-    
-    OUTPUT RULES:
-    - 3 lines only.
-    - Concise and descriptive.
+    SCRIPT: "${script}"
     `;
     
     try {
-        const completion = await groq.chat.completions.create({
-            messages: [{ role: "user", content: prompt }],
-            model: "llama-3.3-70b-versatile",
-            temperature: 0.7,
-        });
-        const visualDescription = completion.choices[0].message.content;
-        logger.info("✓ Visual prompt generated via Groq");
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const visualDescription = response.text().trim();
+        logger.info("🎨 Visual prompt generated via Gemini");
         return visualDescription;
     } catch (e) {
-        logger.error("Failed to generate visual prompt", e);
-        return "Neon aesthetic, dynamic data pulse, cybernetic overlays.";
+        logger.error("Failed to generate visual prompt via Gemini", e);
+        return "Neon Blueprint aesthetic, dynamic node-graph pulses, sharp tactical overlays.";
     }
 };
 
