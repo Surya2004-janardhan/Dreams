@@ -181,50 +181,55 @@ async function main() {
             logger.error(`❌ Supabase Upload Error: ${e.message}`);
         }
 
+        // A. YouTube Upload (Direct - Independent of Staging)
+        const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
+            .then(res => { if(res.success) { links.yt = res.url; logger.info(`✅ YT Posted: ${res.url}`); } })
+            .catch(e => logger.error(`❌ YT Error: ${e.message}`));
+
+        const metaPromises = [];
+
         if (supabaseInfo && supabaseInfo.success) {
             const publicUrl = supabaseInfo.publicLink;
-            logger.info(`✅ Supabase Link: ${publicUrl}`);
-
-            logger.info("🚀 Triggering parallel uploads: YouTube, Instagram, Facebook...");
-            // A. YouTube Upload (Direct)
-            const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.yt = res.url; logger.info(`✅ YT Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ YT Error: ${e.message}`));
+            logger.info(`✅ Supabase Link (Staging for Meta): ${publicUrl}`);
 
             // B. Instagram Upload (via URL)
-            const instaPromise = uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.insta = res.url; logger.info(`✅ Insta Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ Insta Error: ${e.message}`));
+            metaPromises.push(
+                uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
+                    .then(res => { if(res.success) { links.insta = res.url; logger.info(`✅ Insta Posted: ${res.url}`); } })
+                    .catch(e => logger.error(`❌ Insta Error: ${e.message}`))
+            );
 
             // C. Facebook Upload (via URL)
-            const fbPromise = uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.fb = res.url; logger.info(`✅ FB Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ FB Error: ${e.message}`));
-
-            await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
-            logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
-            
-            // Step 9: Update Sheet
-            currentStep = "Updating Sheets & Notifications";
-            if (task.rowId > 0) {
-                logger.info("📊 Step 9: Updating Google Sheets with results...");
-                await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
-            }
-
-            // Final Success Email
-            await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
-
-            // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
-            if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
-                logger.info("🧹 Cleaning up Supabase temporary storage...");
-                // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error:", e.message));
-            }
-
-            const totalTime = ((Date.now() - sessionStart)/1000).toFixed(2);
-            logger.info(`✨ AUTOMATION SUCCESSFUL | Total Time: ${totalTime}s`);
+            metaPromises.push(
+                uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
+                    .then(res => { if(res.success) { links.fb = res.url; logger.info(`✅ FB Posted: ${res.url}`); } })
+                    .catch(e => logger.error(`❌ FB Error: ${e.message}`))
+            );
         } else {
-            throw new Error("Supabase pre-upload failed. Skipping social platform uploads to avoid partial failures.");
+            logger.warn("⚠️ Meta (Instagram/Facebook) upload skipped because Supabase staging failed.");
         }
+
+        await Promise.allSettled([ytPromise, ...metaPromises]);
+        logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
+            
+        // Step 9: Update Sheet
+        currentStep = "Updating Sheets & Notifications";
+        if (task.rowId > 0) {
+            logger.info("📊 Step 9: Updating Google Sheets with results...");
+            await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
+        }
+
+        // Final Success Email
+        await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
+
+        // CRITICAL CLEANUP: Delete from Supabase staging
+        if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
+            logger.info("🧹 Cleaning up Supabase temporary storage...");
+            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error:", e.message));
+        }
+
+        const totalTime = ((Date.now() - sessionStart)/1000).toFixed(2);
+        logger.info(`✨ AUTOMATION SUCCESSFUL | Total Time: ${totalTime}s`);
 
     } catch (err) {
         logger.error(`❌ PIPELINE FAILED | Step: [${currentStep}] | Error: ${err.message}`);
