@@ -575,6 +575,11 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     }
   };
 
+  // Expose to window for automation/debug
+  useEffect(() => {
+    (window as any).stopRecording = stopRecording;
+  }, []);
+
   return (
     <div className={`flex flex-col items-center justify-center ${fullScreenMode ? 'fixed inset-0 z-50 bg-black' : 'h-full'}`}>
 

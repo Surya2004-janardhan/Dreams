@@ -24,6 +24,7 @@ const { sendErrorNotification, sendSuccessNotification } = require('./src/servic
 const Groq = require("groq-sdk");
 const logger = require("./src/config/logger");
 const { syncLip } = require('./src/services/wav2lipService');
+const voiceboxService = require('./src/services/voiceboxService');
 
 async function main() {
     logger.info("🚀 STARTING REELS AUTOMATION PIPELINE");
@@ -50,21 +51,44 @@ async function main() {
         const script = await generateScript(TOPIC);
         logger.info(`✅ Step 1 Complete: Script generated in ${((Date.now() - step1Start)/1000).toFixed(2)}s`);
 
-        // Step 2: Audio
-        currentStep = "Audio Generation";
-        logger.info("🎤 Step 2: Generating TTS Audio...");
+        // Step 2: Audio (Cloned via Voicebox)
+        currentStep = "Audio Generation (Voicebox)";
+        logger.info("🎤 Step 2: Generating Cloned Audio via Voicebox...");
         const step2Start = Date.now();
         let audioPath;
-        const CACHE_AUDIO = path.resolve('audio_cache.wav');
+        
+        // Configuration for Cloned Voice
+        const REF_AUDIO = path.resolve('Base-audio.mp3'); 
+        const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
+        
+        if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
+            fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
+        }
 
+        if (!fs.existsSync(REF_AUDIO)) {
+            logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
+            const audioResult = await generateAudioWithBatchingStrategy(script);
+            audioPath = audioResult.conversationFile;
+        } else {
+            try {
+                // Generate audio using our local Voicebox Service
+                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO);
+            } catch (vError) {
+                logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
+                const audioResult = await generateAudioWithBatchingStrategy(script);
+                audioPath = audioResult.conversationFile;
+            }
+        }
+        
+        /* GEMINI TTS FALLBACK (Commented out)
         if (fs.existsSync(CACHE_AUDIO)) {
             logger.info("♻️ Using cached audio_cache.wav to save API quota.");
             audioPath = CACHE_AUDIO;
         } else {
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
-            // Optionally: fs.copyFileSync(audioPath, CACHE_AUDIO); // Uncomment to enable caching manually
         }
+        */
         logger.info(`✅ Step 2 Complete: Audio ready at ${audioPath} (${((Date.now() - step2Start)/1000).toFixed(2)}s)`);
 
         // Step 3: Wav2Lip Sync (Dynamic Talking Head)
@@ -157,50 +181,55 @@ async function main() {
             logger.error(`❌ Supabase Upload Error: ${e.message}`);
         }
 
+        // A. YouTube Upload (Direct - Independent of Staging)
+        const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
+            .then(res => { if(res.success) { links.yt = res.url; logger.info(`✅ YT Posted: ${res.url}`); } })
+            .catch(e => logger.error(`❌ YT Error: ${e.message}`));
+
+        const metaPromises = [];
+
         if (supabaseInfo && supabaseInfo.success) {
             const publicUrl = supabaseInfo.publicLink;
-            logger.info(`✅ Supabase Link: ${publicUrl}`);
-
-            logger.info("🚀 Triggering parallel uploads: YouTube, Instagram, Facebook...");
-            // A. YouTube Upload (Direct)
-            const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.yt = res.url; logger.info(`✅ YT Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ YT Error: ${e.message}`));
+            logger.info(`✅ Supabase Link (Staging for Meta): ${publicUrl}`);
 
             // B. Instagram Upload (via URL)
-            const instaPromise = uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.insta = res.url; logger.info(`✅ Insta Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ Insta Error: ${e.message}`));
+            metaPromises.push(
+                uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
+                    .then(res => { if(res.success) { links.insta = res.url; logger.info(`✅ Insta Posted: ${res.url}`); } })
+                    .catch(e => logger.error(`❌ Insta Error: ${e.message}`))
+            );
 
             // C. Facebook Upload (via URL)
-            const fbPromise = uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) { links.fb = res.url; logger.info(`✅ FB Posted: ${res.url}`); } })
-                .catch(e => logger.error(`❌ FB Error: ${e.message}`));
-
-            await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
-            logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
-            
-            // Step 9: Update Sheet
-            currentStep = "Updating Sheets & Notifications";
-            if (task.rowId > 0) {
-                logger.info("📊 Step 9: Updating Google Sheets with results...");
-                await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
-            }
-
-            // Final Success Email
-            await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
-
-            // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
-            if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
-                logger.info("🧹 Cleaning up Supabase temporary storage...");
-                // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error:", e.message));
-            }
-
-            const totalTime = ((Date.now() - sessionStart)/1000).toFixed(2);
-            logger.info(`✨ AUTOMATION SUCCESSFUL | Total Time: ${totalTime}s`);
+            metaPromises.push(
+                uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
+                    .then(res => { if(res.success) { links.fb = res.url; logger.info(`✅ FB Posted: ${res.url}`); } })
+                    .catch(e => logger.error(`❌ FB Error: ${e.message}`))
+            );
         } else {
-            throw new Error("Supabase pre-upload failed. Skipping social platform uploads to avoid partial failures.");
+            logger.warn("⚠️ Meta (Instagram/Facebook) upload skipped because Supabase staging failed.");
         }
+
+        await Promise.allSettled([ytPromise, ...metaPromises]);
+        logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
+            
+        // Step 9: Update Sheet
+        currentStep = "Updating Sheets & Notifications";
+        if (task.rowId > 0) {
+            logger.info("📊 Step 9: Updating Google Sheets with results...");
+            await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
+        }
+
+        // Final Success Email
+        await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
+
+        // CRITICAL CLEANUP: Delete from Supabase staging
+        if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
+            logger.info("🧹 Cleaning up Supabase temporary storage...");
+            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error:", e.message));
+        }
+
+        const totalTime = ((Date.now() - sessionStart)/1000).toFixed(2);
+        logger.info(`✨ AUTOMATION SUCCESSFUL | Total Time: ${totalTime}s`);
 
     } catch (err) {
         logger.error(`❌ PIPELINE FAILED | Step: [${currentStep}] | Error: ${err.message}`);
@@ -236,6 +265,8 @@ async function runCompositor(vPath, sPath, vPrompt) {
             '--auto-select-tab-capture-source-by-title=Reel Composer',
             '--enable-usermedia-screen-capturing',
             '--use-fake-ui-for-media-stream',
+            '--use-fake-device-for-media-stream',
+            '--disable-dev-shm-usage',
             '--mute-audio',
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -329,16 +360,57 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.waitForTimeout(5000);
         await page.click('button:has-text("Browser Recorder")');
 
+        // VERIFICATION: Check if recording actually started (Stop button should appear)
+        const isRecordingStarted = await page.waitForSelector('button:has-text("Stop Recording")', { timeout: 15000 }).then(() => true).catch(() => false);
+        if (!isRecordingStarted) {
+            console.warn("⚠️ Recording failed to start automatically. Trying to force play...");
+            await page.evaluate(() => {
+                const v = document.querySelector('video');
+                if (v) v.play();
+            });
+        }
+
         console.log("🎥 Monitoring Playback...");
         const begin = Date.now();
-        while (!complete && Date.now() - begin < 800000) {
+        let lastReport = 0;
+        
+        while (!complete && Date.now() - begin < 900000) { // 15 mins timeout
             await page.waitForTimeout(5000);
-            const ended = await page.evaluate(() => { 
+            
+            const stats = await page.evaluate(() => { 
                 const v = document.querySelector('video'); 
-                return v ? v.ended : false; 
+                return {
+                    ended: v ? v.ended : false,
+                    paused: v ? v.paused : true,
+                    time: v ? v.currentTime : 0,
+                    duration: v ? v.duration : 0
+                };
             });
-            if (ended) {
-                console.log("🎞️ Playback ended. Waiting for download...");
+
+            // Log progress every 15 seconds
+            if (Date.now() - lastReport > 15000) {
+                console.log(`📹 Recording Progress: ${stats.time.toFixed(1)}s / ${stats.duration.toFixed(1)}s (Paused: ${stats.paused}, Ended: ${stats.ended})`);
+                lastReport = Date.now();
+            }
+
+            // Force play if stalled
+            if (stats.paused && !stats.ended && stats.time < stats.duration - 1) {
+                await page.evaluate(() => document.querySelector('video')?.play()).catch(() => {});
+            }
+
+            if (stats.ended || (stats.duration > 0 && stats.time >= stats.duration - 0.5)) {
+                console.log("🎞️ Playback reached end. Stopping recording and waiting for download...");
+                // Explicitly stop recording to trigger download
+                await page.click('button:has-text("Stop Recording")').catch(() => {
+                    // Fallback to calling the function directly if button click fails
+                    return page.evaluate(() => {
+                        if (window.stopRecording) window.stopRecording();
+                        // Find button by other means if necessary
+                        const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Stop'));
+                        if (btn) btn.click();
+                    });
+                });
+                
                 const wait = Date.now();
                 while (!complete && Date.now() - wait < 300000) await page.waitForTimeout(2000);
                 break;
@@ -346,7 +418,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         }
         
         if (!complete) {
-            console.warn("⚠️ Recording/Download timed out but proceeding...");
+            console.error("❌ Recording/Download timed out! Attempting emergency screenshot.");
         }
 
     } catch (e) {
