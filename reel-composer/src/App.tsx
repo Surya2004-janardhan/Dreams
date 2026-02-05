@@ -60,7 +60,7 @@ const App: React.FC = () => {
   const [bgMusicVolume, setBgMusicVolume] = useState(0.2);
 
   // Subtitle Style State
-  const [subtitleFontSize, setSubtitleFontSize] = useState(17);
+  const [subtitleFontSize, setSubtitleFontSize] = useState(19);
   const [subtitleFontFamily, setSubtitleFontFamily] = useState('Inter');
   const [subtitleColor, setSubtitleColor] = useState('#fbbf24');
   const [subtitleBgColor, setSubtitleBgColor] = useState('rgba(0, 0, 0, 0.8)');

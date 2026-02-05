@@ -193,7 +193,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   };
 
   const handleResetSubtitleStyles = () => {
-    onSubtitleFontSizeChange(17);
+    onSubtitleFontSizeChange(19);
     onSubtitleFontFamilyChange('Inter');
     onSubtitleColorChange('#fbbf24');
     onSubtitleBgColorChange('rgba(0, 0, 0, 0.8)');
