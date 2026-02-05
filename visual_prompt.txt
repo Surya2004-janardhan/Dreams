@@ -1,6 +1,6 @@
-Here's a high-fidelity visual animation storyboard for the 60-second technical reel:
-Animate a futuristic cityscape with neon lights, transitioning into a revolving 3D robot icon with glowing blue circuits. 
-As the script mentions "virtual assistants", morph the robot into a speech bubble icon with a waveform, symbolizing voice commands. 
-When "chatbots" are mentioned, transform the speech bubble into a messaging app icon with scrolling code lines and a sent message animation. 
-As the script concludes with "the future is here", visualize a stylized 3D globe icon with orbiting satellites and pulsing connection lines, embodying a technologically advanced world. 
-Finally, end with a simple, bold "AI" text label, surrounded by a halo of light, signifying the central theme of the reel.
+Here's a high-fidelity visual animation storyboard for a 60-second technical reel on Caching Strategy:
+Animate a flashing speedometer icon with a rocket ship, transitioning into a database symbol with a clock, highlighting "Fast Data".
+A revolving 3D CPU icon with data pulse lines morphs into a cache memory chip icon, labeled "Cache".
+Frequently-used file icons (e.g., images, documents) stream into a folder labeled "Frequent", with a glowing green checkmark.
+A slow database query symbol (e.g., a snail) transforms into a speedy one (e.g., a cheetah), with a "Boost" label and ascending performance graph.
+A final animated gauge fills up with a "Performance" label, as a series of tiny, pulsing server icons flash in the background, representing " Savings" and "Time".
