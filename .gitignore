@@ -100,4 +100,4 @@ genuine_cache/
 # Large video files should be committed with Git LFS to avoid size limits
 
 # Wav2Lip Weights
-wav2lip/**/*.pth
+# wav2lip/**/*.pth (Tracked via LFS)
