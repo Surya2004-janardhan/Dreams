@@ -1,4 +1,4 @@
-# 🎬 AI Reels Automation: The Talking Head Edition
+# 🎬 Ultimate AI Content Automation - 0/-
 
 Welcome to the ultimate "Ghost Creator" pipeline. This isn't just a video generator; it's a fully automated digital twin that reads technical topics from a spreadsheet, writes high-velocity scripts, generates professional voiceovers, and literally **lip-syncs** a face to the audio before posting it to your socials.
 
