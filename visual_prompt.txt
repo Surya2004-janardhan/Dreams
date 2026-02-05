@@ -1,6 +1,6 @@
-Here's a high-fidelity visual animation storyboard:
-Animate a pulsing circuit board with wires morphing into a robotic arm, symbolizing AI's presence.
-Transition to a swirling cloud of code symbols, forming a virtual assistant icon with a microphone.
-Reveal a self-driving car icon with rotating wheels, surrounded by a network of location pins and map lines.
-Animate a revolving 3D brain scan with highlighted disease markers, transitioning into a doctor's clipboard with a diagnosis report.
-Finish with a glowing globe icon, surrounded by orbiting satellites and data streams, as the words "AI Leads" appear briefly.
+Here's a high-fidelity visual animation storyboard for a 60-second technical reel on Caching Strategy:
+Animate a flashing speedometer icon with a rocket ship, transitioning into a database symbol with a clock, highlighting "Fast Data".
+A revolving 3D CPU icon with data pulse lines morphs into a cache memory chip icon, labeled "Cache".
+Frequently-used file icons (e.g., images, documents) stream into a folder labeled "Frequent", with a glowing green checkmark.
+A slow database query symbol (e.g., a snail) transforms into a speedy one (e.g., a cheetah), with a "Boost" label and ascending performance graph.
+A final animated gauge fills up with a "Performance" label, as a series of tiny, pulsing server icons flash in the background, representing " Savings" and "Time".

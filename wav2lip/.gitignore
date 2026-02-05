@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# Wav2Lip Specific
+results/*
+temp/*
+!results/README.md
+!temp/README.md
+!temp/Video_Generation_of_Tech_Enthusiast.mp4
+!temp/github-explained-in-under-60-seconds-128k_opwYmIrL.mp3
+# checkpoints/*.pth
+# face_detection/detection/sfd/s3fd.pth
+
+# Logs and databases
+*.log
+*.sqlite
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

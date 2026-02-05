@@ -3,7 +3,7 @@ name: Reels Automation Pipeline
 on:
   push:
     branches:
-      - develop
+      - main
   schedule:
     # 8:00 AM IST (2:30 AM UTC)
     - cron: '30 2 * * *'
@@ -14,11 +14,13 @@ on:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -34,25 +36,58 @@ jobs:
           cd reel-composer
           npm install
 
-      - name: Install FFmpeg
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install System Dependencies for Wav2Lip & OpenCV
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libgl1-mesa-glx libglib2.0-0
+
+      - name: Install Wav2Lip Dependencies
+        run: |
+          cd wav2lip
+          pip install -r requirements.txt
 
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps
 
+      - name: Cache Wav2Lip Model Weights
+        id: cache-weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            wav2lip/checkpoints
+            wav2lip/face_detection/detection/sfd
+          key: ${{ runner.os }}-wav2lip-weights-v1
+
+      - name: Download Wav2Lip Model Weights
+        if: steps.cache-weights.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p wav2lip/checkpoints
+          echo "📥 Downloading Wav2Lip weights..."
+          curl -L -o wav2lip/checkpoints/wav2lip_gan.pth https://huggingface.co/collections/HuggingFaceH4/wav2lip-65bb71c/resolve/main/wav2lip_gan.pth
+          
+          mkdir -p wav2lip/face_detection/detection/sfd
+          echo "📥 Downloading SFD weights..."
+          curl -L -o wav2lip/face_detection/detection/sfd/s3fd.pth https://huggingface.co/collections/HuggingFaceH4/wav2lip-65bb71c/resolve/main/s3fd.pth
+
       - name: Start Frontend App
         run: |
           cd reel-composer
-          npm run dev &
-          echo "Waiting for frontend to start..."
+          npm run dev -- --port 3000 &
+          echo "Waiting for frontend to start on port 3000..."
           npx wait-on http://localhost:3000 --timeout 60000
 
       - name: Run Reels Automation Pipeline
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" node main_automation.js
         env:
+          
           PORT: 3000
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
@@ -62,6 +97,7 @@ jobs:
           GEMINI_API_KEY_FOR_VISUALS: ${{ secrets.GEMINI_API_KEY_FOR_VISUALS }}
           GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
           GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
+          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
@@ -70,17 +106,20 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
 
-      - name: Upload Final Video Artifact
+      - name: Upload Logs and Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: final-reels
+          name: automation-artifacts
           path: |
             FINAL_REEL_*.mp4
             merged_output.mp4
             subtitles.srt
             visual_prompt.txt
-            pipeline_fail.png
+            error_screenshot_*.png
             error.log
             combined.log

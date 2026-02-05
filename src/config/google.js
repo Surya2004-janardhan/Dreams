@@ -5,13 +5,16 @@ const fs = require("fs");
 // Google Sheets setup
 const getSheetsClient = async () => {
   let credentials;
+  if (!process.env.GOOGLE_CREDENTIALS) {
+    console.error("❌ GOOGLE_CREDENTIALS environment variable is missing!");
+    throw new Error("GOOGLE_CREDENTIALS secret is not configured in GitHub/Environment");
+  }
+
   try {
     credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
   } catch (error) {
-    console.error("Failed to parse Google credentials:", error);
-    throw new Error(
-      "Invalid Google credentials format in environment variables"
-    );
+    console.error("❌ Failed to parse Google credentials JSON:", error.message);
+    throw new Error("Invalid Google credentials format (Expected JSON string)");
   }
   const auth = new google.auth.GoogleAuth({
     credentials,

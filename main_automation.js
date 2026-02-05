@@ -23,87 +23,83 @@ const {
 const { sendErrorNotification, sendSuccessNotification } = require('./src/services/emailService');
 const Groq = require("groq-sdk");
 const logger = require("./src/config/logger");
+const { syncLip } = require('./src/services/wav2lipService');
 
 async function main() {
-    console.log("🚀 STARTING REELS AUTOMATION PIPELINE");
+    logger.info("🚀 STARTING REELS AUTOMATION PIPELINE");
+    const sessionStart = Date.now();
     
     let task = null;
     let currentStep = "Initialization";
+    var supabaseInfo = null; 
     try {
         // Step 0: Fetch task
         currentStep = "Fetching Task from Sheets";
-        console.log("📊 Step 0: Fetching task from Google Sheets...");
-        task = await getNextTask().catch(err => {
-            console.warn("⚠️ Sheet Service Failed or No Tasks: ", err.message);
-            return { idea: process.env.FALLBACK_TOPIC || "AI in 2026", rowId: 0 };
-        });
+        logger.info("📊 Step 0: Fetching task from Google Sheets...");
+        const step0Start = Date.now();
+        task = await getNextTask();
+        logger.info(`✅ Step 0 Complete: Task fetched in ${((Date.now() - step0Start)/1000).toFixed(2)}s`);
         
         const TOPIC = task.idea;
-        console.log(`✅ Topic: ${TOPIC}`);
+        logger.info(`📝 Target Topic: "${TOPIC}"`);
 
         // Step 1: Script
         currentStep = "Script Generation";
-        console.log("📝 Step 1: Script generation...");
+        logger.info("📝 Step 1: Generating AI Script...");
+        const step1Start = Date.now();
         const script = await generateScript(TOPIC);
-        console.log("✅ Script ready");
+        logger.info(`✅ Step 1 Complete: Script generated in ${((Date.now() - step1Start)/1000).toFixed(2)}s`);
 
         // Step 2: Audio
         currentStep = "Audio Generation";
-        console.log("🎤 Step 2: Audio generation...");
+        logger.info("🎤 Step 2: Generating TTS Audio...");
+        const step2Start = Date.now();
         let audioPath;
         const CACHE_AUDIO = path.resolve('audio_cache.wav');
 
         if (fs.existsSync(CACHE_AUDIO)) {
-            console.log("♻️ Using cached audio_cache.wav to save API quota.");
+            logger.info("♻️ Using cached audio_cache.wav to save API quota.");
             audioPath = CACHE_AUDIO;
         } else {
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
             // Optionally: fs.copyFileSync(audioPath, CACHE_AUDIO); // Uncomment to enable caching manually
         }
-        console.log(`✅ Audio ready: ${audioPath}`);
+        logger.info(`✅ Step 2 Complete: Audio ready at ${audioPath} (${((Date.now() - step2Start)/1000).toFixed(2)}s)`);
 
-        // Step 3: Base Merge (Trim Video to Audio)
-        currentStep = "Base Video Audio Merge";
-        console.log("🎞️ Step 3: Mixing Audio with Base Video (Trimming to sync)...");
-        const BASE_VIDEO = path.resolve('base-vedio.mp4'); 
+        // Step 3: Wav2Lip Sync (Dynamic Talking Head)
+        currentStep = "Wav2Lip Lip-Syncing";
+        logger.info("👄 Step 3: Performing Wav2Lip Sync (Dynamic Talking Head)...");
+        const step3Start = Date.now();
+        
+        // Use Base-vedio.mp4 from root as the source face for lip-syncing
+        const WAV2LIP_BASE = path.resolve('Base-vedio.mp4'); 
         const INIT_MERGE = path.resolve('merged_output.mp4');
         
-        if (!fs.existsSync(BASE_VIDEO)) {
-            console.error("❌ base-vedio.mp4 not found in root!");
-            throw new Error("Missing base-vedio.mp4");
+        if (!fs.existsSync(WAV2LIP_BASE)) {
+            logger.error(`❌ Base-vedio.mp4 not found in root: ${WAV2LIP_BASE}`);
+            throw new Error(`Missing base video for Wav2Lip at ${WAV2LIP_BASE}`);
         }
 
-        await new Promise((resolve, reject) => {
-            ffmpeg(BASE_VIDEO)
-                .input(audioPath)
-                .outputOptions([
-                    '-y',
-                    '-c:v copy',
-                    '-c:a aac',
-                    '-map 0:v:0',
-                    '-map 1:a:0',
-                    '-shortest' 
-                ])
-                .output(INIT_MERGE)
-                .on('end', resolve)
-                .on('error', reject)
-                .run();
-        });
-        console.log("✅ Base merge success");
+        logger.info(`🎬 Using Root Base Video: ${path.basename(WAV2LIP_BASE)}`);
+        await syncLip(audioPath, WAV2LIP_BASE, INIT_MERGE);
+        logger.info(`✅ Step 3 Complete: Wav2Lip sync success in ${((Date.now() - step3Start)/1000).toFixed(2)}s`);
+
 
         // Step 4: SRT (using AssemblyAI)
         currentStep = "SRT Generation (AssemblyAI)";
-        console.log("📜 Step 4: SRT generation via AssemblyAI...");
+        logger.info("📜 Step 4: Generating Subtitles (SRT) via AssemblyAI...");
+        const step4Start = Date.now();
         const srtRes = await createSubtitlesFromAudio(audioPath);
         const srtPath = srtRes.subtitlesPath;
         // Also save as subtitles.srt in root for consistency if needed by other steps
         fs.copyFileSync(srtPath, path.resolve('subtitles.srt'));
-        console.log("✅ SRT ready via AssemblyAI");
+        logger.info(`✅ Step 4 Complete: SRT generated in ${((Date.now() - step4Start)/1000).toFixed(2)}s`);
 
         // Step 5: Visual Prompt
         currentStep = "Visual Prompt Generation";
-        console.log("🎨 Step 5: Generating technical animation prompt...");
+        logger.info("🎨 Step 5: Creating visual prompt for technical animation...");
+        const step5Start = Date.now();
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
         const groqPrompt = `
         Topic: ${TOPIC}
@@ -130,84 +126,89 @@ async function main() {
         });
         const visualPrompt = completion.choices[0].message.content;
         fs.writeFileSync('visual_prompt.txt', visualPrompt);
-        console.log("✅ Prompt ready");
+        logger.info(`✅ Step 5 Complete: Visual prompt ready in ${((Date.now() - step5Start)/1000).toFixed(2)}s`);
 
         // Step 6: Playwright Logic
         currentStep = "Browser Recording & Composition";
-        console.log("🌐 Step 6: Running Browser Compositor...");
+        logger.info("🌐 Step 6: Recording Unified Visuals via Browser Compositor...");
+        const step6Start = Date.now();
         const finalMasterPath = await runCompositor(INIT_MERGE, srtPath, visualPrompt);
         if (!finalMasterPath) throw new Error("Browser recording failed to produce a file.");
-        console.log(`✅ MASTER REEL: ${finalMasterPath}`);
+        logger.info(`✅ Step 6 Complete: MASTER REEL created at ${finalMasterPath} (${((Date.now() - step6Start)/1000).toFixed(2)}s)`);
 
         // Step 7: Social Content
         currentStep = "Generating Captions";
-        console.log("✍️ Step 7: Social media context...");
+        logger.info("✍️ Step 7: Creating social media captions...");
+        const step7Start = Date.now();
         const social = await generateUnifiedSocialMediaCaption(TOPIC);
+        logger.info(`✅ Step 7 Complete: Captions ready in ${((Date.now() - step7Start)/1000).toFixed(2)}s`);
 
         // Step 8: Upload
         currentStep = "Uploading to Social Media";
-        console.log("📤 Step 8: Uploading...");
+        logger.info("📤 Step 8: Starting Social Media Uploads...");
+        const step8Start = Date.now();
         const links = { yt: "", insta: "", fb: "" };
 
         // 1. Supabase Upload (One-time) for Meta Platforms
-        let supabaseInfo = null;
         try {
-            console.log("☁️ Pre-uploading to Supabase for Meta platforms...");
+            logger.info("☁️ Uploading to Supabase (Staging for Meta)...");
             supabaseInfo = await uploadToSupabaseAndGetLink(finalMasterPath, TOPIC);
         } catch (e) {
-            console.error("Supabase Pre-upload Error:", e.message);
+            logger.error(`❌ Supabase Upload Error: ${e.message}`);
         }
 
         if (supabaseInfo && supabaseInfo.success) {
             const publicUrl = supabaseInfo.publicLink;
-            console.log(`✅ Supabase URL ready: ${publicUrl}`);
+            logger.info(`✅ Supabase Link: ${publicUrl}`);
 
+            logger.info("🚀 Triggering parallel uploads: YouTube, Instagram, Facebook...");
             // A. YouTube Upload (Direct)
             const ytPromise = uploadToYouTube(finalMasterPath, TOPIC, social.caption)
-                .then(res => { if(res.success) links.yt = res.url; })
-                .catch(e => console.error("YT Error:", e.message));
+                .then(res => { if(res.success) { links.yt = res.url; logger.info(`✅ YT Posted: ${res.url}`); } })
+                .catch(e => logger.error(`❌ YT Error: ${e.message}`));
 
             // B. Instagram Upload (via URL)
             const instaPromise = uploadToInstagramWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) links.insta = res.url; })
-                .catch(e => console.error("Insta Error:", e.message));
+                .then(res => { if(res.success) { links.insta = res.url; logger.info(`✅ Insta Posted: ${res.url}`); } })
+                .catch(e => logger.error(`❌ Insta Error: ${e.message}`));
 
             // C. Facebook Upload (via URL)
             const fbPromise = uploadToFacebookWithUrl(publicUrl, TOPIC, social.caption)
-                .then(res => { if(res.success) links.fb = res.url; })
-                .catch(e => console.error("FB Error:", e.message));
+                .then(res => { if(res.success) { links.fb = res.url; logger.info(`✅ FB Posted: ${res.url}`); } })
+                .catch(e => logger.error(`❌ FB Error: ${e.message}`));
 
             await Promise.allSettled([ytPromise, instaPromise, fbPromise]);
+            logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
             
             // Step 9: Update Sheet
             currentStep = "Updating Sheets & Notifications";
             if (task.rowId > 0) {
-                console.log("📊 Step 9: Updating sheet...");
+                logger.info("📊 Step 9: Updating Google Sheets with results...");
                 await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
             }
 
             // Final Success Email
-            await sendSuccessNotification(task, links).catch(e => console.error("Email failed:", e.message));
+            await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
 
             // CRITICAL CLEANUP: Only now, after everything is done, delete from Supabase
             if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
-                console.log("🧹 Final Step: Cleaning up Supabase temporary file...");
-                // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error:", e.message));
+                logger.info("🧹 Cleaning up Supabase temporary storage...");
+                // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error:", e.message));
             }
 
-            console.log("✨ AUTOMATION SUCCESSFUL");
+            const totalTime = ((Date.now() - sessionStart)/1000).toFixed(2);
+            logger.info(`✨ AUTOMATION SUCCESSFUL | Total Time: ${totalTime}s`);
         } else {
             throw new Error("Supabase pre-upload failed. Skipping social platform uploads to avoid partial failures.");
         }
 
     } catch (err) {
-        console.error(`❌ PIPELINE FAILED at Step [${currentStep}]:`, err.message);
-        console.log("🚨 AUTOMATION FAILED");
+        logger.error(`❌ PIPELINE FAILED | Step: [${currentStep}] | Error: ${err.message}`);
         
         // Cleanup on failure as well, if we managed to upload anything
         if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {
-            console.log("🧹 Cleanup on failure: Removing Supabase temporary file...");
-            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => console.error("Supabase Cleanup Error on Failure:", e.message));
+            logger.info("🧹 Cleanup on failure: Removing Supabase temporary file...");
+            // await deleteFromSupabase(supabaseInfo.fileName, supabaseInfo.bucket || "videos").catch(e => logger.error("Supabase Cleanup Error on Failure:", e.message));
         }
 
         if (task && task.rowId > 0) {
@@ -215,7 +216,7 @@ async function main() {
         }
 
         // Send Error Email - NOW ENABLED
-        await sendErrorNotification(task, err, currentStep).catch(e => console.error("Error email failed:", e.message));
+        await sendErrorNotification(task, err, currentStep).catch(e => logger.error(`❌ Error email failed: ${e.message}`));
     }
 }
 
