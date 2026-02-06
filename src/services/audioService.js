@@ -1,4 +1,4 @@
-const { GoogleGenAI, Modality } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
 const logger = require("../config/logger");
@@ -245,13 +245,13 @@ const generateAudioWithBatchingStrategy = async (script) => {
     logger.info(`🎭 Generating single-speaker explanation audio`);
 
     // Initialize Google GenAI client
-    const ai = new GoogleGenAI({
-      apiKey: process.env.GEMINI_API_KEY_FOR_AUDIO,
-    });
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
     // Reference from doc: Gemini 2.5 Flash Preview TTS is the standard for high-quality audio
     const modelName = "gemini-2.5-flash-preview-tts";
     const voiceName = "Puck"; // Upbeat base voice for natural energy and pitch peaks
+
+    const model = genAI.getGenerativeModel({ model: modelName });
 
     // Construct the refined "Dynamic Tech Global" persona
     const styledPrompt = `
@@ -268,10 +268,9 @@ const generateAudioWithBatchingStrategy = async (script) => {
 
     logger.info(`📝 Sending High-Energy/Brisk TTS request with "Puck" base`);
     
-    const response = await ai.models.generateContent({
-      model: modelName,
+    const response = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: styledPrompt }] }],
-      config: {
+      generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
