@@ -17,7 +17,27 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false # Manual LFS fetching to enable caching
+
+      - name: Create LFS file list for cache key
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: LFS Cache
+        uses: actions/cache@v4
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: |
+            ${{ runner.os }}-lfs-
+
+      - name: Git LFS Pull
+        if: steps.lfs-cache.outputs.cache-hit != 'true'
+        run: |
+          git lfs pull || echo "⚠️ LFS Pull failed (budget likely exceeded). Models may be missing if not already in cache."
+        
+      - name: Finalize LFS (Checkout files from cache)
+        run: git lfs checkout
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,8 +71,22 @@ jobs:
           # Specific addition from voicebox README if needed
           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json', 'reel-composer/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright Dependencies (if cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
 
       - name: Start Frontend App
