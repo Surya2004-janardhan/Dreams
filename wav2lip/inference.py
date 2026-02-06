@@ -190,6 +190,13 @@ def main():
 		video_stream = cv2.VideoCapture(args.face)
 		fps = video_stream.get(cv2.CAP_PROP_FPS)
 
+		if fps <= 0:
+			# Likely an LFS pointer or corrupted file
+			video_stream.release()
+			raise ValueError(f"CRITICAL: Could not read FPS from {args.face}. "
+							 "The file might be an LFS pointer (not downloaded) or corrupted. "
+							 "Check your Git LFS budget and ensure models are pulled.")
+
 		print('Reading video frames...')
 
 		full_frames = []
