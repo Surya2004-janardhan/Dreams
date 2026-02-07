@@ -1,116 +1,107 @@
-# 🎬 Ultimate AI Content Automation - 0/-
+# 🎬 Ultimate AI Content Automation (Dreams Pipeline)
 
-Welcome to the ultimate "Ghost Creator" pipeline. This isn't just a video generator; it's a fully automated digital twin that reads technical topics from a spreadsheet, writes high-velocity scripts, generates professional voiceovers, and literally **lip-syncs** a face to the audio before posting it to your socials.
+Welcome to a professional "Ghost Creator" pipeline. This system transforms technical topics from a Google Sheet into high-retention, fully lip-synced vertical videos (Reels/Shorts) using a multi-agent AI architecture.
 
-No cameras, no microphones, no manual editing. Just pure automation.
-
----
-
-## 🚀 The workflow (What actually happens?)
-
-Here’s the step-by-step journey of a single reel, from a cell in a Google Sheet to a viral post:
-
-1.  **The Idea**: The system wakes up (on a schedule or manual trigger) and grabs a technical topic from your **Google Sheet**.
-2.  **The Script**: It sends that topic to **Llama 3.3 (via Groq)**. It’s been prompted to be "Zero Fluff"—meaning it skips the "Hey guys" and jumps straight into high-density technical value.
-3.  **The Voicebox (Cloning)**: Instead of generic voices, we use **Voicebox**. Provide a 30-second `Base-audio.mp3` of your own voice, and the system **clones it** in real-time. The AI tech lead now literally speaks with *your* voice. (Gemini TTS remains as a rock-solid backup).
-4.  **The Lip-Sync (Wav2Lip)**: The magic part. The system takes your `Base-vedio.mp4` (the face) and the newly cloned audio. It uses a neural network to **re-animate the person's mouth** to match your voice word-for-word.
-5.  **The Design**: While the video encodes, the **GSAP-powered React app** (`reel-composer`) generates futuristic, Swiss-style typography and technical icons that pulsate in sync with the audio.
-6.  **The Merge**: Everything is flattened into a high-bitrate (50Mbps) vertical MP4. 
-7.  **The Distribution**: The final reel is uploaded simultaneously to **YouTube Shorts, Instagram, and Facebook**.
-8.  **The Report**: You get an email with the links to the posts or a detailed error report if something went wrong.
+**No cameras, no microphones, no manual editing. 24/7 autonomous production.**
 
 ---
 
-## 🚀 General Workflow: How it works
+## 🚀 The workflow (How it works)
 
-The system operates as a **master orchestration loop** (`main_automation.js`) that synchronizes four different AI engines and a browser-based visual compositor.
-
-1.  **Ingestion**: The "Brain" polls a Google Sheet for new technical ideas. It cross-references existing posts to ensure zero content duplication.
-2.  **Viral Scripting**: The topic is sent to **Gemini 1.5 Pro**. Our proprietary prompt strategy forces a "Viral Loop" structure:
-    *   **Pattern Interrupt Hook**: A negative or controversial opening (0-3s).
-    *   **The Gap**: Identifying a pain point or cognitive dissonance.
-    *   **Continuous Value**: Fast-paced technical insights (no "Intro/Outro" fluff).
-    *   **Infinite Loop Outro**: Ending on a phrase that links back to the video start.
-3.  **Voice Cloning (Voicebox)**: The script is synthesized using a 1.7B parameter **Qwen3-TTS** model. It clones your voice from `Base-audio.mp3` and uses "Instruct Tags" to add emotional peaks, varied pitch, and natural pauses.
-4.  **Neural Lip-Sync (Wav2Lip)**: Using a pre-trained GAN, the system re-animates the mouth of your `Base-vedio.mp4` actor. We use specific **vertical padding** to ensure the entire jaw and chin move in sync with the cloned audio.
-5.  **Visual Composition (Browser Engine)**: A headless Chromium instance (Playwright) boots a **React/GSAP** application. This engine renders high-fidelity animations, futuristic typography, and technical overlays that are frame-synced to the audio.
-6.  **Broadcast**: The final high-bitrate (50Mbps) master is stage-uploaded to Supabase, then simultaneously pushed to **YouTube Shorts, Instagram, and Facebook**.
+1.  **Ingestion**: The system polls a **Google Sheet** for new topics.
+2.  **Scripting**: **Gemini 2.0 Pro** generates a "Viral Loop" script (Pattern Interrupt → Technical Value → Infinite Loop).
+3.  **Voice Cloning**: **Voicebox (Qwen3-TTS)** clones your voice DNA from a 30s sample (`Base-audio.mp3`).
+4.  **Neural Lip-Sync**: **Wav2Lip** re-animates the mouth of your actor (`Base-vedio.mp4`) to match the cloned audio.
+5.  **Visual Composition**: A **React/GSAP** engine rendered via Playwright captures "Swiss-Style" technical overlays.
+6.  **Broadcast**: Videos are multi-streamed to **YouTube Shorts, Instagram, and Facebook**.
 
 ---
 
-## 🏗️ Technical Architecture
+## 🛠️ Global Setup & Installation
 
-### **The "Brain" (Node.js)**
-The orchestrator manages the state machine and bridges the JavaScript ecosystem with the Python AI modules. It handles error recovery, logging, and 24/7 scheduling via GitHub Actions.
+### 1. Prerequisites
+*   **Node.js**: v20 or higher
+*   **Python**: 3.10.x (Essential for Torch/Transformers compatibility)
+*   **FFMpeg**: Installed on system path
+*   **Hardware**: 16GB RAM minimum. NVIDIA GPU (8GB+ VRAM) highly recommended for local high-speed processing.
 
-### **The "Voice" (Voicebox Python)**
-*   **Model**: Qwen3-TTS (1.7B base).
-*   **STT Engine**: Whisper (for automatic reference transcription).
-*   **Feature**: Real-time voice cloning via few-shot learning (zeros out the need for fine-tuning).
+### 2. Local Installation
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd Ai-content-automation
 
-### **The "Face" (Wav2Lip Python)**
-*   **Engine**: GAN-based Lipsync (Wav2Lip model).
-*   **Detection**: S3FD face detector for frame-by-frame coordinate tracking.
-*   **Optimization**: Syllabic snapping (disabled smoothing) for fast-paced technical narration.
+# Install Node dependencies
+npm install
+cd reel-composer && npm install && cd ..
 
-### **The "Visuals" (React + GSAP)**
-*   **Compositor**: `reel-composer` (Vite, React, TypeScript).
-*   **Animation**: GSAP (GreenSock) for high-performance visual timing.
-*   **Capture**: Playwright + MediaRecorder API @ 60fps for "Master Grade" video capture.
+# Install Python dependencies
+pip install -r wav2lip/requirements.txt
+pip install -r voicebox/requirements.txt
+```
+
+### 3. External Asset Hosting (Crucial)
+To bypass GitHub LFS bandwidth limits, large models are hosted on **Google Drive**. 
+The system automatically downloads these during the GitHub Actions run:
+*   `wav2lip_gan.pth` (415MB) - The main lip-sync weights.
+*   `s3fd.pth` (90MB) - The face detector weights.
+*   `Base-vedio.mp4` (100MB+) - Your high-quality "Actor" footage.
 
 ---
 
-## 🏗️ Project Anatomy
+## 🤖 Automating with GitHub Actions
 
+The pipeline runs autonomously twice daily (8:00 AM & 8:00 PM IST). 
+
+### Required GitHub Secrets
+To make the automation work, you **MUST** add these into your GitHub Repository Secrets (`Settings > Secrets and variables > Actions`):
+
+| Secret Name | Description |
+| :--- | :--- |
+| `GEMINI_API_KEY` | Your Google AI Studio API Key |
+| `GOOGLE_SHEET_ID` | The ID of your content spreadsheet |
+| `GOOGLE_CREDENTIALS` | Your Google Service Account JSON |
+| `SUPABASE_URL` | For hosting video artifacts |
+| `SUPABASE_SERVICE_ROLE_KEY` | For cloud storage access |
+| `INSTAGRAM_ACCESS_TOKEN` | Meta Graph API token |
+| `YOUTUBE_REFRESH_TOKEN` | OAuth2 token for YouTube uploads |
+
+---
+
+## 🏗️ Project Structure
 ```text
-├── main_automation.js      # Orchestrator & State Machine
-├── wav2lip/                # Neural Lip-sync Engine (Python/PyTorch)
-├── voicebox/               # Voice Cloning Engine (Python/Transformers)
-├── reel-composer/          # Visual Compositor (React/GSAP)
-├── Base-vedio.mp4          # The "Actor" Asset
-├── Base-audio.mp3          # The "Voice" DNA Asset
-├── src/
-│   └── services/
-│       ├── voiceboxService.js  # Node <-> Python Voice Bridge
-│       ├── wav2lipService.js   # Node <-> Python Face Bridge
-│       ├── scriptService.js    # Gemini 1.5 Pro Viral Scripting
-│       └── socialMediaService.js # Multi-APIs (YT, Meta, Supabase)
-└── .github/workflows/      # 24/7 CI/CD Production Pipeline
+├── main_automation.js      # The Orchestrator (The "Brain")
+├── wav2lip/                # Neural Lip-sync Engine (Python)
+├── voicebox/               # Voice Cloning Engine (Python)
+├── reel-composer/          # Visual Compositor (React/GSAP/Vite)
+├── src/services/           # Logic Bridges (Gemini, Social API, FFmpeg)
+├── .github/workflows/      # CI/CD Production Configuration
+└── Base-vedio.mp4          # Your "Face" Asset (Downloadable via GDrive)
 ```
 
 ---
 
-## 🛠️ Installation & Setup
+## 📊 Performance & Optimization
 
-### 1. Environment
-*   Node.js v20+
-*   Python 3.10+ (with CUDA/MPS for acceleration)
-*   Playwright Browsers: `npx playwright install chromium --with-deps`
+| Runtime | Environment | Speed |
+| :--- | :--- | :--- |
+| **GPU (NVIDIA)** | Local PC | ~2 minutes / 60s video (Fast) |
+| **CPU (Free Tier)** | GitHub Actions | ~50 minutes / 60s video (Intensive) |
 
-### 2. AI Weight Download
-The system uses Git LFS to track heavy `.pth` and `.bin` models. Initial setup requires:
-```bash
-git lfs pull
-```
-
-### 3. Local Run
-```bash
-# 1. Start the visual compositor
-cd reel-composer && npm run dev
-
-# 2. Run the automation pipeline
-node main_automation.js
-```
+**Note**: In GitHub Actions, we use `spawn` with real-time streaming logs. You can monitor the `Wav2Lip Progress` bar directly in the workflow console to ensure the system is "alive."
 
 ---
 
-## 🤖 Continuous Production (Cloud)
+## 📜 Usage Instructions
 
-The pipeline is optimized for **GitHub Actions**:
-- **Schedule**: Twice daily (8:00 AM & 8:00 PM IST).
-- **Execution**: Headless Xvfb display on Ubuntu runners.
-- **Persistence**: Git LFS + Smart Caching for rapid 500MB AI model loading.
+### Local Development
+1.  Run `cd reel-composer && npm run dev` to start the graphics server.
+2.  Run `node main_automation.js` in the root folder.
+3.  Check the `final_video/` folder for the result.
+
+### Production
+Simply push your code to the `main` branch. The `.github/workflows/reels-automation.yml` will handle the environment setup, model downloads from Google Drive, and the full automation loop.
 
 ---
 
-*Built for creators who would rather build the future than manually edit it.*
+*Built for creators who value high-density technical value over manual manual effort.*
