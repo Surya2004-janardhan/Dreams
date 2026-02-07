@@ -6,6 +6,17 @@ Welcome to a professional "Ghost Creator" pipeline. This system transforms techn
 
 ---
 
+### **💡 In Plain English: How it works**
+1.  **Selection**: The system picks a topic from your Google Sheet.
+2.  **Writing**: An AI writes a short, viral script about that topic.
+3.  **Cloning**: Your voice is cloned so the video sounds exactly like you.
+4.  **Animating**: A "digital twin" video is created where your lips move to match the new voice.
+5.  **Posting**: The final video is automatically uploaded to Instagram, YouTube, and Facebook.
+
+*It’s essentially a 24/7 social media team that never sleeps.*
+
+---
+
 ## 🚀 The workflow (How it works)
 
 1.  **Ingestion**: The system polls a **Google Sheet** for new topics.
