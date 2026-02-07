@@ -32,8 +32,8 @@ temp/*
 !temp/README.md
 !temp/Video_Generation_of_Tech_Enthusiast.mp4
 !temp/github-explained-in-under-60-seconds-128k_opwYmIrL.mp3
-# checkpoints/*.pth
-# face_detection/detection/sfd/s3fd.pth
+checkpoints/*.pth
+face_detection/detection/sfd/s3fd.pth
 
 # Logs and databases
 *.log

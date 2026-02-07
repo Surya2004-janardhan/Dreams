@@ -19,25 +19,30 @@ jobs:
         with:
           lfs: false # Manual LFS fetching to enable caching
 
-      - name: Create LFS file list for cache key
-        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
-
-      - name: LFS Cache
-        uses: actions/cache@v4
-        id: lfs-cache
-        with:
-          path: .git/lfs
-          key: ${{ runner.os }}-lfs-${{ hashFiles('.lfs-assets-id') }}
-          restore-keys: |
-            ${{ runner.os }}-lfs-
-
-      - name: Git LFS Pull
-        if: steps.lfs-cache.outputs.cache-hit != 'true'
+      - name: Download Models and Base Video
         run: |
-          git lfs pull || echo "⚠️ LFS Pull failed (budget likely exceeded). Models may be missing if not already in cache."
-        
-      - name: Finalize LFS (Checkout files from cache)
-        run: git lfs checkout
+          mkdir -p wav2lip/checkpoints
+          mkdir -p wav2lip/face_detection/detection/sfd
+          
+          # Function to download from GDrive (handles confirmation for large files)
+          gdrive_download() {
+            FILE_ID=$1
+            OUTPUT=$2
+            echo "Downloading $OUTPUT (ID: $FILE_ID)..."
+            CONFIRM=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=$FILE_ID" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')
+            wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$CONFIRM&id=$FILE_ID" -O "$OUTPUT"
+            rm -rf /tmp/cookies.txt
+            if [ -s "$OUTPUT" ]; then
+              echo "✅ $OUTPUT downloaded successfully."
+            else
+              echo "❌ Failed to download $OUTPUT."
+              exit 1
+            fi
+          }
+
+          gdrive_download "1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr" "wav2lip/checkpoints/wav2lip_gan.pth"
+          gdrive_download "1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh" "wav2lip/face_detection/detection/sfd/s3fd.pth"
+          gdrive_download "1R18D4f09IiEYhudN2motD9bZ_AA5YzwP" "Base-vedio.mp4"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
