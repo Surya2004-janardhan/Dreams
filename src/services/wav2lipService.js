@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../config/logger');
@@ -44,11 +44,37 @@ async function syncLip(audioPath, facePath, outputPath) {
     logger.debug(`Command: ${command}`);
 
     return new Promise((resolve, reject) => {
-        const proc = exec(command, { cwd: wav2lipDir }, (error, stdout, stderr) => {
-            if (error) {
-                logger.error(`❌ Wav2Lip Sync Failed: ${error.message}`);
-                if (stderr) logger.error(`Stderr: ${stderr}`);
-                return reject(error);
+        // Use spawn for real-time streaming of logs
+        const args = [
+            inferenceScript,
+            '--checkpoint_path', checkpoint,
+            '--face', absFacePath,
+            '--audio', absAudioPath,
+            '--outfile', absOutputPath,
+            '--resize_factor', '2'
+        ];
+        
+        const proc = spawn('python', args, { cwd: wav2lipDir });
+
+        proc.stdout.on('data', (data) => {
+            const output = data.toString().trim();
+            if (output) logger.info(`[Wav2Lip] ${output}`);
+        });
+
+        proc.stderr.on('data', (data) => {
+            const output = data.toString().trim();
+            // TQDM often uses stderr, so we don't necessarily treat it as an error
+            if (output.includes('it/s') || output.includes('%')) {
+                logger.info(`[Wav2Lip Progress] ${output}`);
+            } else {
+                logger.debug(`[Wav2Lip Stderr] ${output}`);
+            }
+        });
+
+        proc.on('close', (code) => {
+            if (code !== 0) {
+                logger.error(`❌ Wav2Lip Sync Failed with exit code ${code}`);
+                return reject(new Error(`Wav2Lip failed with code ${code}`));
             }
 
             // VERIFICATION: Check if output file exists and is not 0 bytes
@@ -63,13 +89,6 @@ async function syncLip(audioPath, facePath, outputPath) {
 
             logger.info(`✅ Wav2Lip Sync Successful: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
             resolve(absOutputPath);
-        });
-
-        // Log progress/output if needed
-        proc.stdout.on('data', (data) => {
-            if (data.includes('it/s')) { // Simple progress indicator from tqdm
-                logger.debug(`Wav2Lip: ${data.trim()}`);
-            }
         });
     });
 }

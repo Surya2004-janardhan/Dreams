@@ -1,18 +1,17 @@
 
-import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType as Type } from "@google/generative-ai";
+import type { Schema } from "@google/generative-ai";
 import { GeneratedContent } from "@/types.ts";
 import { constructPrompt } from "@/src/utils/promptTemplates.ts";
 import { fileToBase64, pcmToWav, extractAudioBlob } from "@/src/utils/audioHelpers.ts";
 
 export const validateGeminiConnection = async (apiKey: string, modelName: string): Promise<boolean> => {
   if (!apiKey) return false;
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
   try {
+    const model = genAI.getGenerativeModel({ model: modelName });
     // Simple verification call
-    await ai.models.generateContent({
-      model: modelName,
-      contents: "Test connection.",
-    });
+    await model.generateContent("Test connection.");
     return true;
   } catch (e) {
     console.error("API Key Validation Failed:", e);
@@ -35,10 +34,9 @@ export const generateSRT = async (
   mediaFile: File | Blob,
   apiKey: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   // OPTIMIZATION: If input is a video, extract the audio track first.
-  // Sending pure Audio (WAV) to Gemini significantly improves timestamp accuracy compared to processing video frames.
   let fileToProcess = mediaFile;
   let mimeType = mediaFile.type;
 
@@ -56,7 +54,8 @@ export const generateSRT = async (
   const base64Data = await fileToBase64(fileToProcess);
 
   // Use Flash for speed and multimodal capability
-  const model = 'gemini-2.5-flash';
+  const modelName = 'gemini-2.0-flash';
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   // Define a strict schema for subtitles to prevent formatting hallucinations
   const subtitleSchema: Schema = {
@@ -73,36 +72,39 @@ export const generateSRT = async (
   };
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'audio/mp3',
-              data: base64Data
-            }
-          },
-          {
-            text: `You are a professional captioning assistant.
-            Extract the transcript from this audio with EXTREME TIMING PRECISION.
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/mp3',
+                data: base64Data
+              }
+            },
+            {
+              text: `You are a professional captioning assistant.
+              Extract the transcript from this audio with EXTREME TIMING PRECISION.
 
-            CRITICAL RULES:
-            1. Timestamps must align perfectly with the audio waveform.
-            2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
-            3. Do NOT hallucinate. Only transcribe what is clearly spoken.
-            4. If there is silence, do not create segments.
-            `
-          }
-        ]
-      },
-      config: {
+              CRITICAL RULES:
+              1. Timestamps must align perfectly with the audio waveform.
+              2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
+              3. Do NOT hallucinate. Only transcribe what is clearly spoken.
+              4. If there is silence, do not create segments.
+              `
+            }
+          ]
+        }
+      ],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: subtitleSchema
       }
     });
 
-    const segments = JSON.parse(response.text || "[]");
+    const response = await result.response;
+    const segments = JSON.parse(response.text() || "[]");
 
     // Convert JSON segments to SRT String
     let srtOutput = "";
@@ -128,28 +130,29 @@ export const generateTTS = async (
   voice: 'male' | 'female',
   apiKey: string
 ): Promise<Blob> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
   // Correct model for TTS
-  const model = 'gemini-2.5-flash-preview-tts';
+  const modelName = 'gemini-2.0-flash-preview-tts';
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   // Map to Gemini Voices
   // Female: Kore, Male: Charon
   const voiceName = voice === 'female' ? 'Kore' : 'Charon';
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts: [{ text }] },
-      config: {
-        responseModalities: [Modality.AUDIO],
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName }
           }
         }
-      }
+      } as any
     });
 
+    const response = await result.response;
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("No audio data returned");
 
@@ -182,7 +185,7 @@ export const generateReelContent = async (
     throw new Error("API Key is missing. Please enter it in the settings.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   const systemInstruction = `
     You are a world-class Motion Graphics Designer and Creative Technologist for high-retention social media video (Reels/TikTok).
@@ -290,22 +293,26 @@ export const generateReelContent = async (
     required: ["html", "layoutConfig"]
   };
 
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    systemInstruction: systemInstruction
+  });
+
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-      },
+      } as any,
     });
 
-    const result = JSON.parse(response.text || "{}");
+    const response = await result.response;
+    const resultJson = JSON.parse(response.text() || "{}");
 
     // --- REEL HELPER API INJECTION ---
     // Instead of just a shim, we inject a robust helper library to prevent common AI mistakes.
-    if (result.html) {
+    if (resultJson.html) {
       const reelHelperScript = `<script>
             /* REEL COMPOSER STANDARD LIBRARY */
             (function() {
@@ -335,11 +342,11 @@ export const generateReelContent = async (
         </script>`;
 
       // Inject immediately after <head> for earliest execution
-      result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
+      resultJson.html = resultJson.html.replace('<head>', '<head>' + reelHelperScript);
     }
     // -----------------------------
 
-    return result as GeneratedContent;
+    return resultJson as any as GeneratedContent;
   } catch (error: any) {
     console.error("Gemini Generation Error:", error);
     let message = "Failed to generate content.";

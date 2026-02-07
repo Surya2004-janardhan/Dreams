@@ -1,4 +1,4 @@
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
 
@@ -18,7 +18,8 @@ const generateSRT = async (audioPath, apiKey) => {
   
   const audioData = fs.readFileSync(audioPath);
   const base64Data = audioData.toString("base64");
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
   
   // Strict schema for subtitles
   const subtitleSchema = {
@@ -35,33 +36,36 @@ const generateSRT = async (audioPath, apiKey) => {
   };
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'audio/wav', // Assuming WAV from AudioService
-              data: base64Data
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'audio/wav', // Assuming WAV from AudioService
+                data: base64Data
+              }
+            },
+            {
+              text: `You are a professional captioning assistant. Extract the transcript with EXTREME TIMING PRECISION.
+              CRITICAL RULES:
+              1. Timestamps must align perfectly with the audio.
+              2. Break text into naturally spoken short chunks (max 3-5 words).
+              3. Do NOT hallucinate.
+              4. If silence, do not create segments.`
             }
-          },
-          {
-            text: `You are a professional captioning assistant. Extract the transcript with EXTREME TIMING PRECISION.
-            CRITICAL RULES:
-            1. Timestamps must align perfectly with the audio.
-            2. Break text into naturally spoken short chunks (max 3-5 words).
-            3. Do NOT hallucinate.
-            4. If silence, do not create segments.`
-          }
-        ]
-      },
-      config: {
+          ]
+        }
+      ],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: subtitleSchema
       }
     });
 
-    let jsonString = response.text || "[]";
+    const response = await result.response;
+    let jsonString = response.text() || "[]";
     if (!response.text && response.candidates && response.candidates[0].content && response.candidates[0].content.parts) {
         jsonString = response.candidates[0].content.parts[0].text;
     }
@@ -154,19 +158,19 @@ const generateReelContent = async (
   };
 
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
       },
     });
 
-    const result = JSON.parse(response.text || "{}");
+    const response = await result.response;
+    const resultJson = JSON.parse(response.text() || "{}");
     
     // Inject ReelHelper
-    if (result.html) {
+    if (resultJson.html) {
          const reelHelperScript = `<script>
             (function() {
                 if (typeof HTMLCollection !== 'undefined' && !HTMLCollection.prototype.forEach) {
@@ -186,10 +190,10 @@ const generateReelContent = async (
                 };
             })();
         </script>`;
-        result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
+        resultJson.html = resultJson.html.replace('<head>', '<head>' + reelHelperScript);
     }
 
-    return result;
+    return resultJson;
   } catch (error) {
     console.error("Gemini Generation Error:", error);
     throw error;

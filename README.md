@@ -21,75 +21,96 @@ Here’s the step-by-step journey of a single reel, from a cell in a Google Shee
 
 ---
 
+## 🚀 General Workflow: How it works
+
+The system operates as a **master orchestration loop** (`main_automation.js`) that synchronizes four different AI engines and a browser-based visual compositor.
+
+1.  **Ingestion**: The "Brain" polls a Google Sheet for new technical ideas. It cross-references existing posts to ensure zero content duplication.
+2.  **Viral Scripting**: The topic is sent to **Gemini 1.5 Pro**. Our proprietary prompt strategy forces a "Viral Loop" structure:
+    *   **Pattern Interrupt Hook**: A negative or controversial opening (0-3s).
+    *   **The Gap**: Identifying a pain point or cognitive dissonance.
+    *   **Continuous Value**: Fast-paced technical insights (no "Intro/Outro" fluff).
+    *   **Infinite Loop Outro**: Ending on a phrase that links back to the video start.
+3.  **Voice Cloning (Voicebox)**: The script is synthesized using a 1.7B parameter **Qwen3-TTS** model. It clones your voice from `Base-audio.mp3` and uses "Instruct Tags" to add emotional peaks, varied pitch, and natural pauses.
+4.  **Neural Lip-Sync (Wav2Lip)**: Using a pre-trained GAN, the system re-animates the mouth of your `Base-vedio.mp4` actor. We use specific **vertical padding** to ensure the entire jaw and chin move in sync with the cloned audio.
+5.  **Visual Composition (Browser Engine)**: A headless Chromium instance (Playwright) boots a **React/GSAP** application. This engine renders high-fidelity animations, futuristic typography, and technical overlays that are frame-synced to the audio.
+6.  **Broadcast**: The final high-bitrate (50Mbps) master is stage-uploaded to Supabase, then simultaneously pushed to **YouTube Shorts, Instagram, and Facebook**.
+
+---
+
+## 🏗️ Technical Architecture
+
+### **The "Brain" (Node.js)**
+The orchestrator manages the state machine and bridges the JavaScript ecosystem with the Python AI modules. It handles error recovery, logging, and 24/7 scheduling via GitHub Actions.
+
+### **The "Voice" (Voicebox Python)**
+*   **Model**: Qwen3-TTS (1.7B base).
+*   **STT Engine**: Whisper (for automatic reference transcription).
+*   **Feature**: Real-time voice cloning via few-shot learning (zeros out the need for fine-tuning).
+
+### **The "Face" (Wav2Lip Python)**
+*   **Engine**: GAN-based Lipsync (Wav2Lip model).
+*   **Detection**: S3FD face detector for frame-by-frame coordinate tracking.
+*   **Optimization**: Syllabic snapping (disabled smoothing) for fast-paced technical narration.
+
+### **The "Visuals" (React + GSAP)**
+*   **Compositor**: `reel-composer` (Vite, React, TypeScript).
+*   **Animation**: GSAP (GreenSock) for high-performance visual timing.
+*   **Capture**: Playwright + MediaRecorder API @ 60fps for "Master Grade" video capture.
+
+---
+
 ## 🏗️ Project Anatomy
 
 ```text
-├── main_automation.js      # The "Brain" - orchestrates the entire pipeline
-├── wav2lip/                # AI Lip-sync engine (Python based)
-├── voicebox/               # AI Voice Cloning engine (Python based)
-├── reel-composer/          # The "Face" - React/GSAP app for visual overlays
-├── Base-vedio.mp4          # The "Actor" - The face used for re-animation
-├── Base-audio.mp3          # The "Source" - The voice sample used for cloning
+├── main_automation.js      # Orchestrator & State Machine
+├── wav2lip/                # Neural Lip-sync Engine (Python/PyTorch)
+├── voicebox/               # Voice Cloning Engine (Python/Transformers)
+├── reel-composer/          # Visual Compositor (React/GSAP)
+├── Base-vedio.mp4          # The "Actor" Asset
+├── Base-audio.mp3          # The "Voice" DNA Asset
 ├── src/
-│   ├── services/
-│   │   ├── voiceboxService.js  # Audio cloning bridge (Python <-> Node)
-│   │   ├── wav2lipService.js   # Lip-sync bridge (Python <-> Node)
-│   │   ├── scriptService.js    # Script writing via Groq (Llama 3.3)
-│   │   └── socialMediaService.js # The multi-platform uploader
-└── .github/workflows/      # The "24/7 Producer" - Scheduled GitHub Actions
+│   └── services/
+│       ├── voiceboxService.js  # Node <-> Python Voice Bridge
+│       ├── wav2lipService.js   # Node <-> Python Face Bridge
+│       ├── scriptService.js    # Gemini 1.5 Pro Viral Scripting
+│       └── socialMediaService.js # Multi-APIs (YT, Meta, Supabase)
+└── .github/workflows/      # 24/7 CI/CD Production Pipeline
 ```
 
 ---
 
-## 🛠️ Setting it up (Locally)
+## 🛠️ Installation & Setup
 
-If you want to run this on your own machine:
+### 1. Environment
+*   Node.js v20+
+*   Python 3.10+ (with CUDA/MPS for acceleration)
+*   Playwright Browsers: `npx playwright install chromium --with-deps`
 
-### 1. The Basics
+### 2. AI Weight Download
+The system uses Git LFS to track heavy `.pth` and `.bin` models. Initial setup requires:
 ```bash
-npm install
-npx playwright install chromium --with-deps
+git lfs pull
 ```
 
-### 2. The AI (Wav2Lip)
-You'll need Python 3.10 and the AI weights:
+### 3. Local Run
 ```bash
-cd wav2lip
-pip install -r requirements.txt
-# The system will automatically download the heavy model weights on the first run!
-```
-
-### 3. Your Keys
-Grab the `.env.example` (or create a `.env`) and fill in your API keys for Groq, Gemini, AssemblyAI, and your social tokens.
-
-### 4. Let it rip
-```bash
-# Start the visualizer
+# 1. Start the visual compositor
 cd reel-composer && npm run dev
 
-# In another terminal, run the brain
+# 2. Run the automation pipeline
 node main_automation.js
 ```
 
 ---
 
-## 🤖 Cloud Automation (GitHub Actions)
+## 🤖 Continuous Production (Cloud)
 
-The system works autonomously on GitHub's infrastructure:
-- **Zero-Manual Trigger**: No longer runs on every push. It survives only on the **Main Branch**.
-- **Scheduled Hits**: Hardcoded to post fresh reels twice daily:
-    - **8:00 AM IST** (Morning Prime)
-    - **8:00 PM IST** (Evening Prime)
-- **LFS Optimized**: High-resolution models and base assets are managed via Git LFS for uncorrupted cloud pulls.
+The pipeline is optimized for **GitHub Actions**:
+- **Schedule**: Twice daily (8:00 AM & 8:00 PM IST).
+- **Execution**: Headless Xvfb display on Ubuntu runners.
+- **Persistence**: Git LFS + Smart Caching for rapid 500MB AI model loading.
 
 ---
 
-## 🧠 Strategic Content Philosophy
-
-- **High Density**: 150-180 words in 55 seconds. No wasted breath.
-- **Visual Rhythm**: Visuals move *with* the speaker's cadence.
-- **Dark Mode Aesthetic**: Deep blues, neons, and sharp typography for a premium "developer" feel.
-
----
-
-*Built with ❤️ for technical creators who would rather code than edit videos.*
+*Built for creators who would rather build the future than manually edit it.*

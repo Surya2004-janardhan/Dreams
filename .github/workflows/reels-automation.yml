@@ -11,13 +11,39 @@ on:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false # Manual LFS fetching to enable caching
+
+      - name: Install gdown
+        run: pip install gdown
+
+      - name: Download Models and Base Video
+        run: |
+          mkdir -p wav2lip/checkpoints
+          mkdir -p wav2lip/face_detection/detection/sfd
+          
+          # Delete existing pointer files to ensure fresh download
+          rm -f wav2lip/checkpoints/wav2lip_gan.pth
+          rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
+          rm -f Base-vedio.mp4
+
+          # Download using gdown
+          gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
+          gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
+          gdown 1R18D4f09IiEYhudN2motD9bZ_AA5YzwP -O Base-vedio.mp4
+
+      - name: Verify Downloads
+        run: |
+          ls -lh wav2lip/checkpoints/wav2lip_gan.pth
+          ls -lh wav2lip/face_detection/detection/sfd/s3fd.pth
+          ls -lh Base-vedio.mp4
+          # Exit if files are suspiciously small (LFS pointers are ~1KB)
+          [ $(stat -c%s "Base-vedio.mp4") -gt 1000000 ] || { echo "❌ Base-vedio.mp4 is too small!"; exit 1; }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,8 +77,22 @@ jobs:
           # Specific addition from voicebox README if needed
           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json', 'reel-composer/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright Dependencies (if cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
 
       - name: Start Frontend App
