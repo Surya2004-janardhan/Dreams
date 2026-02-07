@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const logger = require('../config/logger');
@@ -38,16 +38,32 @@ class VoiceboxService {
         logger.debug(`Command: ${command}`);
 
         return new Promise((resolve, reject) => {
-            exec(command, { cwd: this.voiceboxDir }, (error, stdout, stderr) => {
-                if (error) {
-                    logger.error(`❌ Voicebox Synthesis Failed: ${error.message}`);
-                    if (stderr) logger.error(`Stderr: ${stderr}`);
-                    return reject(error);
-                }
+            const args = [
+                this.pythonScript,
+                '--text', text,
+                '--audio', absRefAudioPath,
+                '--output', absOutputPath
+            ];
+            if (refText) {
+                args.push('--ref_text', refText);
+            }
 
-                if (stdout.includes('ERROR:')) {
-                    logger.error(`❌ Voicebox internal error: ${stdout}`);
-                    return reject(new Error('Voicebox internal processing error'));
+            const proc = spawn('python', args, { cwd: this.voiceboxDir });
+
+            proc.stdout.on('data', (data) => {
+                const output = data.toString().trim();
+                if (output) logger.info(`[Voicebox] ${output}`);
+            });
+
+            proc.stderr.on('data', (data) => {
+                const output = data.toString().trim();
+                if (output) logger.debug(`[Voicebox Stderr] ${output}`);
+            });
+
+            proc.on('close', (code) => {
+                if (code !== 0) {
+                    logger.error(`❌ Voicebox Synthesis Failed with code ${code}`);
+                    return reject(new Error(`Voicebox failed with code ${code}`));
                 }
 
                 if (!fs.existsSync(absOutputPath)) {
