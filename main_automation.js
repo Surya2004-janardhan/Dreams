@@ -71,9 +71,9 @@ async function main() {
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                // Generate audio with professional technical educator instructions
-                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
-                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+                // Generate audio with "Elite" viral creator instructions
+                const VIRAL_VOICE_INSTRUCT = "Deliver this with high-octane energy, vary pitch for technical keywords, and use natural pauses.";
+                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VIRAL_VOICE_INSTRUCT);
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
@@ -107,7 +107,8 @@ async function main() {
         }
 
         logger.info(`🎬 Using Root Base Video: ${path.basename(WAV2LIP_BASE)}`);
-        await syncLip(audioPath, WAV2LIP_BASE, INIT_MERGE);
+        // Use "Elite" Sync Settings: bottom padding for chin + no smoothing for snapping
+        await syncLip(audioPath, WAV2LIP_BASE, INIT_MERGE, { pads: [0, 20, 0, 0], nosmooth: true });
         logger.info(`✅ Step 3 Complete: Wav2Lip sync success in ${((Date.now() - step3Start)/1000).toFixed(2)}s`);
 
 
