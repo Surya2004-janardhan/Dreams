@@ -49,6 +49,8 @@ parser.add_argument('--rotate', default=False, action='store_true',
 
 parser.add_argument('--nosmooth', default=False, action='store_true',
 					help='Prevent smoothing face detections over a short temporal window')
+parser.add_argument('--face_cache', type=str, default='',
+					help='Path to precomputed face boxes (.npy file)')
 
 args = parser.parse_args()
 args.img_size = 96
@@ -71,18 +73,26 @@ def face_detect(images):
 
 	batch_size = args.face_det_batch_size
 	
-	while 1:
-		predictions = []
-		try:
-			for i in tqdm(range(0, len(images), batch_size)):
-				predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
-		except RuntimeError:
-			if batch_size == 1: 
-				raise RuntimeError('Image too big to run face detection on GPU. Please use the --resize_factor argument')
-			batch_size //= 2
-			print('Recovering from OOM error; New batch size: {}'.format(batch_size))
-			continue
-		break
+	if args.face_cache and os.path.exists(args.face_cache):
+		print(f'Loading face boxes from cache: {args.face_cache}')
+		predictions = np.load(args.face_cache)
+		if len(predictions) != len(images):
+			print(f'Warning: Cache length ({len(predictions)}) does not match video length ({len(images)}). Falling back to detection.')
+			args.face_cache = "" # Reset so it runs detector
+	
+	if not args.face_cache:
+		while 1:
+			predictions = []
+			try:
+				for i in tqdm(range(0, len(images), batch_size)):
+					predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
+			except RuntimeError:
+				if batch_size == 1: 
+					raise RuntimeError('Image too big to run face detection on GPU. Please use the --resize_factor argument')
+				batch_size //= 2
+				print('Recovering from OOM error; New batch size: {}'.format(batch_size))
+				continue
+			break
 
 	results = []
 	pady1, pady2, padx1, padx2 = args.pads
