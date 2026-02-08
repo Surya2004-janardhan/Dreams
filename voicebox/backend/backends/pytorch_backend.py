@@ -26,12 +26,7 @@ class PyTorchTTSBackend:
         self._current_model_size = None
     
     def _get_device(self) -> str:
-        """Get the best available device."""
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            # MPS can have issues, use CPU for stability
-            return "cpu"
+        """Forced to CPU for stability."""
         return "cpu"
     
     def is_loaded(self) -> bool:

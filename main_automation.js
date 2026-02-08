@@ -287,12 +287,21 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
-        const bgmSrc = path.resolve('bgm.mp3');
+        // Resolve BGM source (supporting multiple formats)
+        const bgmExtensions = ['.mp3', '.m4a', '.wav'];
+        let bgmSrc = null;
+        for (const ext of bgmExtensions) {
+            const potentialPath = path.resolve(`bgm${ext}`);
+            if (fs.existsSync(potentialPath)) {
+                bgmSrc = potentialPath;
+                break;
+            }
+        }
 
         console.log("📽️ Final Remuxing (audio offset sync + BGM mixing + high-compatibility settings)...");
         
         let command = ffmpeg(raw).input(audioSrc);
-        let hasBgm = fs.existsSync(bgmSrc);
+        let hasBgm = !!bgmSrc;
         
         if (hasBgm) {
             command = command.input(bgmSrc).inputOptions(['-stream_loop -1']);
