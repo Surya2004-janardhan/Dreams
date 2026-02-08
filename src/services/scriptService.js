@@ -21,18 +21,22 @@ const generateScript = async (topic, description = "") => {
     3. NO LABELS: Do not include [Hook], [Gap], etc.
     4. ONLY SCRIPT CONTENT: The output must contain ONLY the words to be spoken.
 
+    PROSODY & FLOW (CRITICAL FOR HUMAN VOICE):
+    - Use "..." for subtle thought-pauses.
+    - Use "—" (dashes) for mid-sentence pivots.
+    - CAPITALIZE words that need technical emphasis (e.g. "But the REAL secret...").
+    - Break the linear flow. Start with a punch, then a slow realization, then a fast-paced solution.
+
     VIRAL STRATEGY:
-    1. THE HOOK (0-3s): Start with a sharp technical contradiction or a "Stop doing X" statement.
-    2. THE GAP (3-10s): Explain why the standard approach is failing.
-    3. THE CORE VALUE (10-45s): High-density technical insight. Use one continuous flow. Use "Which means..." or "Effectively..." as connectors.
-    4. THE INFINITE LOOP (45-55s): End with a phrase that loops perfectly back to the first word of the hook.
+    1. THE HOOK (0-3s): A sharp, non-linear technical contradiction.
+    2. THE GAP (3-10s): The slow "realization" of why traditional methods fail.
+    3. THE CORE VALUE (10-45s): High-density technical insight with excited peaks and deliberate pauses.
+    4. THE INFINITE LOOP (45-55s): A perfectly synced closing that starts the video over.
 
     TONE & STYLE:
-    - Voice of a high-level technical educator. Clear, punchy, authoritative.
-    - No filler. No "Hey guys." No generic hype.
-    - Format as a single paragraph of spoken text.
-
-    TOTAL WORD COUNT: Strictly between 100 and 120 words.
+    - Voice of a "Real Person" who is obsessed with tech. Not a broadcast voice. 
+    - Use natural connectors like "Look," "The thing is," "Which basically means."
+    - Total WORD COUNT: Strictly between 100 and 120 words.
   `;
 
   try {
@@ -52,8 +56,8 @@ const generateScript = async (topic, description = "") => {
 
     script = filteredLines.join(' ').trim();
     
-    // Clean up markdown markers and bracketed text
-    script = script.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+    // Clean up markdown markers but PRESERVE punctuation and capitalization for prosody
+    script = script.replace(/\[.*?\]/g, '').replace(/\*/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
 
     const wordCount = script.split(/\s+/).filter(w => w.length > 0).length;
     logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
