@@ -11,7 +11,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
  */
 const generateScript = async (topic, description = "") => {
   const prompt = `
-    TASK: Write a 55-second technical educational script for a reel.
+    TASK: Write a 65-second technical educational script for a reel.
     TOPIC: ${topic}
     ${description ? `CONTEXT: ${description}` : ""}
 

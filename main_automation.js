@@ -304,13 +304,15 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
         if (hasBgm) {
             filterComplex.push({
+                filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
+            });
+            filterComplex.push({
                 filter: 'amix',
-                options: { inputs: 2, weights: '1 0.2' }, 
-                inputs: ['delayed', '2:a'],
+                options: { inputs: 2, dropout_transition: 0, normalize: 0 }, 
+                inputs: ['delayed', 'lowBgm'],
                 outputs: 'mixed'
             });
         } else {
-            // If no BGM, just use the delayed audio
             filterComplex[0].outputs = 'mixed';
         }
 
