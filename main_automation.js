@@ -71,8 +71,9 @@ async function main() {
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                // Generate audio using our local Voicebox Service
-                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO);
+                // Generate audio with professional technical educator instructions
+                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
+                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);

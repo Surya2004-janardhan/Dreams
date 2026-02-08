@@ -17,10 +17,11 @@ class VoiceboxService {
      * @param {string} text - The text to synthesize.
      * @param {string} refAudioPath - Path to the reference audio sample (e.g., Base-audio.mp3).
      * @param {string} outputPath - Path to save the generated audio.
-     * @param {string} [refText] - Optional transcript of the reference audio.
+     * @param {string} [instruct] - Optional style instruction.
+     * @param {number} [speed] - Speech speed ratio (default: 0.9).
      * @returns {Promise<string>} - Path to the generated audio file.
      */
-    async generateClonedVoice(text, refAudioPath, outputPath, refText = null) {
+    async generateClonedVoice(text, refAudioPath, outputPath, refText = null, instruct = null, speed = 0.9) {
         if (!fs.existsSync(this.voiceboxDir)) {
             throw new Error(`Voicebox directory not found at: ${this.voiceboxDir}`);
         }
@@ -46,6 +47,12 @@ class VoiceboxService {
             ];
             if (refText) {
                 args.push('--ref_text', refText);
+            }
+            if (instruct) {
+                args.push('--instruct', instruct);
+            }
+            if (speed) {
+                args.push('--speed', speed.toString());
             }
 
             const proc = spawn('python', args, { cwd: this.voiceboxDir });
