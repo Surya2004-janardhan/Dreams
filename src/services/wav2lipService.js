@@ -10,7 +10,7 @@ const logger = require('../config/logger');
  * @param {string} outputPath - Path to save the synced video
  * @returns {Promise<string>} - Path to the generated video
  */
-async function syncLip(audioPath, facePath, outputPath) {
+async function syncLip(audioPath, facePath, outputPath, options = {}) {
     // Resolve absolute paths
     const absAudioPath = path.resolve(audioPath);
     const absFacePath = path.resolve(facePath);
@@ -19,6 +19,10 @@ async function syncLip(audioPath, facePath, outputPath) {
     const wav2lipDir = path.resolve(__dirname, '../../wav2lip');
     const checkpoint = path.join(wav2lipDir, 'checkpoints/wav2lip_gan.pth');
     const inferenceScript = path.join(wav2lipDir, 'inference.py');
+
+    // Use "Elite" Sync Settings: bottom padding for chin + no smoothing for snapping
+    const pads = options.pads || [0, 20, 0, 0]; // Extra bottom padding for chin movement
+    const nosmooth = options.nosmooth !== undefined ? options.nosmooth : true; // Default to snap for tech content
 
     // Ensure wav2lip directory exists
     if (!fs.existsSync(wav2lipDir)) {
@@ -32,16 +36,7 @@ async function syncLip(audioPath, facePath, outputPath) {
         fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    // Command to run inference
-    const command = `python "${inferenceScript}" ` +
-                    `--checkpoint_path "${checkpoint}" ` +
-                    `--face "${absFacePath}" ` +
-                    `--audio "${absAudioPath}" ` +
-                    `--outfile "${absOutputPath}" ` +
-                    `--resize_factor 2`;
-
     logger.info(`👄 Starting Wav2Lip Sync...`);
-    logger.debug(`Command: ${command}`);
 
     return new Promise((resolve, reject) => {
         // Use spawn for real-time streaming of logs
@@ -51,8 +46,13 @@ async function syncLip(audioPath, facePath, outputPath) {
             '--face', absFacePath,
             '--audio', absAudioPath,
             '--outfile', absOutputPath,
-            '--resize_factor', '2'
+            '--resize_factor', '2',
+            '--pads', ...pads.map(String)
         ];
+
+        if (nosmooth) {
+            args.push('--nosmooth');
+        }
         
         const proc = spawn('python', args, { cwd: wav2lipDir });
 
