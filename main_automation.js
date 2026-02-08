@@ -286,32 +286,54 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
+        const bgmSrc = path.resolve('bgm.mp3');
 
-        console.log("📽️ Final Remuxing (audio offset sync + high-compatibility settings)...");
-        await new Promise((res, rej) => {
-            ffmpeg(raw).input(audioSrc)
-                .complexFilter([{ filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'd' }])
-                .outputOptions([
-                    '-y', 
-                    '-c:v libx264', 
-                    '-pix_fmt yuv420p',      // Crucial for Instagram/Facebook
-                    '-preset fast', 
-                    '-crf 22', 
-                    '-profile:v main',       // Main profile is more compatible
-                    '-level:v 4.1',
-                    '-r 30',                 // Force constant 30fps to avoid VFR issues
-                    '-c:a aac', 
-                    '-ar 44100',             // Standard audio rate
-                    '-map 0:v:0', 
-                    '-map [d]', 
-                    '-shortest', 
-                    '-movflags +faststart'
-                ])
-                .output(out)
-                .on('end', () => { masterPath = out; res(); })
-                .on('error', rej)
-                .run();
-        });
+        console.log("📽️ Final Remuxing (audio offset sync + BGM mixing + high-compatibility settings)...");
+        
+        let command = ffmpeg(raw).input(audioSrc);
+        let hasBgm = fs.existsSync(bgmSrc);
+        
+        if (hasBgm) {
+            command = command.input(bgmSrc).inputOptions(['-stream_loop -1']);
+        }
+
+        const filterComplex = [
+            { filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'delayed' }
+        ];
+
+        if (hasBgm) {
+            filterComplex.push({
+                filter: 'amix',
+                options: { inputs: 2, weights: '1 0.2' }, 
+                inputs: ['delayed', '2:a'],
+                outputs: 'mixed'
+            });
+        } else {
+            // If no BGM, just use the delayed audio
+            filterComplex[0].outputs = 'mixed';
+        }
+
+        command.complexFilter(filterComplex)
+            .outputOptions([
+                '-y', 
+                '-c:v libx264', 
+                '-pix_fmt yuv420p',
+                '-preset fast', 
+                '-crf 22', 
+                '-profile:v main',
+                '-level:v 4.1',
+                '-r 30',
+                '-c:a aac', 
+                '-ar 44100',
+                '-map 0:v:0', 
+                '-map [mixed]', 
+                '-shortest', 
+                '-movflags +faststart'
+            ])
+            .output(out)
+            .on('end', () => { masterPath = out; res(); })
+            .on('error', rej)
+            .run();
         if (fs.existsSync(raw)) fs.unlinkSync(raw);
         complete = true;
     });
