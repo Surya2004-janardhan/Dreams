@@ -17,11 +17,8 @@ def get_smoothened_boxes(boxes, T):
     return boxes
 
 def precompute_face_boxes(video_path, output_path, batch_size=4, nosmooth=False):
-    # Forced to CPU for stability as requested by user for local runs
-    # But will use GPU if we ever flip this back
+    # Determine device
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    # For now, let's respect the user's wish for "normal cpu itself" local
-    # We can detect if we are in GitHub Actions and use GPU there
     if os.environ.get('GITHUB_ACTIONS') != 'true':
         device = 'cpu'
         
@@ -31,58 +28,57 @@ def precompute_face_boxes(video_path, output_path, batch_size=4, nosmooth=False)
     detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
                                             flip_input=False, device=device)
     
-    # Load video
+    # Open video stream
     video_stream = cv2.VideoCapture(video_path)
     if not video_stream.isOpened():
         print(f"Error: Could not open video {video_path}")
         return
 
-    frames = []
-    fps = video_stream.get(cv2.CAP_PROP_FPS)
-    if fps == 0:
-        print("Error: Invalid video file (FPS is 0)")
+    total_frames = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f'Total frames to process: {total_frames}. Memory-efficient streaming enabled.')
+
+    boxes = []
+    
+    # Process in batches without storing the whole video in RAM
+    pbar = tqdm(total=total_frames)
+    
+    try:
+        while True:
+            batch_frames = []
+            for _ in range(batch_size):
+                still_reading, frame = video_stream.read()
+                if not still_reading:
+                    break
+                # Convert BGR to RGB for detector
+                batch_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            
+            if not batch_frames:
+                break
+                
+            # Run detection on current batch
+            preds = detector.get_detections_for_batch(np.array(batch_frames))
+            
+            # Process predictions
+            for rect in preds:
+                if rect is None:
+                    if len(boxes) > 0:
+                        boxes.append(boxes[-1])
+                    else:
+                        boxes.append([0, 0, 100, 100])
+                else:
+                    boxes.append([rect[0], rect[1], rect[2], rect[3]])
+            
+            pbar.update(len(batch_frames))
+    except Exception as e:
+        print(f"Error during detection: {e}")
+    finally:
+        video_stream.release()
+        pbar.close()
+
+    if not boxes:
+        print("Error: No faces detected or video empty.")
         return
 
-    while True:
-        still_reading, frame = video_stream.read()
-        if not still_reading:
-            break
-        # FaceAlignment expects RGB
-        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    video_stream.release()
-
-    total_frames = len(frames)
-    print(f'Total frames: {total_frames}. Detecting faces...')
-    
-    # Batch processing for detection
-    predictions = []
-    while 1:
-        predictions = []
-        try:
-            for i in tqdm(range(0, total_frames, batch_size)):
-                batch = np.array(frames[i:i + batch_size])
-                preds = detector.get_detections_for_batch(batch)
-                predictions.extend(preds)
-        except RuntimeError as e:
-            if "out of memory" in str(e).lower() and batch_size > 1:
-                batch_size //= 2
-                print(f'Memory Pressure; auto-reducing batch size to: {batch_size}')
-                continue
-            raise e
-        break
-    
-    # Convert predictions (rects) to box coordinates [x1, y1, x2, y2]
-    boxes = []
-    for rect in predictions:
-        if rect is None:
-            if len(boxes) > 0:
-                boxes.append(boxes[-1])
-            else:
-                print("Warning: Initial frame had no face. Defaulting to center box.")
-                boxes.append([0, 0, 100, 100])
-        else:
-            boxes.append([rect[0], rect[1], rect[2], rect[3]])
-            
     boxes = np.array(boxes)
     if not nosmooth:
         print("Applying temporal smoothing to face boxes...")

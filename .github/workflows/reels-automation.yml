@@ -87,8 +87,8 @@ jobs:
       - name: Pre-compute Face Boxes (if cache miss)
         if: steps.face-cache.outputs.cache-hit != 'true'
         run: |
-          # Use a batch size of 16 for Actions runners to maximize CPU/Memory efficiency
-          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 16
+          # Use a batch size of 8 for stable memory usage on Actions runners
+          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 8
 
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
