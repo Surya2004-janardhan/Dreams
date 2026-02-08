@@ -24,6 +24,10 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
     const pads = options.pads || [0, 20, 0, 0]; // Extra bottom padding for chin movement
     const nosmooth = options.nosmooth !== undefined ? options.nosmooth : true; // Default to snap for tech content
 
+    // Check for pre-computed face cache to save time
+    const cachePath = path.resolve('Base-vedio.npy');
+    const hasCache = fs.existsSync(cachePath);
+
     // Ensure wav2lip directory exists
     if (!fs.existsSync(wav2lipDir)) {
         throw new Error(`Wav2Lip directory not found at ${wav2lipDir}`);
@@ -36,7 +40,7 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
         fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    logger.info(`👄 Starting Wav2Lip Sync...`);
+    logger.info(`👄 Starting Wav2Lip Sync (Safe Mode)...`);
 
     return new Promise((resolve, reject) => {
         // Use spawn for real-time streaming of logs
@@ -52,6 +56,11 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
 
         if (nosmooth) {
             args.push('--nosmooth');
+        }
+
+        if (hasCache) {
+            logger.info(`🚀 SPEED BOOST: Using pre-computed face boxes from ${path.basename(cachePath)}`);
+            args.push('--face_cache', cachePath);
         }
         
         const proc = spawn('python', args, { cwd: wav2lipDir });

@@ -164,7 +164,12 @@ def datagen(frames, mels):
 		yield img_batch, mel_batch, frame_batch, coords_batch
 
 mel_step_size = 16
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# Force CPU for local runs to prevent system crashes (Safe Mode)
+# Use GPU only in GitHub Actions where hardware is isolated
+device = 'cpu'
+if os.environ.get('GITHUB_ACTIONS') == 'true' and torch.cuda.is_available():
+    device = 'cuda'
+
 print('Using {} for inference.'.format(device))
 
 def _load(checkpoint_path):

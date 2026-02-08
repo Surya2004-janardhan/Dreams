@@ -77,6 +77,19 @@ jobs:
           # Specific addition from voicebox README if needed
           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
+      - name: Cache Face Detection Bounding Boxes
+        uses: actions/cache@v4
+        id: face-cache
+        with:
+          path: Base-vedio.npy
+          key: ${{ runner.os }}-face-boxes-${{ hashFiles('Base-vedio.mp4') }}
+
+      - name: Pre-compute Face Boxes (if cache miss)
+        if: steps.face-cache.outputs.cache-hit != 'true'
+        run: |
+          # Use a batch size of 16 for Actions runners to maximize CPU/Memory efficiency
+          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 16
+
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         id: playwright-cache
