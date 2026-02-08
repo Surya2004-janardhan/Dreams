@@ -6,7 +6,7 @@ Welcome to a professional "Ghost Creator" pipeline. This system transforms techn
 
 ---
 
-### **💡 In Plain English: How it works**
+### **💡How it works: General**
 1.  **Selection**: The system picks a topic from your Google Sheet.
 2.  **Writing**: An AI writes a short, viral script about that topic.
 3.  **Cloning**: Your voice is cloned so the video sounds exactly like you.
@@ -116,3 +116,4 @@ Simply push your code to the `main` branch. The `.github/workflows/reels-automat
 ---
 
 *Built for creators who value high-density technical value over manual manual effort.*
+
