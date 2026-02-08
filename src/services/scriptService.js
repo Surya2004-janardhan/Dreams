@@ -11,23 +11,28 @@ const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
  */
 const generateScript = async (topic, description = "") => {
   const prompt = `
-    TASK: Write a 55-second viral technical reel script.
+    TASK: Write a 55-second technical educational script for a reel.
     TOPIC: ${topic}
     ${description ? `CONTEXT: ${description}` : ""}
 
-    VIRAL STRATEGY (CRITICAL):
-    1. THE HOOK (0-3s): Start with a "Pattern Interrupt." Use a negative hook, a bold contradiction, or a "Stop doing X" statement.
-    2. THE GAP (3-10s): Create cognitive dissonance. Why is the status quo wrong? What is the hidden cost?
-    3. THE CORE VALUE (10-45s): Fast-paced, high-density technical insight. Use one continuous flow. Skip "First/Second/Third." Use "The secret is..." or "Which means..." to connect ideas.
-    4. THE INFINITE LOOP (45-55s): The script MUST end with a leading phrase that seamlessly loops back to the very first word of the Hook. 
+    STRICT RULES (FAILURE TO FOLLOW WILL RESULT IN INVALID OUTPUT):
+    1. NO INTRODUCTIONS: Do not say "Here is your script" or "I have written a 55-word script". 
+    2. NO OUTROS: Do not say "Hope this helps" or "End of script".
+    3. NO LABELS: Do not include [Hook], [Gap], etc.
+    4. ONLY SCRIPT CONTENT: The output must contain ONLY the words to be spoken.
 
-    TONE: 
-    Confident, slightly edgy tech visionary. Calm but intense. No "Hey guys" or "Welcome back." Jump straight into the jugular.
+    VIRAL STRATEGY:
+    1. THE HOOK (0-3s): Start with a sharp technical contradiction or a "Stop doing X" statement.
+    2. THE GAP (3-10s): Explain why the standard approach is failing.
+    3. THE CORE VALUE (10-45s): High-density technical insight. Use one continuous flow. Use "Which means..." or "Effectively..." as connectors.
+    4. THE INFINITE LOOP (45-55s): End with a phrase that loops perfectly back to the first word of the hook.
 
-    FORMAT:
-    - Short, punchy lines (max 8 words per line).
-    - Use punctuation to force natural pauses (..., !, ?).
-    - TOTAL WORD COUNT: Strictly between 100 and 120 words.
+    TONE & STYLE:
+    - Voice of a high-level technical educator. Clear, punchy, authoritative.
+    - No filler. No "Hey guys." No generic hype.
+    - Format as a single paragraph of spoken text.
+
+    TOTAL WORD COUNT: Strictly between 100 and 120 words.
   `;
 
   try {
@@ -35,7 +40,19 @@ const generateScript = async (topic, description = "") => {
     const response = await result.response;
     let script = response.text().trim();
 
-    // Clean up markdown markers if any
+    // Aggressive cleanup: remove any lines that look like meta-explanation
+    const lines = script.split('\n');
+    const filteredLines = lines.filter(line => {
+      const lower = line.toLowerCase();
+      if (lower.includes('here is') && lower.includes('script')) return false;
+      if (lower.includes('word count') || lower.includes('words long')) return false;
+      if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
+      return true;
+    });
+
+    script = filteredLines.join(' ').trim();
+    
+    // Clean up markdown markers and bracketed text
     script = script.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
 
     const wordCount = script.split(/\s+/).filter(w => w.length > 0).length;
