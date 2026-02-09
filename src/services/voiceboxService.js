@@ -55,7 +55,10 @@ class VoiceboxService {
                 args.push('--speed', speed.toString());
             }
 
-            const proc = spawn('python', args, { cwd: this.voiceboxDir });
+            const proc = spawn('python', ['-u', ...args], { 
+                cwd: this.voiceboxDir,
+                env: { ...process.env, PYTHONUNBUFFERED: '1' }
+            });
 
             proc.stdout.on('data', (data) => {
                 const output = data.toString().trim();
@@ -64,7 +67,8 @@ class VoiceboxService {
 
             proc.stderr.on('data', (data) => {
                 const output = data.toString().trim();
-                if (output) logger.debug(`[Voicebox Stderr] ${output}`);
+                // Capture everything as info so user sees progress bars/loading logs
+                if (output) logger.info(`[Voicebox Progress] ${output}`);
             });
 
             proc.on('close', (code) => {

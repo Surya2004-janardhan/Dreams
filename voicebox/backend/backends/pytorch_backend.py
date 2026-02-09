@@ -14,6 +14,7 @@ from ..utils.audio import normalize_audio, load_audio
 from ..utils.progress import get_progress_manager
 from ..utils.hf_progress import HFProgressTracker, create_hf_progress_callback
 from ..utils.tasks import get_task_manager
+from ..config import get_models_dir
 
 
 class PyTorchTTSBackend:
@@ -40,14 +41,21 @@ class PyTorchTTSBackend:
     
     def _get_model_path(self, model_size: str) -> str:
         """
-        Get the HuggingFace Hub model ID.
+        Get the local path or HuggingFace Hub model ID.
         
         Args:
             model_size: Model size (1.7B or 0.6B)
             
         Returns:
-            HuggingFace Hub model ID
+            Local path if found, otherwise HuggingFace Hub model ID
         """
+        local_name = f"Qwen3-TTS-12Hz-{model_size}-Base"
+        local_path = get_models_dir() / local_name
+        
+        if local_path.exists():
+            print(f"Found local TTS model at: {local_path}")
+            return str(local_path.absolute())
+
         hf_model_map = {
             "1.7B": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
             "0.6B": "Qwen/Qwen3-TTS-12Hz-0.6B-Base",
@@ -461,13 +469,18 @@ class PyTorchSTTBackend:
             tracker_context.__enter__()
             print("[DEBUG] tqdm patched, now importing transformers")
 
-            # Import transformers
-            from transformers import WhisperProcessor, WhisperForConditionalGeneration
+            # Get local or HF model path
+            local_name = f"whisper-{model_size}"
+            local_path = get_models_dir() / local_name
+            
+            if local_path.exists():
+                print(f"Found local Whisper model at: {local_path}")
+                model_name = str(local_path.absolute())
+                is_cached = True # Skip download tracking if using local path
+            else:
+                model_name = f"openai/whisper-{model_size}"
 
-            model_name = f"openai/whisper-{model_size}"
-            print(f"[DEBUG] Model name: {model_name}")
-
-            print(f"Loading Whisper model {model_size} on {self.device}...")
+            print(f"Loading Whisper model {model_size} from {model_name} on {self.device}...")
 
             # Only track download progress if model is NOT cached
             if not is_cached:

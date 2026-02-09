@@ -247,8 +247,8 @@ const generateAudioWithBatchingStrategy = async (script) => {
     // Initialize Google GenAI client
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
-    // Reference from doc: Gemini 2.5 Flash Preview TTS is the standard for high-quality audio
-    const modelName = "gemini-2.5-flash-preview-tts";
+    // Use Gemini 2.0 Flash for high-quality multimodal output
+    const modelName = "gemini-2.0-flash";
     const voiceName = "Puck"; // Upbeat base voice for natural energy and pitch peaks
 
     const model = genAI.getGenerativeModel({ model: modelName });
