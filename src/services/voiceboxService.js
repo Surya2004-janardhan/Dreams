@@ -15,7 +15,7 @@ class VoiceboxService {
     /**
      * Generates a cloned voice audio file.
      * @param {string} text - The text to synthesize.
-     * @param {string} refAudioPath - Path to the reference audio sample (e.g., Base-audio.mp3).
+     * @param {string} refAudioPath - Path to the reference audio sample (e.g., Base-audio.wav).
      * @param {string} outputPath - Path to save the generated audio.
      * @param {string} [instruct] - Optional style instruction.
      * @param {number} [speed] - Speech speed ratio (default: 0.9).

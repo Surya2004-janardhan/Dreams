@@ -58,7 +58,7 @@ async function main() {
         let audioPath;
         
         // Configuration for Cloned Voice
-        const REF_AUDIO = path.resolve('Base-audio.mp3'); 
+        const REF_AUDIO = path.resolve('Base-audio.wav'); 
         const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
@@ -66,7 +66,7 @@ async function main() {
         }
 
         if (!fs.existsSync(REF_AUDIO)) {
-            logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
+            logger.warn(`⚠️ Base-audio.wav not found in root. Falling back to Gemini TTS.`);
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
         } else {
@@ -288,15 +288,20 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
-        // Resolve BGM source (supporting multiple formats)
+        // Resolve BGM source (supporting multiple formats and case sensitivity)
         const bgmExtensions = ['.mp3', '.m4a', '.wav'];
+        const bgmNames = ['bgm', 'Bgm'];
         let bgmSrc = null;
-        for (const ext of bgmExtensions) {
-            const potentialPath = path.resolve(`bgm${ext}`);
-            if (fs.existsSync(potentialPath)) {
-                bgmSrc = potentialPath;
-                break;
+        
+        for (const name of bgmNames) {
+            for (const ext of bgmExtensions) {
+                const potentialPath = path.resolve(`${name}${ext}`);
+                if (fs.existsSync(potentialPath)) {
+                    bgmSrc = potentialPath;
+                    break;
+                }
             }
+            if (bgmSrc) break;
         }
 
         console.log("📽️ Final Remuxing (audio offset sync + BGM mixing + high-compatibility settings)...");

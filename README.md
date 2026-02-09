@@ -21,7 +21,7 @@ Welcome to a professional "Ghost Creator" pipeline. This system transforms techn
 
 1.  **Ingestion**: The system polls a **Google Sheet** for new topics.
 2.  **Scripting**: **Gemini 2.0 Pro** generates a "Viral Loop" script (Pattern Interrupt → Technical Value → Infinite Loop).
-3.  **Voice Cloning**: **Voicebox (Qwen3-TTS)** clones your voice DNA from a 30s sample (`Base-audio.mp3`).
+3.  **Voice Cloning**: **Voicebox (Qwen3-TTS)** clones your voice DNA from a 30s sample (`Base-audio.wav`).
 4.  **Neural Lip-Sync**: **Wav2Lip** re-animates the mouth of your actor (`Base-vedio.mp4`) to match the cloned audio.
 5.  **Visual Composition**: A **React/GSAP** engine rendered via Playwright captures "Swiss-Style" technical overlays.
 6.  **Broadcast**: Videos are multi-streamed to **YouTube Shorts, Instagram, and Facebook**.
