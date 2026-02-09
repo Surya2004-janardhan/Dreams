@@ -3,8 +3,8 @@ const logger = require("../config/logger");
 
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-// gemini-2.5-flash
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+// gemini-2.0-flash
 
 /**
  * Generates a viral, high-retention script for a 55-60 second technical reel.
