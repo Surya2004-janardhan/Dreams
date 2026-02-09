@@ -23,10 +23,31 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
     // Use "Elite" Sync Settings: bottom padding for chin + no smoothing for snapping
     const pads = options.pads || [0, 20, 0, 0]; // Extra bottom padding for chin movement
     const nosmooth = options.nosmooth !== undefined ? options.nosmooth : true; // Default to snap for tech content
-
+    
     // Check for pre-computed face cache to save time
     const cachePath = path.resolve('Base-vedio.npy');
-    const hasCache = fs.existsSync(cachePath);
+    let hasCache = fs.existsSync(cachePath);
+
+    // If cache is missing OR older than the video (user replaced video), regenerate it
+    if (absFacePath.includes('Base-vedio.mp4')) {
+        const videoStats = fs.statSync(absFacePath);
+        if (!hasCache || fs.statSync(cachePath).mtime < videoStats.mtime) {
+            logger.info(`🔄 Face cache missing or stale. Regenerating for ${path.basename(absFacePath)}...`);
+            await new Promise((res, rej) => {
+                const precomputeScript = path.join(wav2lipDir, 'precompute_face.py');
+                const proc = spawn('python', [precomputeScript, '--video', absFacePath, '--output', cachePath, '--batch_size', '4'], { cwd: wav2lipDir });
+                proc.stdout.on('data', (d) => logger.info(`[Precompute] ${d.toString().trim()}`));
+                proc.on('close', (code) => {
+                    if (code === 0) {
+                        hasCache = true;
+                        res();
+                    } else {
+                        rej(new Error(`Face pre-computation failed with code ${code}`));
+                    }
+                });
+            });
+        }
+    }
 
     // Ensure wav2lip directory exists
     if (!fs.existsSync(wav2lipDir)) {
