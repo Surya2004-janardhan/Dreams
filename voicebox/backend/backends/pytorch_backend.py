@@ -6,6 +6,9 @@ from typing import Optional, List, Tuple
 import asyncio
 import torch
 import numpy as np
+import re
+import unicodedata
+import time
 from pathlib import Path
 
 from . import TTSBackend, STTBackend
@@ -172,14 +175,18 @@ class PyTorchTTSBackend:
                     status="downloading",
                 )
 
-            # Load the model (tqdm is patched, but filters out non-download progress)
+            # Load the model
             try:
+                # Use bfloat16 for stability on RTX 2050 (Ampere) if available
+                load_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+                print(f"Loading 0.6B model on {self.device} with dtype {load_dtype}")
+                
                 self.model = Qwen3TTSModel.from_pretrained(
                     model_path,
                     device_map=self.device,
-                    torch_dtype=torch.float32 if self.device == "cpu" else torch.float16,
+                    torch_dtype=load_dtype,
                 )
-                print(f"Loaded 0.6B model on {self.device}")
+                print(f"Loaded 0.6B model successfully")
             finally:
                 # Exit the patch context
                 tracker_context.__exit__(None, None, None)
@@ -314,124 +321,108 @@ class PyTorchTTSBackend:
         voice_prompt: dict,
         language: str = "en",
         seed: Optional[int] = None,
-        instruct: Optional[str] = None,
         speed: float = 1.0,
+        instruct: Optional[str] = None,
     ) -> Tuple[np.ndarray, int]:
         """
-        Generate audio from text using voice prompt.
-
-        Args:
-            text: Text to synthesize
-            voice_prompt: Voice prompt dictionary from create_voice_prompt
-            language: Language code (en or zh)
-            seed: Random seed for reproducibility
-            instruct: Natural language instruction for speech delivery control
-
-        Returns:
-            Tuple of (audio_array, sample_rate)
+        Generate speech using the loaded model in a single pass.
         """
-        # Load model
         await self.load_model_async(None)
-
+        
+        import time
         import re
+        import unicodedata
         
-        # Split text into chunks (by sentences/punctuation) to avoid long hangs
-        def split_text(t, max_len=100):
-            # Clean text of special characters that might cause issues in tokenization/generation
-            t = t.replace("—", " ").replace("...", ". ").replace("..", ". ").replace("  ", " ").strip()
-            
-            # Split by period, exclamation, or question mark followed by space
-            sentences = re.split(r'(?<=[.!?])\s+', t)
-            chunks = []
-            current_chunk = ""
-            for s in sentences:
-                s = s.strip()
-                if not s: continue
-                if len(current_chunk) + len(s) < max_len:
-                    current_chunk += (" " if current_chunk else "") + s
+        start_time = time.time()
+        print("\n" + "="*50)
+        print("STARTING VOICEBOX GENERATION (SINGLE PASS)")
+        print(f"TEXT: '{text[:100]}{'...' if len(text) > 100 else ''}'")
+        print(f"LENGTH: {len(text)} characters")
+        print(f"LANGUAGE: {language}, SPEED: {speed}")
+        
+        # Aggressive text cleaning for stability
+        cleaned_text = "".join(ch for ch in text if unicodedata.category(ch)[0] != 'C')
+        cleaned_text = re.sub(r'([.!?])\1+', r'\1', cleaned_text) # Collapse repeated punctuation
+        cleaned_text = cleaned_text.replace("—", " ").replace("–", " ").replace('"', '').replace("'", "").replace("*", "")
+        cleaned_text = " ".join(cleaned_text.split()) # Normalize whitespace
+        
+        print(f"CLEANED TEXT: '{cleaned_text[:100]}...'")
+
+        if seed is not None:
+            torch.manual_seed(seed)
+            print(f"SEED: {seed}")
+
+        # Log Voice Prompt details
+        if isinstance(voice_prompt, dict):
+            print("VOICE PROMPT DETAILS:")
+            for k, v in voice_prompt.items():
+                if isinstance(v, torch.Tensor):
+                    print(f"  - {k}: shape={list(v.shape)}, dtype={v.dtype}, device={v.device}")
+                    # Check for NaNs
+                    if torch.isnan(v).any():
+                        print(f"    WARNING: NaNs detected in {k}. Zeroing them.")
+                        v[torch.isnan(v)] = 0.0
                 else:
-                    if current_chunk: chunks.append(current_chunk)
-                    current_chunk = s
-            if current_chunk: chunks.append(current_chunk)
-            return [c for c in chunks if c.strip()]
+                    print(f"  - {k}: {type(v)}")
 
-        chunks = split_text(text)
-        print(f"Text split into {len(chunks)} segments for stable generation.")
-        
-        all_audio = []
-        final_sample_rate = 24000 # Default for QwenTTS
+        # "Dont include custom prompts for now" - Ignoring instruct if provided
+        generation_instruct = None
+        if instruct:
+            print(f"INFO: Ignoring custom instruct prompt as requested: '{instruct}'")
 
-        for i, chunk in enumerate(chunks):
-            print(f"Generating segment {i+1}/{len(chunks)}: '{chunk[:50]}...' ({len(chunk)} chars)")
-            if not chunk.strip():
-                continue
-            
-            async def _generate_with_heartbeat(c, index):
-                """Wrap the blocking call with a heartbeat logger."""
-                stop_event = asyncio.Event()
+        def _generate_sync():
+            gen_start = time.time()
+            try:
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
                 
-                async def heartbeat():
-                    start_time = asyncio.get_event_loop().time()
-                    while not stop_event.is_set():
-                        try:
-                            # Wait for event or 15s timeout
-                            await asyncio.wait_for(stop_event.wait(), timeout=15)
-                            break # Event was set
-                        except asyncio.TimeoutError:
-                            # 15s passed without event being set
-                            elapsed = int(asyncio.get_event_loop().time() - start_time)
-                            print(f"  ... still synthesizing segment {index+1} ({elapsed}s elapsed) ...")
-
-                def _generate_chunk_sync(inner_c):
-                    if seed is not None:
-                        torch.manual_seed(seed + index)
-                    
-                    with torch.inference_mode():
-                        # Use autocast for potential speedups on Tensor Cores
-                        with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
-                            wavs, sr = self.model.generate_voice_clone(
-                                text=inner_c,
-                                voice_clone_prompt=voice_prompt,
-                                instruct=instruct,
-                            )
-                    return wavs[0], sr
-
-                # Start heartbeat task
-                heartbeat_task = asyncio.create_task(heartbeat())
-                try:
-                    result = await asyncio.to_thread(_generate_chunk_sync, c)
-                    return result
-                finally:
-                    stop_event.set()
-                    heartbeat_task.cancel()
-                    try:
-                        await heartbeat_task
-                    except asyncio.CancelledError:
-                        pass
-
-            audio_chunk, sr = await _generate_with_heartbeat(chunk, i)
-            all_audio.append(audio_chunk)
-            final_sample_rate = sr
-            
-            # Clear VRAM after each segment to prevent cumulative slowdown/hangs
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            
-            import gc
-            gc.collect()
+                print(f"DEVICE: {self.device}, MODEL DTYPE: {getattr(self.model, 'dtype', 'unknown')}")
                 
-            print(f"Segment {i+1} complete.")
+                with torch.inference_mode():
+                    # Generate the whole thing at once
+                    wavs, sr = self.model.generate_voice_clone(
+                        text=cleaned_text,
+                        voice_clone_prompt=voice_prompt,
+                        instruct=generation_instruct,
+                    )
+                
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+                
+                duration = time.time() - gen_start
+                print(f"GENERATION COMPLETE in {duration:.2f}s")
+                return wavs[0], sr
+            except Exception as e:
+                print(f"CRITICAL GENERATION ERROR: {str(e)}")
+                raise
 
-        # Merge segments
-        audio = np.concatenate(all_audio)
-        
+        # Run with a generous timeout for the whole generation
+        try:
+            audio, sample_rate = await asyncio.wait_for(
+                asyncio.to_thread(_generate_sync),
+                timeout=300.0 # 5 minutes for large text
+            )
+        except asyncio.TimeoutError:
+            print("GENERATION TIMED OUT after 300s")
+            raise Exception("Voicebox generation timed out.")
+
         # Apply speed adjustment if requested
         if speed != 1.0:
             import librosa
             print(f"Applying speed adjustment: {speed}x")
             audio = librosa.effects.time_stretch(audio, rate=speed)
 
-        return audio, final_sample_rate
+        total_duration = time.time() - start_time
+        print(f"TOTAL PIPELINE TIME: {total_duration:.2f}s")
+        print("="*50 + "\n")
+
+        # Clear VRAM
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        import gc
+        gc.collect()
+
+        return audio, sample_rate
 
 
 class PyTorchSTTBackend:

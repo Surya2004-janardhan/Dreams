@@ -4,7 +4,7 @@ const logger = require("../config/logger");
 // Initialize Gemini
 // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 // dont change the model name abv is one is working fine
 
 /**

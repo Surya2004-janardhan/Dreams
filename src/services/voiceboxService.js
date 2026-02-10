@@ -60,7 +60,8 @@ class VoiceboxService {
                 env: { 
                     ...process.env, 
                     PYTHONUNBUFFERED: '1',
-                    CUDA_LAUNCH_BLOCKING: '1'
+                    CUDA_LAUNCH_BLOCKING: '1',
+                    PYTHONIOENCODING: 'utf-8'
                 }
             });
 
