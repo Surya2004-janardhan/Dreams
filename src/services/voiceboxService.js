@@ -57,19 +57,25 @@ class VoiceboxService {
 
             const proc = spawn('python', ['-u', ...args], { 
                 cwd: this.voiceboxDir,
-                env: { ...process.env, PYTHONUNBUFFERED: '1' }
+                env: { 
+                    ...process.env, 
+                    PYTHONUNBUFFERED: '1'
+                }
             });
 
-            proc.stdout.on('data', (data) => {
-                const output = data.toString().trim();
-                if (output) logger.info(`[Voicebox] ${output}`);
-            });
+            const logByLine = (prefix, data) => {
+                const lines = data.toString().split(/[\r\n]+/);
+                for (const line of lines) {
+                    const clean = line.trim();
+                    if (clean) {
+                        // Skip excessive tqdm junk if it gets too noisy, but keep percentage/rate
+                        logger.info(`[${prefix}] ${clean}`);
+                    }
+                }
+            };
 
-            proc.stderr.on('data', (data) => {
-                const output = data.toString().trim();
-                // Capture everything as info so user sees progress bars/loading logs
-                if (output) logger.info(`[Voicebox Progress] ${output}`);
-            });
+            proc.stdout.on('data', (data) => logByLine('Voicebox', data));
+            proc.stderr.on('data', (data) => logByLine('Voicebox Progress', data));
 
             proc.on('close', (code) => {
                 if (code !== 0) {

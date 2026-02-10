@@ -5,7 +5,7 @@ const logger = require("../config/logger");
 // const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const genAI = new GoogleGenerativeAI("AIzaSyBMfKkJ0OIkVaetZ1O8y2bHvXjDl1g-cJY");
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-// gemini-2.0-flash
+// dont change the model name abv is one is working fine
 
 /**
  * Generates a viral, high-retention script for a 55-60 second technical reel.

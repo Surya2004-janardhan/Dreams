@@ -15,7 +15,7 @@ except ImportError:
     sys.exit(1)
 
 # Hardcoded Configuration
-MODEL_SIZE = os.getenv("VOICEBOX_MODEL_SIZE", "1.7B")
+MODEL_SIZE = os.getenv("VOICEBOX_MODEL_SIZE", "0.6B")
 _backend = None
 _stt_backend = None
 

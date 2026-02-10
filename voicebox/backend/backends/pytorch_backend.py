@@ -20,7 +20,7 @@ from ..config import get_models_dir
 class PyTorchTTSBackend:
     """PyTorch-based TTS backend using Qwen3-TTS."""
     
-    def __init__(self, model_size: str = "1.7B"):
+    def __init__(self, model_size: str = "0.6B"):
         self.model = None
         self.model_size = model_size
         self.device = self._get_device()
@@ -176,9 +176,11 @@ class PyTorchTTSBackend:
             try:
                 self.model = Qwen3TTSModel.from_pretrained(
                     model_path,
-                    device_map=self.device,
-                    torch_dtype=torch.float32 if self.device == "cpu" else torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "cpu" else torch.float16,
                 )
+                self.model.to(self.device)
+                self.model.eval()
+                print(f"Loaded 0.6B model on {self.device}")
             finally:
                 # Exit the patch context
                 tracker_context.__exit__(None, None, None)
@@ -332,32 +334,98 @@ class PyTorchTTSBackend:
         # Load model
         await self.load_model_async(None)
 
-        def _generate_sync():
-            """Run synchronous generation in thread pool."""
-            # Set seed if provided
-            if seed is not None:
-                torch.manual_seed(seed)
-                if torch.cuda.is_available():
-                    torch.cuda.manual_seed(seed)
+        import re
+        
+        # Split text into chunks (by sentences/punctuation) to avoid long hangs
+        def split_text(t, max_len=100):
+            # Split by period, exclamation, or question mark followed by space
+            sentences = re.split(r'(?<=[.!?])\s+', t)
+            chunks = []
+            current_chunk = ""
+            for s in sentences:
+                if len(current_chunk) + len(s) < max_len:
+                    current_chunk += (" " if current_chunk else "") + s
+                else:
+                    if current_chunk: chunks.append(current_chunk)
+                    current_chunk = s
+            if current_chunk: chunks.append(current_chunk)
+            return chunks
 
-            # Generate audio - this is the blocking operation
-            wavs, sample_rate = self.model.generate_voice_clone(
-                text=text,
-                voice_clone_prompt=voice_prompt,
-                instruct=instruct,
-            )
-            return wavs[0], sample_rate
+        chunks = split_text(text)
+        print(f"Text split into {len(chunks)} segments for stable generation.")
+        
+        all_audio = []
+        final_sample_rate = 24000 # Default for QwenTTS
 
-        # Run blocking inference in thread pool to avoid blocking event loop
-        audio, sample_rate = await asyncio.to_thread(_generate_sync)
+        for i, chunk in enumerate(chunks):
+            print(f"Generating segment {i+1}/{len(chunks)} ({len(chunk)} chars)...")
+            
+            async def _generate_with_heartbeat(c, index):
+                """Wrap the blocking call with a heartbeat logger."""
+                stop_event = asyncio.Event()
+                
+                async def heartbeat():
+                    start_time = asyncio.get_event_loop().time()
+                    while not stop_event.is_set():
+                        try:
+                            # Wait for event or 15s timeout
+                            await asyncio.wait_for(stop_event.wait(), timeout=15)
+                            break # Event was set
+                        except asyncio.TimeoutError:
+                            # 15s passed without event being set
+                            elapsed = int(asyncio.get_event_loop().time() - start_time)
+                            print(f"  ... still synthesizing segment {index+1} ({elapsed}s elapsed) ...")
 
+                def _generate_chunk_sync(inner_c):
+                    if seed is not None:
+                        torch.manual_seed(seed + index)
+                    
+                    with torch.inference_mode():
+                        # Use autocast for potential speedups on Tensor Cores
+                        with torch.cuda.amp.autocast(enabled=(self.device == "cuda")):
+                            wavs, sr = self.model.generate_voice_clone(
+                                text=inner_c,
+                                voice_clone_prompt=voice_prompt,
+                                instruct=instruct,
+                            )
+                    return wavs[0], sr
+
+                # Start heartbeat task
+                heartbeat_task = asyncio.create_task(heartbeat())
+                try:
+                    result = await asyncio.to_thread(_generate_chunk_sync, c)
+                    return result
+                finally:
+                    stop_event.set()
+                    heartbeat_task.cancel()
+                    try:
+                        await heartbeat_task
+                    except asyncio.CancelledError:
+                        pass
+
+            audio_chunk, sr = await _generate_with_heartbeat(chunk, i)
+            all_audio.append(audio_chunk)
+            final_sample_rate = sr
+            
+            # Clear VRAM after each segment to prevent cumulative slowdown/hangs
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            import gc
+            gc.collect()
+                
+            print(f"Segment {i+1} complete.")
+
+        # Merge segments
+        audio = np.concatenate(all_audio)
+        
         # Apply speed adjustment if requested
         if speed != 1.0:
             import librosa
             print(f"Applying speed adjustment: {speed}x")
             audio = librosa.effects.time_stretch(audio, rate=speed)
 
-        return audio, sample_rate
+        return audio, final_sample_rate
 
 
 class PyTorchSTTBackend:
@@ -468,6 +536,9 @@ class PyTorchSTTBackend:
             tracker_context = tracker.patch_download()
             tracker_context.__enter__()
             print("[DEBUG] tqdm patched, now importing transformers")
+
+            # Import transformers
+            from transformers import WhisperProcessor, WhisperForConditionalGeneration
 
             # Get local or HF model path
             local_name = f"whisper-{model_size}"

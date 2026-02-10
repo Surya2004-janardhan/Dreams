@@ -247,7 +247,7 @@ const generateAudioWithBatchingStrategy = async (script) => {
     // Initialize Google GenAI client
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY_FOR_AUDIO);
 
-    // Use Gemini 2.0 Flash for high-quality multimodal output
+    // Use Gemini 2.0 Flash for reliable multimodal audio output
     const modelName = "gemini-2.0-flash";
     const voiceName = "Puck"; // Upbeat base voice for natural energy and pitch peaks
 
