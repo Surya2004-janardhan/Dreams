@@ -393,7 +393,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.click('button:has-text("Studio")'); 
 
         console.log("⏳ Waiting for visual generation...");
-        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 300000 });
+        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 600000 });
         
         console.log("🎬 Initiating Recording...");
         await page.click('button:has-text("Rec & Export")');

@@ -400,10 +400,10 @@ class PyTorchTTSBackend:
         try:
             audio, sample_rate = await asyncio.wait_for(
                 asyncio.to_thread(_generate_sync),
-                timeout=300.0 # 5 minutes for large text
+                timeout=7200.0 # 2 hours for large text on CPU
             )
         except asyncio.TimeoutError:
-            print("GENERATION TIMED OUT after 300s")
+            print("GENERATION TIMED OUT after 7200s")
             raise Exception("Voicebox generation timed out.")
 
         # Apply speed adjustment if requested
