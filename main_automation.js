@@ -331,29 +331,45 @@ async function runCompositor(vPath, sPath, vPrompt) {
             filterComplex[0].outputs = 'mixed';
         }
 
-        command.complexFilter(filterComplex)
-            .outputOptions([
-                '-y', 
-                '-c:v libx264', 
-                '-pix_fmt yuv420p',
-                '-preset fast', 
-                '-crf 22', 
-                '-profile:v main',
-                '-level:v 4.1',
-                '-r 30',
-                '-c:a aac', 
-                '-ar 44100',
-                '-map 0:v:0', 
-                '-map [mixed]', 
-                '-shortest', 
-                '-movflags +faststart'
-            ])
-            .output(out)
-            .on('end', () => { masterPath = out; res(); })
-            .on('error', rej)
-            .run();
-        if (fs.existsSync(raw)) fs.unlinkSync(raw);
-        complete = true;
+        try {
+            await new Promise((resolve, reject) => {
+                command.complexFilter(filterComplex)
+                    .outputOptions([
+                        '-y', 
+                        '-c:v libx264', 
+                        '-pix_fmt yuv420p',
+                        '-preset fast', 
+                        '-crf 22', 
+                        '-profile:v main',
+                        '-level:v 4.1',
+                        '-r 30',
+                        '-c:a aac', 
+                        '-ar 44100',
+                        '-map 0:v:0', 
+                        '-map [mixed]', 
+                        '-shortest', 
+                        '-movflags +faststart'
+                    ])
+                    .output(out)
+                    .on('end', () => { 
+                        masterPath = out; 
+                        console.log("✅ Final remuxing complete.");
+                        resolve(); 
+                    })
+                    .on('error', (err) => {
+                        console.error("❌ FFmpeg remuxing error:", err);
+                        reject(err);
+                    })
+                    .run();
+            });
+            if (fs.existsSync(raw)) fs.unlinkSync(raw);
+            complete = true;
+        } catch (error) {
+            console.error("Error during download processing:", error);
+            // Even on error, we might want to mark as complete to break the wait loop
+            // but the masterPath will remain empty, which main() handles.
+            complete = true; 
+        }
     });
 
     try {
