@@ -59,7 +59,8 @@ class VoiceboxService {
                 cwd: this.voiceboxDir,
                 env: { 
                     ...process.env, 
-                    PYTHONUNBUFFERED: '1'
+                    PYTHONUNBUFFERED: '1',
+                    CUDA_LAUNCH_BLOCKING: '1'
                 }
             });
 

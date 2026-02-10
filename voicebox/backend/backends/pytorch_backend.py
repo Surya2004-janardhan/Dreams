@@ -176,10 +176,9 @@ class PyTorchTTSBackend:
             try:
                 self.model = Qwen3TTSModel.from_pretrained(
                     model_path,
+                    device_map=self.device,
                     torch_dtype=torch.float32 if self.device == "cpu" else torch.float16,
                 )
-                self.model.to(self.device)
-                self.model.eval()
                 print(f"Loaded 0.6B model on {self.device}")
             finally:
                 # Exit the patch context
@@ -338,18 +337,23 @@ class PyTorchTTSBackend:
         
         # Split text into chunks (by sentences/punctuation) to avoid long hangs
         def split_text(t, max_len=100):
+            # Clean text of special characters that might cause issues in tokenization/generation
+            t = t.replace("—", " ").replace("...", ". ").replace("..", ". ").replace("  ", " ").strip()
+            
             # Split by period, exclamation, or question mark followed by space
             sentences = re.split(r'(?<=[.!?])\s+', t)
             chunks = []
             current_chunk = ""
             for s in sentences:
+                s = s.strip()
+                if not s: continue
                 if len(current_chunk) + len(s) < max_len:
                     current_chunk += (" " if current_chunk else "") + s
                 else:
                     if current_chunk: chunks.append(current_chunk)
                     current_chunk = s
             if current_chunk: chunks.append(current_chunk)
-            return chunks
+            return [c for c in chunks if c.strip()]
 
         chunks = split_text(text)
         print(f"Text split into {len(chunks)} segments for stable generation.")
@@ -358,7 +362,9 @@ class PyTorchTTSBackend:
         final_sample_rate = 24000 # Default for QwenTTS
 
         for i, chunk in enumerate(chunks):
-            print(f"Generating segment {i+1}/{len(chunks)} ({len(chunk)} chars)...")
+            print(f"Generating segment {i+1}/{len(chunks)}: '{chunk[:50]}...' ({len(chunk)} chars)")
+            if not chunk.strip():
+                continue
             
             async def _generate_with_heartbeat(c, index):
                 """Wrap the blocking call with a heartbeat logger."""
