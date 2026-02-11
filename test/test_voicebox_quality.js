@@ -19,19 +19,19 @@ async function testAudioQuality() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  // 2. Technical Dummy Script (Varied punctuation to test prosody)
+  // 2. High-Modulation Technical Script
   const dummyScript = `
-    Look... building AI agents is easy. But building agents that actually work? That's the REAL challenge. 
-    The secret isn't just the LLM—it's the feedback loop between the perception and the action. 
-    Which basically means... you need to stop over-engineering your prompts and start focusing on your data reliability. 
-    Anyway, if you're seeing this, the audio quality is definitely working. Let's get back to building something amazing!
+    Listen... the future of software isn't built on just code anymore. It's built on INTELLIGENCE. 
+    If you're still using old-school databases, you're literally living in the past! 
+    But don't worry... I can help you fix it. Let's start with your data pipeline, and then? 
+    Then we scale it to the moon!
   `.trim();
 
-  // 3. Manual Reference Text (Prevents slow Whisper/STT loading)
+  // 3. Manual Reference Text
   const manualRefText = "Hello, this is a sample recording of my natural speaking voice used for cloning.";
 
-  // 4. Cloned Voice Instructions (The "Elite" Style)
-  const viralInstructions = "Deliver this with high-octane energy, vary pitch for technical keywords, and use natural pauses.";
+  // 4. Expression & Modulation Instructions
+  const viralInstructions = "Speak with a deep, authoritative bass. Emphasize the word 'INTELLIGENCE'. Use a sarcastic tone for 'living in the past', and end with high excitement.";
 
   try {
     if (!fs.existsSync(referenceAudio)) {

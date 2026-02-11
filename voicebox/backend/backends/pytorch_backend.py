@@ -402,10 +402,10 @@ class PyTorchTTSBackend:
                 else:
                     print(f"  - {k}: {type(v)}")
 
-        # "Dont include custom prompts for now" - Ignoring instruct if provided
-        generation_instruct = None
+        # Use the provided instruct prompt
+        generation_instruct = instruct
         if instruct:
-            print(f"INFO: Ignoring custom instruct prompt as requested: '{instruct}'")
+            print(f"🎨 Applying style instruction: '{instruct}'")
 
         def _generate_sync():
             gen_start = time.time()
@@ -418,7 +418,12 @@ class PyTorchTTSBackend:
                 print(f"DEBUG - Environment FORCE_CPU: {os.getenv('FORCE_CPU')}")
                 print(f"DEBUG - Environment GITHUB_ACTIONS: {os.getenv('GITHUB_ACTIONS')}")
 
-                print("⏳ Starting neural inference... (The process will look 'frozen' for a few minutes while the CPU/GPU does the heavy math)")
+                # Quality/Speed Estimation
+                char_count = len(text)
+                est_min = "1-2" if self.model_size == "0.6B" else "4-6"
+                print(f"📦 Model Size: {self.model_size} | Script Length: {char_count} chars")
+                print(f"⏳ ESTIMATED WAIT: {est_min} minutes on CPU. Please do not close the terminal.")
+                print("--- Neural math in progress... ---")
                 
                 with torch.inference_mode():
                     # Generate the whole thing at once
@@ -428,14 +433,45 @@ class PyTorchTTSBackend:
                         instruct=generation_instruct,
                     )
                 
+                # Prevent Clipping / 'Base Shake'
+                # Neural models can sometimes output values > 1.0 which causes digital distortion
+                # We normalize and clamp for professional audio quality.
+                if isinstance(wavs, torch.Tensor):
+                    max_val = torch.abs(wavs).max()
+                    if max_val > 1.0:
+                        print(f"📏 Normalizing audio (peak at {max_val:.2f}) to prevent clipping.")
+                        wavs = wavs / max_val
+                    wavs = torch.clamp(wavs, -0.99, 0.99)
+                elif isinstance(wavs, np.ndarray):
+                    max_val = np.abs(wavs).max()
+                    if max_val > 1.0:
+                        wavs = wavs / max_val
+                    wavs = np.clip(wavs, -0.99, 0.99)
+
                 print("✨ Neural inference finished. Finalizing audio...")
                 
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 
+                # Final conversion to numpy for saving
+                print(f"DEBUG - Finalizing audio type: {type(wavs)}")
+                if isinstance(wavs, (list, tuple)):
+                    print("DEBUG - Converting list/tuple of tensors to numpy.")
+                    wavs = wavs[0] # Take first item if list
+                
+                if isinstance(wavs, torch.Tensor):
+                    wavs = wavs.detach().cpu().numpy()
+                    # Handle batch dimension if present
+                    if wavs.ndim > 1:
+                        wavs = wavs[0]
+                
+                if not isinstance(wavs, np.ndarray):
+                    print(f"DEBUG - Forcing conversion of {type(wavs)} to numpy array.")
+                    wavs = np.array(wavs)
+                
                 duration = time.time() - gen_start
                 print(f"GENERATION COMPLETE in {duration:.2f}s")
-                return wavs[0], sr
+                return wavs, sr
             except Exception as e:
                 print(f"CRITICAL GENERATION ERROR: {str(e)}")
                 raise
