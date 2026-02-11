@@ -30,13 +30,34 @@ class PyTorchTTSBackend:
         self._current_model_size = None
     
     def _get_device(self) -> str:
-        """Get the best available device."""
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            # MPS can have issues, use CPU for stability
+        """Get the best available device with manual override support."""
+        import os
+        if os.getenv("FORCE_CPU", "false").lower() == "true":
+            print("ℹ️ FORCE_CPU=true detected. Skipping GPU.")
+            self._apply_cpu_optimizations()
             return "cpu"
+
+        if torch.cuda.is_available():
+            # Basic sanity check
+            try:
+                torch.zeros(1).cuda()
+                return "cuda"
+            except Exception:
+                print("⚠️ CUDA available but unusable. Falling back to CPU.")
+
+        self._apply_cpu_optimizations()
         return "cpu"
+
+    def _apply_cpu_optimizations(self):
+        """Enable multi-core threading for CPU inference."""
+        try:
+            import os
+            cpu_count = os.cpu_count() or 1
+            threads = max(1, min(cpu_count, 8))
+            torch.set_num_threads(threads)
+            print(f"🚀 CPU Optimization: Using {threads} threads for inference.")
+        except Exception:
+            pass
     
     def is_loaded(self) -> bool:
         """Check if model is loaded."""
@@ -177,16 +198,32 @@ class PyTorchTTSBackend:
 
             # Load the model
             try:
-                # Use bfloat16 for stability on RTX 2050 (Ampere) if available
-                load_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
-                print(f"Loading 0.6B model on {self.device} with dtype {load_dtype}")
+                import os
+                is_workflow = os.getenv("GITHUB_ACTIONS") == "true"
+
+                # Precision Selection
+                if self.device == "cuda":
+                    if is_workflow:
+                        # Keep original logic for cloud runners
+                        load_dtype = torch.bfloat16
+                        print("💎 Workflow: Using original bfloat16 precision.")
+                    else:
+                        # Optimized for Local Stability
+                        # float16 was crashing on RTX 2050; using float32 for stability.
+                        load_dtype = torch.float32
+                        print("⚡ Local GPU: Using float32 for maximum stability.")
+                else:
+                    load_dtype = torch.float32
+                    print(f"💻 Device: {self.device} | Precision: float32")
+
+                print(f"Loading {model_size} model on {self.device}...")
                 
                 self.model = Qwen3TTSModel.from_pretrained(
                     model_path,
                     device_map=self.device,
                     torch_dtype=load_dtype,
                 )
-                print(f"Loaded 0.6B model successfully")
+                print(f"Loaded {model_size} model successfully")
             finally:
                 # Exit the patch context
                 tracker_context.__exit__(None, None, None)
@@ -377,6 +414,11 @@ class PyTorchTTSBackend:
                     torch.cuda.synchronize()
                 
                 print(f"DEVICE: {self.device}, MODEL DTYPE: {getattr(self.model, 'dtype', 'unknown')}")
+                import os
+                print(f"DEBUG - Environment FORCE_CPU: {os.getenv('FORCE_CPU')}")
+                print(f"DEBUG - Environment GITHUB_ACTIONS: {os.getenv('GITHUB_ACTIONS')}")
+
+                print("⏳ Starting neural inference... (The process will look 'frozen' for a few minutes while the CPU/GPU does the heavy math)")
                 
                 with torch.inference_mode():
                     # Generate the whole thing at once
@@ -385,6 +427,8 @@ class PyTorchTTSBackend:
                         voice_clone_prompt=voice_prompt,
                         instruct=generation_instruct,
                     )
+                
+                print("✨ Neural inference finished. Finalizing audio...")
                 
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
