@@ -433,41 +433,41 @@ class PyTorchTTSBackend:
                         instruct=generation_instruct,
                     )
                 
-                # Prevent Clipping / 'Base Shake'
-                # Neural models can sometimes output values > 1.0 which causes digital distortion
-                # We normalize and clamp for professional audio quality.
+                # 1. Robust Unpacking (Handle list/tuple nesting)
+                print(f"DEBUG - Raw Generated: type={type(wavs)}")
+                while isinstance(wavs, (list, tuple)) and len(wavs) > 0:
+                    wavs = wavs[0]
+                
+                # 2. Convert to CPU Tensor for processing
                 if isinstance(wavs, torch.Tensor):
-                    max_val = torch.abs(wavs).max()
-                    if max_val > 1.0:
-                        print(f"📏 Normalizing audio (peak at {max_val:.2f}) to prevent clipping.")
-                        wavs = wavs / max_val
-                    wavs = torch.clamp(wavs, -0.99, 0.99)
-                elif isinstance(wavs, np.ndarray):
-                    max_val = np.abs(wavs).max()
-                    if max_val > 1.0:
-                        wavs = wavs / max_val
-                    wavs = np.clip(wavs, -0.99, 0.99)
+                    wavs = wavs.detach().cpu()
+                    print(f"DEBUG - Tensor shape before squeeze: {wavs.shape}")
+                    wavs = wavs.squeeze() # Remove batch/channel dims
+                    print(f"DEBUG - Tensor shape after squeeze: {wavs.shape}")
+                
+                # 3. Check for empty/failed generation
+                if wavs is None or (hasattr(wavs, 'numel') and wavs.numel() < 100):
+                    print("⚠️ WARNING: Model generated almost no audio. The text or instructions might be out of range.")
+                    return np.zeros(100), sr
 
-                print("✨ Neural inference finished. Finalizing audio...")
+                # 4. Professional Normalization & Clipping Prevention
+                max_val = torch.abs(wavs).max().item()
+                if max_val > 0.00001:
+                    if max_val > 1.0:
+                        print(f"📏 Normalizing: Peak {max_val:.2f} -> 1.0 (Fixing distortion/shake)")
+                        wavs = wavs / (max_val + 1e-6)
+                    wavs = torch.clamp(wavs, -0.99, 0.99)
+                
+                # 5. Final NumPy conversion
+                if isinstance(wavs, torch.Tensor):
+                    wavs = wavs.numpy()
+                elif not isinstance(wavs, np.ndarray):
+                    wavs = np.array(wavs)
+
+                print(f"✨ Audio Finalized: {len(wavs)} samples ({(len(wavs)/sr):.2f} seconds)")
                 
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
-                
-                # Final conversion to numpy for saving
-                print(f"DEBUG - Finalizing audio type: {type(wavs)}")
-                if isinstance(wavs, (list, tuple)):
-                    print("DEBUG - Converting list/tuple of tensors to numpy.")
-                    wavs = wavs[0] # Take first item if list
-                
-                if isinstance(wavs, torch.Tensor):
-                    wavs = wavs.detach().cpu().numpy()
-                    # Handle batch dimension if present
-                    if wavs.ndim > 1:
-                        wavs = wavs[0]
-                
-                if not isinstance(wavs, np.ndarray):
-                    print(f"DEBUG - Forcing conversion of {type(wavs)} to numpy array.")
-                    wavs = np.array(wavs)
                 
                 duration = time.time() - gen_start
                 print(f"GENERATION COMPLETE in {duration:.2f}s")
