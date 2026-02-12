@@ -314,9 +314,15 @@ class PyTorchTTSBackend:
                 x_vector_only_mode=False,
             )
         
-        # Run blocking operation in thread pool
         voice_prompt_items = await asyncio.to_thread(_create_prompt_sync)
         
+        # Log details about the created prompt
+        if isinstance(voice_prompt_items, dict):
+            print(f"✅ Voice prompt created from {len(reference_text.split())} words.")
+            for k, v in voice_prompt_items.items():
+                if isinstance(v, torch.Tensor):
+                    print(f"  - {k}: shape={list(v.shape)}")
+
         # Cache if enabled
         if use_cache:
             cache_key = get_cache_key(audio_path, reference_text)
@@ -450,11 +456,24 @@ class PyTorchTTSBackend:
                 print(f"DEBUG - Raw Result Type: {type(wavs)}")
                 if isinstance(wavs, (list, tuple)):
                     if len(wavs) > 0:
-                        if isinstance(wavs[0], torch.Tensor):
-                            print(f"DEBUG - Concatenating {len(wavs)} audio segments.")
-                            wavs = torch.cat(wavs, dim=-1)
-                        else:
-                            wavs = wavs[0]
+                        print(f"DEBUG - Result contains {len(wavs)} items. Checking types...")
+                        # Filter out very short segments that might be silence/padding
+                        valid_segments = []
+                        for i, seg in enumerate(wavs):
+                            s_len = seg.numel() if isinstance(seg, torch.Tensor) else seg.size
+                            print(f"  - Segment {i}: {s_len} samples")
+                            if s_len > 1000: # Skip fragments < 40ms
+                                valid_segments.append(seg)
+                        
+                        if not valid_segments and len(wavs) > 0:
+                            valid_segments = [wavs[0]] # Fallback
+
+                        if isinstance(valid_segments[0], torch.Tensor):
+                            print(f"DEBUG - Concatenating {len(valid_segments)} torch segments.")
+                            wavs = torch.cat(valid_segments, dim=-1)
+                        elif isinstance(valid_segments[0], np.ndarray):
+                            print(f"DEBUG - Concatenating {len(valid_segments)} numpy segments.")
+                            wavs = np.concatenate(valid_segments, axis=-1)
                     else:
                         print("⚠️ WARNING: Model returned an empty list.")
                         wavs = torch.zeros(100)
@@ -466,9 +485,9 @@ class PyTorchTTSBackend:
                     wavs = wavs.squeeze()
                 
                 # 3. Check for empty generation
-                if (isinstance(wavs, torch.Tensor) and wavs.numel() < 100) or (isinstance(wavs, np.ndarray) and wavs.size < 100):
-                    print("⚠️ WARNING: Audio too short. Generation likely failed.")
-                    wavs = np.zeros(100)
+                if (isinstance(wavs, torch.Tensor) and wavs.numel() < 2000) or (isinstance(wavs, np.ndarray) and wavs.size < 2000):
+                    print("⚠️ WARNING: Audio too short (under 0.1s). Generation likely failed or hit EOS immediately.")
+                    # We return as is, but this identifies the bug in the logs.
 
                 # 4. Normalization
                 if isinstance(wavs, torch.Tensor):
@@ -481,9 +500,10 @@ class PyTorchTTSBackend:
                     wavs = wavs.numpy()
                 elif isinstance(wavs, np.ndarray):
                     max_val = np.abs(wavs).max()
-                    if max_val > 1.0:
-                        wavs = wavs / (max_val + 1e-6)
-                    wavs = np.clip(wavs, -0.99, 0.99)
+                    if max_val > 0.00001:
+                        if max_val > 1.0:
+                            wavs = wavs / (max_val + 1e-6)
+                        wavs = np.clip(wavs, -0.99, 0.99)
 
                 # 5. Ensure 1D Numpy
                 if not isinstance(wavs, np.ndarray):
