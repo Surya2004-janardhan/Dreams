@@ -300,52 +300,54 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
         console.log("📽️ Final Remuxing (audio offset sync + BGM mixing + high-compatibility settings)...");
         
-        let command = ffmpeg(raw).input(audioSrc);
-        let hasBgm = !!bgmSrc;
-        
-        if (hasBgm) {
-            command = command.input(bgmSrc).inputOptions(['-stream_loop -1']);
-        }
+        await new Promise((res, rej) => {
+            let command = ffmpeg(raw).input(audioSrc);
+            let hasBgm = !!bgmSrc;
+            
+            if (hasBgm) {
+                command = command.input(bgmSrc).inputOptions(['-stream_loop -1']);
+            }
 
-        const filterComplex = [
-            { filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'delayed' }
-        ];
+            const filterComplex = [
+                { filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'delayed' }
+            ];
 
-        if (hasBgm) {
-            filterComplex.push({
-                filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
-            });
-            filterComplex.push({
-                filter: 'amix',
-                options: { inputs: 2, dropout_transition: 0, normalize: 0 }, 
-                inputs: ['delayed', 'lowBgm'],
-                outputs: 'mixed'
-            });
-        } else {
-            filterComplex[0].outputs = 'mixed';
-        }
+            if (hasBgm) {
+                filterComplex.push({
+                    filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
+                });
+                filterComplex.push({
+                    filter: 'amix',
+                    options: { inputs: 2, dropout_transition: 0, normalize: 0 }, 
+                    inputs: ['delayed', 'lowBgm'],
+                    outputs: 'mixed'
+                });
+            } else {
+                filterComplex[0].outputs = 'mixed';
+            }
 
-        command.complexFilter(filterComplex)
-            .outputOptions([
-                '-y', 
-                '-c:v libx264', 
-                '-pix_fmt yuv420p',
-                '-preset fast', 
-                '-crf 22', 
-                '-profile:v main',
-                '-level:v 4.1',
-                '-r 30',
-                '-c:a aac', 
-                '-ar 44100',
-                '-map 0:v:0', 
-                '-map [mixed]', 
-                '-shortest', 
-                '-movflags +faststart'
-            ])
-            .output(out)
-            .on('end', () => { masterPath = out; res(); })
-            .on('error', rej)
-            .run();
+            command.complexFilter(filterComplex)
+                .outputOptions([
+                    '-y', 
+                    '-c:v libx264', 
+                    '-pix_fmt yuv420p',
+                    '-preset fast', 
+                    '-crf 22', 
+                    '-profile:v main',
+                    '-level:v 4.1',
+                    '-r 30',
+                    '-c:a aac', 
+                    '-ar 44100',
+                    '-map 0:v:0', 
+                    '-map [mixed]', 
+                    '-shortest', 
+                    '-movflags +faststart'
+                ])
+                .output(out)
+                .on('end', () => { masterPath = out; res(); })
+                .on('error', rej)
+                .run();
+        });
         if (fs.existsSync(raw)) fs.unlinkSync(raw);
         complete = true;
     });
