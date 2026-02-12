@@ -1,6 +1,9 @@
 name: Reels Automation Pipeline
 
 on:
+  push:
+    branches:
+      - develop-visual
   schedule:
     # 8:00 AM IST (2:30 AM UTC)
     - cron: '30 2 * * *'
@@ -87,9 +90,8 @@ jobs:
       - name: Pre-compute Face Boxes (if cache miss)
         if: steps.face-cache.outputs.cache-hit != 'true'
         run: |
-          # The script is already in wav2lip/precompute_face.py
-          # We use a batch size of 16 for Actions runners
-          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 16
+          # batch_size=2 keeps RAM under 7GB for 1080p videos on free runners
+          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 2
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         id: playwright-cache
