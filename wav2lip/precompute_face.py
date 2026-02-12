@@ -19,7 +19,7 @@ def get_smoothened_boxes(boxes, T):
 def precompute_face_boxes(video_path, output_path, batch_size=4, nosmooth=False):
     # Forced to CPU for stability as requested
     device = 'cpu'
-    print(f'Starting STABLE pre-computation on {device}...')
+    print(f'Starting STABLE pre-computation on {device} (Memory Efficient Mode)...')
     
     # Initialize detector
     detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
@@ -31,39 +31,36 @@ def precompute_face_boxes(video_path, output_path, batch_size=4, nosmooth=False)
         print(f"Error: Could not open video {video_path}")
         return
 
-    frames = []
-    fps = video_stream.get(cv2.CAP_PROP_FPS)
-    if fps == 0:
-        print("Error: Invalid video file (FPS is 0)")
-        return
-
-    while True:
-        still_reading, frame = video_stream.read()
-        if not still_reading:
-            break
-        # FaceAlignment expects RGB
-        frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    video_stream.release()
-
-    total_frames = len(frames)
-    print(f'Total frames: {total_frames}. Detecting faces with RTX power...')
+    total_frames = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+    print(f'Total frames: {total_frames}. Processing batches of {batch_size}...')
     
-    # Batch processing for detection
     predictions = []
-    while 1:
-        predictions = []
+    pbar = tqdm(total=total_frames)
+    
+    while True:
+        batch_frames = []
+        for _ in range(batch_size):
+            still_reading, frame = video_stream.read()
+            if not still_reading:
+                break
+            # FaceAlignment expects RGB
+            batch_frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        
+        if not batch_frames:
+            break
+            
+        # Process batch
         try:
-            for i in tqdm(range(0, total_frames, batch_size)):
-                batch = np.array(frames[i:i + batch_size])
-                preds = detector.get_detections_for_batch(batch)
-                predictions.extend(preds)
-        except RuntimeError as e:
-            if "out of memory" in str(e).lower() and batch_size > 1:
-                batch_size //= 2
-                print(f'RTX Memory Full; auto-reducing batch size to: {batch_size}')
-                continue
-            raise e
-        break
+            batch_np = np.array(batch_frames)
+            preds = detector.get_detections_for_batch(batch_np)
+            predictions.extend(preds)
+            pbar.update(len(batch_frames))
+        except Exception as e:
+            print(f"Error during batch processing: {e}")
+            break
+
+    pbar.close()
+    video_stream.release()
     
     # Convert predictions (rects) to box coordinates [x1, y1, x2, y2]
     boxes = []
@@ -72,19 +69,26 @@ def precompute_face_boxes(video_path, output_path, batch_size=4, nosmooth=False)
             if len(boxes) > 0:
                 boxes.append(boxes[-1])
             else:
-                print("Warning: Initial frame had no face. Defaulting to center box.")
+                # Default box if first frame fails
                 boxes.append([0, 0, 100, 100])
         else:
             boxes.append([rect[0], rect[1], rect[2], rect[3]])
             
     boxes = np.array(boxes)
+    
+    # Check if we have enough boxes
+    if len(boxes) < total_frames:
+        print(f"Warning: Only processed {len(boxes)}/{total_frames} frames. Padding with last known box.")
+        while len(boxes) < total_frames:
+            boxes = np.vstack([boxes, boxes[-1]]) if len(boxes) > 0 else np.array([[0,0,100,100]])
+
     if not nosmooth:
         print("Applying temporal smoothing to face boxes...")
         boxes = get_smoothened_boxes(boxes, T=5)
         
     # Save to .npy
     np.save(output_path, boxes)
-    print(f'✅ GPU EXPORT SUCCESSFUL: {len(boxes)} frames cached to {output_path}')
+    print(f'✅ CACHE EXPORT SUCCESSFUL: {len(boxes)} frames saved to {output_path}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
