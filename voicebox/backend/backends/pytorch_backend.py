@@ -286,6 +286,9 @@ class PyTorchTTSBackend:
             Tuple of (voice_prompt_dict, was_cached)
         """
         await self.load_model_async(None)
+        print(f"🎤 Creating voice prompt. Text source: {'Manual' if reference_text else 'Automatic Whisper'}")
+        if reference_text:
+            print(f"📝 Reference Text: '{reference_text[:80]}{'...' if len(reference_text) > 80 else ''}'")
         
         # Check cache if enabled
         if use_cache:
@@ -402,10 +405,10 @@ class PyTorchTTSBackend:
                 else:
                     print(f"  - {k}: {type(v)}")
 
-        # Use the provided instruct prompt
-        generation_instruct = instruct
+        # "Dont include custom prompts for now" - Ignoring instruct as requested for stability
+        generation_instruct = None
         if instruct:
-            print(f"🎨 Applying style instruction: '{instruct}'")
+            print(f"ℹ️ Ignoring custom instruct prompt as requested: '{instruct}'")
 
         def _generate_sync():
             gen_start = time.time()
@@ -413,66 +416,80 @@ class PyTorchTTSBackend:
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 
-                print(f"DEVICE: {self.device}, MODEL DTYPE: {getattr(self.model, 'dtype', 'unknown')}")
-                import os
-                print(f"DEBUG - Environment FORCE_CPU: {os.getenv('FORCE_CPU')}")
-                print(f"DEBUG - Environment GITHUB_ACTIONS: {os.getenv('GITHUB_ACTIONS')}")
+                # Log Prompt Details and move to device
+                if isinstance(voice_prompt, dict):
+                    for k, v in voice_prompt.items():
+                        if isinstance(v, torch.Tensor):
+                            print(f"DEBUG - Prompt '{k}': {v.shape} | {v.device} | {v.dtype}")
+                            if v.device.type != self.device:
+                                voice_prompt[k] = v.to(self.device)
 
                 # Quality/Speed Estimation
                 char_count = len(text)
                 est_min = "1-2" if self.model_size == "0.6B" else "4-6"
                 print(f"📦 Model Size: {self.model_size} | Script Length: {char_count} chars")
+                print(f"📝 Text to Model: '{cleaned_text[:50]}...'")
                 print(f"⏳ ESTIMATED WAIT: {est_min} minutes on CPU. Please do not close the terminal.")
                 print("--- Neural math in progress... ---")
                 
                 with torch.inference_mode():
-                    # Generate the whole thing at once
-                    wavs, sr = self.model.generate_voice_clone(
+                    # Generate audio - could return list of tensors or single tensor
+                    result = self.model.generate_voice_clone(
                         text=cleaned_text,
                         voice_clone_prompt=voice_prompt,
                         instruct=generation_instruct,
                     )
+                    
+                    if isinstance(result, tuple) and len(result) == 2:
+                        wavs, sr = result
+                    else:
+                        wavs = result
+                        sr = 24000 # Default fallback
                 
-                # 1. Robust Unpacking (Handle list/tuple nesting)
-                print(f"DEBUG - Raw Generated: type={type(wavs)}")
-                while isinstance(wavs, (list, tuple)) and len(wavs) > 0:
-                    wavs = wavs[0]
-                
-                # 2. Convert to CPU Tensor for processing
+                # 1. Robust Unpacking & Concatenation
+                print(f"DEBUG - Raw Result Type: {type(wavs)}")
+                if isinstance(wavs, (list, tuple)):
+                    if len(wavs) > 0:
+                        if isinstance(wavs[0], torch.Tensor):
+                            print(f"DEBUG - Concatenating {len(wavs)} audio segments.")
+                            wavs = torch.cat(wavs, dim=-1)
+                        else:
+                            wavs = wavs[0]
+                    else:
+                        print("⚠️ WARNING: Model returned an empty list.")
+                        wavs = torch.zeros(100)
+
+                # 2. Convert to CPU Tensor
                 if isinstance(wavs, torch.Tensor):
                     wavs = wavs.detach().cpu()
-                    print(f"DEBUG - Tensor shape before squeeze: {wavs.shape}")
-                    wavs = wavs.squeeze() # Remove batch/channel dims
-                    print(f"DEBUG - Tensor shape after squeeze: {wavs.shape}")
+                    print(f"DEBUG - Tensor shape: {wavs.shape}")
+                    wavs = wavs.squeeze()
                 
-                # 3. Check for empty/failed generation
-                if wavs is None or (hasattr(wavs, 'numel') and wavs.numel() < 100):
-                    print("⚠️ WARNING: Model generated almost no audio. The text or instructions might be out of range.")
-                    return np.zeros(100), sr
+                # 3. Check for empty generation
+                if (isinstance(wavs, torch.Tensor) and wavs.numel() < 100) or (isinstance(wavs, np.ndarray) and wavs.size < 100):
+                    print("⚠️ WARNING: Audio too short. Generation likely failed.")
+                    wavs = np.zeros(100)
 
-                # 4. Professional Normalization & Clipping Prevention
-                # Neural models can sometimes output values > 1.0 which causes digital distortion
+                # 4. Normalization
                 if isinstance(wavs, torch.Tensor):
                     max_val = torch.abs(wavs).max().item()
                     if max_val > 0.00001:
                         if max_val > 1.0:
-                            print(f"📏 Normalizing Tensor: Peak {max_val:.2f} -> 1.0 (Fixing distortion/shake)")
+                            print(f"📏 Normalizing: Peak {max_val:.2f}")
                             wavs = wavs / (max_val + 1e-6)
                         wavs = torch.clamp(wavs, -0.99, 0.99)
-                else:
-                    # Handle as numpy array
-                    max_val = np.abs(wavs).max()
-                    if max_val > 0.00001:
-                        if max_val > 1.0:
-                            print(f"📏 Normalizing Array: Peak {max_val:.2f} -> 1.0")
-                            wavs = wavs / (max_val + 1e-6)
-                        wavs = np.clip(wavs, -0.99, 0.99)
-                
-                # 5. Final NumPy conversion
-                if isinstance(wavs, torch.Tensor):
                     wavs = wavs.numpy()
-                elif not isinstance(wavs, np.ndarray):
+                elif isinstance(wavs, np.ndarray):
+                    max_val = np.abs(wavs).max()
+                    if max_val > 1.0:
+                        wavs = wavs / (max_val + 1e-6)
+                    wavs = np.clip(wavs, -0.99, 0.99)
+
+                # 5. Ensure 1D Numpy
+                if not isinstance(wavs, np.ndarray):
                     wavs = np.array(wavs)
+                if wavs.ndim > 1:
+                    wavs = wavs[0]
 
                 print(f"✨ Audio Finalized: {len(wavs)} samples ({(len(wavs)/sr):.2f} seconds)")
                 

@@ -49,9 +49,9 @@ async function testAudioQuality() {
       dummyScript, 
       referenceAudio, 
       outputFile, 
-      manualRefText, // Provided manually to skip STT load
+      null, // Set to null to enable automatic Whisper STT transcription
       viralInstructions, 
-      // Slightly slower for better clarity
+      0.9 
     );
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
