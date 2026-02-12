@@ -85,7 +85,8 @@ jobs:
         id: face-cache
         with:
           path: Base-vedio.npy
-          key: ${{ runner.os }}-face-boxes-${{ hashFiles('Base-vedio.mp4') }}
+          # IMPORTANT: Update this key when you change the Base-vedio Drive link above
+          key: ${{ runner.os }}-face-boxes-v1-1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1
 
       - name: Pre-compute Face Boxes (if cache miss)
         if: steps.face-cache.outputs.cache-hit != 'true'
