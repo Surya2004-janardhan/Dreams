@@ -31,7 +31,7 @@ async function testAudioQuality() {
   const manualRefText = "Hello, this is a sample recording of my natural speaking voice used for cloning.";
 
   // 4. Expression & Modulation Instructions
-  const viralInstructions = "Speak with a deep, authoritative bass. Emphasize the word 'INTELLIGENCE'. Use a sarcastic tone for 'living in the past', and end with high excitement.";
+  const viralInstructions = "Speak with a calm, confident, and professional tone.";
 
   try {
     if (!fs.existsSync(referenceAudio)) {

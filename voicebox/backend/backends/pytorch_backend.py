@@ -411,10 +411,8 @@ class PyTorchTTSBackend:
                 else:
                     print(f"  - {k}: {type(v)}")
 
-        # "Dont include custom prompts for now" - Ignoring instruct as requested for stability
+        # Custom instructions are disabled for the 'normal' automated flow
         generation_instruct = None
-        if instruct:
-            print(f"ℹ️ Ignoring custom instruct prompt as requested: '{instruct}'")
 
         def _generate_sync():
             gen_start = time.time()
@@ -422,24 +420,13 @@ class PyTorchTTSBackend:
                 if torch.cuda.is_available():
                     torch.cuda.synchronize()
                 
-                # Log Prompt Details and move to device
+                # Ensure prompts are on the correct device
                 if isinstance(voice_prompt, dict):
                     for k, v in voice_prompt.items():
-                        if isinstance(v, torch.Tensor):
-                            print(f"DEBUG - Prompt '{k}': {v.shape} | {v.device} | {v.dtype}")
-                            if v.device.type != self.device:
-                                voice_prompt[k] = v.to(self.device)
+                        if isinstance(v, torch.Tensor) and v.device.type != self.device:
+                            voice_prompt[k] = v.to(self.device)
 
-                # Quality/Speed Estimation
-                char_count = len(text)
-                est_min = "1-2" if self.model_size == "0.6B" else "4-6"
-                print(f"📦 Model Size: {self.model_size} | Script Length: {char_count} chars")
-                print(f"📝 Text to Model: '{cleaned_text[:50]}...'")
-                print(f"⏳ ESTIMATED WAIT: {est_min} minutes on CPU. Please do not close the terminal.")
-                print("--- Neural math in progress... ---")
-                
                 with torch.inference_mode():
-                    # Generate audio - could return list of tensors or single tensor
                     result = self.model.generate_voice_clone(
                         text=cleaned_text,
                         voice_clone_prompt=voice_prompt,
@@ -450,32 +437,18 @@ class PyTorchTTSBackend:
                         wavs, sr = result
                     else:
                         wavs = result
-                        sr = 24000 # Default fallback
+                        sr = 24000 
                 
-                # 1. Robust Unpacking & Concatenation
-                print(f"DEBUG - Raw Result Type: {type(wavs)}")
+                # Robust Unpacking & Concatenation (Kept for stability)
                 if isinstance(wavs, (list, tuple)):
                     if len(wavs) > 0:
-                        print(f"DEBUG - Result contains {len(wavs)} items. Checking types...")
-                        # Filter out very short segments that might be silence/padding
-                        valid_segments = []
-                        for i, seg in enumerate(wavs):
-                            s_len = seg.numel() if isinstance(seg, torch.Tensor) else seg.size
-                            print(f"  - Segment {i}: {s_len} samples")
-                            if s_len > 1000: # Skip fragments < 40ms
-                                valid_segments.append(seg)
-                        
-                        if not valid_segments and len(wavs) > 0:
-                            valid_segments = [wavs[0]] # Fallback
-
-                        if isinstance(valid_segments[0], torch.Tensor):
-                            print(f"DEBUG - Concatenating {len(valid_segments)} torch segments.")
-                            wavs = torch.cat(valid_segments, dim=-1)
-                        elif isinstance(valid_segments[0], np.ndarray):
-                            print(f"DEBUG - Concatenating {len(valid_segments)} numpy segments.")
-                            wavs = np.concatenate(valid_segments, axis=-1)
+                        if isinstance(wavs[0], torch.Tensor):
+                            wavs = torch.cat(wavs, dim=-1)
+                        elif isinstance(wavs[0], np.ndarray):
+                            wavs = np.concatenate(wavs, axis=-1)
+                        else:
+                            wavs = wavs[0]
                     else:
-                        print("⚠️ WARNING: Model returned an empty list.")
                         wavs = torch.zeros(100)
 
                 # 2. Convert to CPU Tensor
