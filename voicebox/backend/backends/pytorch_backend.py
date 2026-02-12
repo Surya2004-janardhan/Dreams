@@ -451,12 +451,22 @@ class PyTorchTTSBackend:
                     return np.zeros(100), sr
 
                 # 4. Professional Normalization & Clipping Prevention
-                max_val = torch.abs(wavs).max().item()
-                if max_val > 0.00001:
-                    if max_val > 1.0:
-                        print(f"📏 Normalizing: Peak {max_val:.2f} -> 1.0 (Fixing distortion/shake)")
-                        wavs = wavs / (max_val + 1e-6)
-                    wavs = torch.clamp(wavs, -0.99, 0.99)
+                # Neural models can sometimes output values > 1.0 which causes digital distortion
+                if isinstance(wavs, torch.Tensor):
+                    max_val = torch.abs(wavs).max().item()
+                    if max_val > 0.00001:
+                        if max_val > 1.0:
+                            print(f"📏 Normalizing Tensor: Peak {max_val:.2f} -> 1.0 (Fixing distortion/shake)")
+                            wavs = wavs / (max_val + 1e-6)
+                        wavs = torch.clamp(wavs, -0.99, 0.99)
+                else:
+                    # Handle as numpy array
+                    max_val = np.abs(wavs).max()
+                    if max_val > 0.00001:
+                        if max_val > 1.0:
+                            print(f"📏 Normalizing Array: Peak {max_val:.2f} -> 1.0")
+                            wavs = wavs / (max_val + 1e-6)
+                        wavs = np.clip(wavs, -0.99, 0.99)
                 
                 # 5. Final NumPy conversion
                 if isinstance(wavs, torch.Tensor):
