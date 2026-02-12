@@ -11,7 +11,7 @@ on:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 340
 
     steps:
       - name: Checkout Code
@@ -35,7 +35,7 @@ jobs:
           # Download using gdown
           gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
           gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
-          gdown 1R18D4f09IiEYhudN2motD9bZ_AA5YzwP -O Base-vedio.mp4
+          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O Base-vedio.mp4
 
       - name: Verify Downloads
         run: |
