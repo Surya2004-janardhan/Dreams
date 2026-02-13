@@ -336,7 +336,7 @@ class PyTorchTTSBackend:
             
             # Apply normalization to fix "base shake"/clipping
             audio = wavs[0]
-            audio = normalize_audio(audio)
+            audio = normalize_audio(audio, sample_rate=sample_rate)
             
             return audio, sample_rate
 
