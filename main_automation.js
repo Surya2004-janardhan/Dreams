@@ -314,7 +314,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.7', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
@@ -331,8 +331,8 @@ async function runCompositor(vPath, sPath, vPrompt) {
                     '-y', 
                     '-c:v libx264', 
                     '-pix_fmt yuv420p',
-                    '-preset fast', 
-                    '-crf 22', 
+                    '-preset slow', 
+                    '-crf 18', 
                     '-profile:v main',
                     '-level:v 4.1',
                     '-r 30',
