@@ -354,27 +354,40 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
     try {
         console.log("🌐 Navigating to composer...");
-        await page.goto('http://localhost:3000', { timeout: 90000, waitUntil: 'networkidle' });
+        await page.goto('http://localhost:3000', { timeout: 60000, waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000); // Small grace for local hydration
         
         const pass = page.locator('input[type="password"]');
-        await pass.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+        await pass.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {
+            console.log("ℹ️ No password field detected, assuming already logged in.");
+        });
         
         if (await pass.isVisible()) {
             console.log("🔑 Entering API key...");
             for (const key of uniqueKeys) {
+                console.log(`🔑 Trying API key: ${key.substring(0, 4)}...${key.substring(key.length - 4)}`);
                 await pass.fill(key);
                 await page.click('button:has-text("Enter Studio")');
+                
+                // Wait for either the success indicator or a failure message/timeout
                 const success = await Promise.race([
-                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 30000 }).then(() => true),
-                    page.waitForTimeout(31000).then(() => false)
+                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 20000 }).then(() => true).catch(() => false),
+                    page.waitForTimeout(21000).then(() => false)
                 ]);
-                if (success) break;
-                await pass.fill('');
+
+                if (success) {
+                    console.log("✅ Login successful.");
+                    break;
+                }
+                console.log("❌ Key failed or timed out. Trying next...");
+                await pass.clear();
             }
         }
 
         console.log("📤 Uploading assets...");
-        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 60000 });
+        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 60000 }).catch(err => {
+            throw new Error(`CRITICAL: Page failed to load #video-upload after login attempts. Error: ${err.message}`);
+        });
         await page.setInputFiles('#video-upload', vPath);
         await page.setInputFiles('#srt-upload', sPath);
         await page.waitForTimeout(5000);
