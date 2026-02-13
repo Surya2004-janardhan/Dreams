@@ -333,7 +333,12 @@ class PyTorchTTSBackend:
                 voice_clone_prompt=voice_prompt,
                 instruct=instruct,
             )
-            return wavs[0], sample_rate
+            
+            # Apply normalization to fix "base shake"/clipping
+            audio = wavs[0]
+            audio = normalize_audio(audio)
+            
+            return audio, sample_rate
 
         # Run blocking inference in thread pool to avoid blocking event loop
         audio, sample_rate = await asyncio.to_thread(_generate_sync)
