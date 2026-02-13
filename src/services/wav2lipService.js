@@ -60,6 +60,12 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
             '--outfile', absOutputPath,
             '--resize_factor', '1'
         ];
+
+        // Pass face detection cache if it exists (Triggers OOM-safe streaming mode in inference.py)
+        if (hasCache) {
+            args.push('--face_det_results', cachePath);
+            logger.info(`📦 Using pre-computed face boxes: ${cachePath}`);
+        }
         
         const proc = spawn('python', args, { cwd: wav2lipDir });
 
