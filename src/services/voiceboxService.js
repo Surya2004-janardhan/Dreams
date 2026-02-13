@@ -21,7 +21,7 @@ class VoiceboxService {
      * @param {number} [speed] - Speech speed ratio (default: 0.9).
      * @returns {Promise<string>} - Path to the generated audio file.
      */
-    async generateClonedVoice(text, refAudioPath, outputPath, refText = null, instruct = null, speed = 0.9) {
+    async generateClonedVoice(text, refAudioPath, outputPath, refText = null, instruct = null, speed = 0.85) {
         if (!fs.existsSync(this.voiceboxDir)) {
             throw new Error(`Voicebox directory not found at: ${this.voiceboxDir}`);
         }
