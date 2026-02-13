@@ -58,7 +58,7 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
             '--face', absFacePath,
             '--audio', absAudioPath,
             '--outfile', absOutputPath,
-            '--resize_factor', '2'
+            '--resize_factor', '1'
         ];
         
         const proc = spawn('python', args, { cwd: wav2lipDir });
