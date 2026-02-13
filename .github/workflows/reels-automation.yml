@@ -1,6 +1,9 @@
 name: Reels Automation Pipeline
 
 on:
+  push:
+    branches:
+      - develop-visual
   schedule:
     # 8:00 AM IST (2:30 AM UTC)
     - cron: '30 2 * * *'
@@ -11,7 +14,7 @@ on:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 340
 
     steps:
       - name: Checkout Code
@@ -35,7 +38,7 @@ jobs:
           # Download using gdown
           gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
           gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
-          gdown 1R18D4f09IiEYhudN2motD9bZ_AA5YzwP -O Base-vedio.mp4
+          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O Base-vedio.mp4
 
       - name: Verify Downloads
         run: |
@@ -77,6 +80,19 @@ jobs:
           # Specific addition from voicebox README if needed
           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
+      - name: Cache Face Detection Bounding Boxes
+        uses: actions/cache@v4
+        id: face-cache
+        with:
+          path: Base-vedio.npy
+          # IMPORTANT: Update this key when you change the Base-vedio Drive link above
+          key: ${{ runner.os }}-face-boxes-v1-1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1
+
+      - name: Pre-compute Face Boxes (if cache miss)
+        if: steps.face-cache.outputs.cache-hit != 'true'
+        run: |
+          # batch_size=2 keeps RAM under 7GB for 1080p videos on free runners
+          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 2
       - name: Cache Playwright Browsers
         uses: actions/cache@v4
         id: playwright-cache

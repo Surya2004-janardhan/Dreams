@@ -10,11 +10,18 @@ const logger = require('../config/logger');
  * @param {string} outputPath - Path to save the synced video
  * @returns {Promise<string>} - Path to the generated video
  */
-async function syncLip(audioPath, facePath, outputPath) {
+async function syncLip(audioPath, facePath, outputPath, options = {}) {
     // Resolve absolute paths
     const absAudioPath = path.resolve(audioPath);
     const absFacePath = path.resolve(facePath);
     const absOutputPath = path.resolve(outputPath);
+    // Use "Elite" Sync Settings: bottom padding for chin + no smoothing for snapping
+    const pads = options.pads || [0, 20, 0, 0]; // Extra bottom padding for chin movement
+    const nosmooth = options.nosmooth !== undefined ? options.nosmooth : true; // Default to snap for tech content
+    
+    // Check for pre-computed face cache to save time
+    const cachePath = path.resolve('Base-vedio.npy');
+    const hasCache = fs.existsSync(cachePath);
     
     const wav2lipDir = path.resolve(__dirname, '../../wav2lip');
     const checkpoint = path.join(wav2lipDir, 'checkpoints/wav2lip_gan.pth');
@@ -40,7 +47,7 @@ async function syncLip(audioPath, facePath, outputPath) {
                     `--outfile "${absOutputPath}" ` +
                     `--resize_factor 2`;
 
-    logger.info(`👄 Starting Wav2Lip Sync...`);
+    logger.info(`👄 Starting Wav2Lip Sync (Safe Mode - CPU)...`);
     logger.debug(`Command: ${command}`);
 
     return new Promise((resolve, reject) => {

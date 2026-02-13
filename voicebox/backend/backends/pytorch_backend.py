@@ -26,12 +26,7 @@ class PyTorchTTSBackend:
         self._current_model_size = None
     
     def _get_device(self) -> str:
-        """Get the best available device."""
-        if torch.cuda.is_available():
-            return "cuda"
-        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            # MPS can have issues, use CPU for stability
-            return "cpu"
+        """Forced to CPU for stability."""
         return "cpu"
     
     def is_loaded(self) -> bool:
@@ -306,6 +301,7 @@ class PyTorchTTSBackend:
         language: str = "en",
         seed: Optional[int] = None,
         instruct: Optional[str] = None,
+        speed: float = 1.0,
     ) -> Tuple[np.ndarray, int]:
         """
         Generate audio from text using voice prompt.
@@ -341,6 +337,12 @@ class PyTorchTTSBackend:
 
         # Run blocking inference in thread pool to avoid blocking event loop
         audio, sample_rate = await asyncio.to_thread(_generate_sync)
+
+        # Apply speed adjustment if requested
+        if speed != 1.0:
+            import librosa
+            print(f"Applying speed adjustment: {speed}x")
+            audio = librosa.effects.time_stretch(audio, rate=speed)
 
         return audio, sample_rate
 

@@ -71,8 +71,9 @@ async function main() {
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                // Generate audio using our local Voicebox Service
-                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO);
+                // Generate audio with professional technical educator instructions
+                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
+                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
@@ -286,24 +287,59 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
+        // Resolve BGM source (supporting multiple formats)
+        const bgmExtensions = ['.mp3', '.m4a', '.wav'];
+        let bgmSrc = null;
+        for (const ext of bgmExtensions) {
+            const potentialPath = path.resolve(`bgm${ext}`);
+            if (fs.existsSync(potentialPath)) {
+                bgmSrc = potentialPath;
+                break;
+            }
+        }
 
-        console.log("📽️ Final Remuxing (audio offset sync + high-compatibility settings)...");
+        console.log("📽️ Final Remuxing (audio offset sync + BGM mixing + high-compatibility settings)...");
+        
         await new Promise((res, rej) => {
-            ffmpeg(raw).input(audioSrc)
-                .complexFilter([{ filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'd' }])
+            let command = ffmpeg(raw).input(audioSrc);
+            let hasBgm = !!bgmSrc;
+            
+            if (hasBgm) {
+                command = command.input(bgmSrc).inputOptions(['-stream_loop -1']);
+            }
+
+            const filterComplex = [
+                { filter: 'adelay', options: '400|400', inputs: '1:a', outputs: 'delayed' }
+            ];
+
+            if (hasBgm) {
+                filterComplex.push({
+                    filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
+                });
+                filterComplex.push({
+                    filter: 'amix',
+                    options: { inputs: 2, dropout_transition: 0, normalize: 0 }, 
+                    inputs: ['delayed', 'lowBgm'],
+                    outputs: 'mixed'
+                });
+            } else {
+                filterComplex[0].outputs = 'mixed';
+            }
+
+            command.complexFilter(filterComplex)
                 .outputOptions([
                     '-y', 
                     '-c:v libx264', 
-                    '-pix_fmt yuv420p',      // Crucial for Instagram/Facebook
+                    '-pix_fmt yuv420p',
                     '-preset fast', 
                     '-crf 22', 
-                    '-profile:v main',       // Main profile is more compatible
+                    '-profile:v main',
                     '-level:v 4.1',
-                    '-r 30',                 // Force constant 30fps to avoid VFR issues
+                    '-r 30',
                     '-c:a aac', 
-                    '-ar 44100',             // Standard audio rate
+                    '-ar 44100',
                     '-map 0:v:0', 
-                    '-map [d]', 
+                    '-map [mixed]', 
                     '-shortest', 
                     '-movflags +faststart'
                 ])

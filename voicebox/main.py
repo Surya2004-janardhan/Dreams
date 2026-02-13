@@ -30,7 +30,7 @@ async def voicebox_get_ref_text(audio_sample_path):
     print(f"Transcribing reference audio: {audio_sample_path}")
     return await _stt_backend.transcribe(str(audio_sample_path))
 
-async def voicebox_clone_and_generate(text, audio_sample_path, sample_transcript=None, output_path="output.wav"):
+async def voicebox_clone_and_generate(text, audio_sample_path, sample_transcript=None, output_path="output.wav", instruct=None, speed=1.0):
     """
     Core function for voice cloning and synthesis.
     """
@@ -65,7 +65,9 @@ async def voicebox_clone_and_generate(text, audio_sample_path, sample_transcript
     audio, sample_rate = await _backend.generate(
         text=text,
         voice_prompt=voice_prompt,
-        language="en"
+        language="en",
+        instruct=instruct,
+        speed=speed
     )
 
     # 5. Save and Return
@@ -78,6 +80,8 @@ if __name__ == "__main__":
     parser.add_argument("--audio", required=True, help="Path to reference audio sample")
     parser.add_argument("--ref_text", help="Transcript of the reference audio (optional, will auto-transcribe if missing)")
     parser.add_argument("--output", default="output.wav", help="Path to save the generated audio")
+    parser.add_argument("--instruct", help="Natural language instruction for style")
+    parser.add_argument("--speed", type=float, default=1.0, help="Speech speed ratio (e.g. 0.9 for 10% slower)")
     
     args = parser.parse_args()
 
@@ -87,7 +91,9 @@ if __name__ == "__main__":
                 text=args.text,
                 audio_sample_path=args.audio,
                 sample_transcript=args.ref_text,
-                output_path=args.output
+                output_path=args.output,
+                instruct=args.instruct,
+                speed=args.speed
             )
             print(f"SUCCESS: {path}")
         except Exception as e:
