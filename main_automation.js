@@ -73,7 +73,19 @@ async function main() {
             try {
                 // Generate audio with professional technical educator instructions
                 const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
-                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+                const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+                
+                // NEW: Slow down audio to 0.9x immediately after generation so it's used for the whole flow
+                logger.info("⏳ Slowing down audio to 0.9x via FFmpeg...");
+                const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
+                await new Promise((res, rej) => {
+                    ffmpeg(rawAudioPath)
+                        .audioFilters('atempo=0.9')
+                        .on('end', res)
+                        .on('error', rej)
+                        .save(slowedAudioPath);
+                });
+                audioPath = slowedAudioPath;
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
