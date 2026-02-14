@@ -428,60 +428,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
   };
 
-  // --- Nuclear Fix: Canvas Proxy for Video Capture ---
-  // This ensures the video frame is ALWAYS repainted, bypassing browser-level optimization "freezes"
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // --- Nuclear Fix: Canvas Proxy for Video Capture REMOVED (Causing black visuals)
 
-  useEffect(() => {
-    if (!isRecording) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-    if (!ctx) return;
-
-    let animId: number;
-    let jitter = 0;
-    const draw = () => {
-      if (video.readyState >= 2) {
-        // Calculate "cover" logic manually for the canvas drawing
-        const canvasAspect = canvas.width / canvas.height;
-        const videoAspect = video.videoWidth / video.videoHeight;
-
-        let drawWidth = canvas.width;
-        let drawHeight = canvas.height;
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (videoAspect > canvasAspect) {
-          // Video is wider than canvas (Horizontal -> Letterbox)
-          drawWidth = canvas.width;
-          drawHeight = canvas.width / videoAspect;
-          offsetY = (canvas.height - drawHeight) / 2;
-        } else {
-          // Video is taller than canvas (Tall -> Pillarbox)
-          drawHeight = canvas.height;
-          drawWidth = canvas.height * videoAspect;
-          offsetX = (canvas.width - drawWidth) / 2;
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-
-        // Jitter Hack: Forces the browser to see a "change" in current pixels
-        // prevents the encoder from sleeping on static video frames.
-        jitter = (jitter + 1) % 2;
-        ctx.fillStyle = `rgba(255,255,255,${0.02 + (jitter * 0.001)})`;
-        ctx.fillRect(0, 0, 1, 1);
-      }
-      animId = requestAnimationFrame(draw);
-    };
-
-    draw();
-    return () => cancelAnimationFrame(animId);
-  }, [isRecording]);
 
   const startRecording = async () => {
     try {
@@ -587,8 +535,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         id="recording-target"
         className="relative bg-black overflow-hidden shadow-2xl border border-gray-800 rounded-none"
         style={{
-          width: fullScreenMode ? 'calc(90vh * 9 / 16)' : '360px',
-          height: fullScreenMode ? '90vh' : '640px',
+          width: fullScreenMode ? 'calc(90vh * 9 / 16)' : '540px',
+          height: fullScreenMode ? '90vh' : '960px',
           aspectRatio: '9/16',
           maxWidth: '100%',
           cursor: isRecording ? 'none' : 'default',
@@ -624,15 +572,6 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             muted={false}
             onEnded={stopRecording}
           />
-          {/* PRO COMPOSITOR CANVAS - True Master Quality Rendering */}
-          {isRecording && (
-            <canvas
-              ref={canvasRef}
-              width={2160}
-              height={3840}
-              className="absolute inset-0 w-full h-full object-cover z-[40]"
-            />
-          )}
           {/* Background Music - Hidden */}
           <audio
             ref={audioRef}

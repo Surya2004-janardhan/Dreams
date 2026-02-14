@@ -275,7 +275,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         headless: false,
         args: [
             '--auto-select-desktop-capture-source=Entire screen',
-            '--auto-select-tab-capture-source-by-title=Reel Composer',
+            '--auto-select-tab-capture-source-by-title=Reel Composer | AI Director\'s Studio',
             '--enable-usermedia-screen-capturing',
             '--use-fake-ui-for-media-stream',
             '--use-fake-device-for-media-stream',
@@ -287,7 +287,11 @@ async function runCompositor(vPath, sPath, vPrompt) {
         ]
     });
 
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    const context = await browser.newContext({ 
+        viewport: { width: 1080, height: 1920 }, // Vertical High-Res Viewport
+        acceptDownloads: true,
+        deviceScaleFactor: 2 // Boost pixel density for sharper recording
+    });
     const page = await context.newPage();
     let masterPath = "";
     let complete = false;
@@ -413,11 +417,58 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.fill('textarea', vPrompt);
         await page.click('button:has-text("Studio")'); 
 
-        console.log("⏳ Submitted visual prompt. Waiting 5 minutes for generation/rendering to complete...");
-        await page.waitForTimeout(300000); // 5 minutes wait
+        console.log("⏳ Waiting for generation to complete...");
+        let isDone = false;
+        for (let i = 1; i <= 10; i++) { // Max 10 checks (10 mins)
+            await page.waitForTimeout(60000);
+            console.log(`⏳ Generation wait progress: ${i} minute(s) elapsed...`);
+            
+            // Keep tab active by moving mouse slightly
+            await page.mouse.move(500 + i, 500 + i);
+            
+            // Check if the generation button is clickable again or if the player is ready
+            const status = await page.evaluate(() => {
+                const btn = document.querySelector('button:has-text("Studio")');
+                const isGenerating = btn?.disabled || document.body.innerText.includes("Generating Content");
+                const v = document.querySelector('video');
+                return { 
+                    isGenerating,
+                    readyState: v? v.readyState : 0,
+                    hasVideo: !!v
+                };
+            });
+            
+            console.log(`📊 Generation Status: ${JSON.stringify(status)}`);
+            if (!status.isGenerating && status.readyState >= 2) {
+                console.log("✅ Generation appears complete.");
+                isDone = true;
+                break;
+            }
+        }
         
-        console.log("⏳ Generation wait complete. Looking for Rec & Export button...");
-        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 300000 });
+        if (!isDone) console.warn("⚠️ Warning: 10 minutes passed without clear 'Done' signal. Proceeding anyway.");
+
+        console.log("⏳ Looking for Rec & Export button...");
+        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 30000 });
+
+        // Final check: Video must have duration and be ready
+        const finalCheck = await page.evaluate(() => {
+            const v = document.querySelector('video');
+            if (!v) return 'MISSING';
+            if (v.readyState < 2) return 'NOT_READY';
+            if (v.duration === 0 || isNaN(v.duration)) return 'INVALID_DURATION';
+            return 'OK';
+        });
+        
+        console.log(`🎬 Final Health Check: ${finalCheck}`);
+        if (finalCheck !== 'OK') {
+            console.warn(`⚠️ Warning: Video state is ${finalCheck}. Attempting to force reload src...`);
+            await page.evaluate(() => {
+                const v = document.querySelector('video');
+                if (v) { v.load(); v.play().catch(() => {}); }
+            });
+            await page.waitForTimeout(3000);
+        }
         
         console.log("🎬 Initiating Recording...");
         await page.click('button:has-text("Rec & Export")');
