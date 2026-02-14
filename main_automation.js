@@ -426,21 +426,24 @@ async function runCompositor(vPath, sPath, vPrompt) {
             // Keep tab active by moving mouse slightly
             await page.mouse.move(500 + i, 500 + i);
             
-            // Check if the generation button is clickable again or if the player is ready
+            // Check if generation is active or if we're back in the editor state
             const status = await page.evaluate(() => {
-                const btn = document.querySelector('button:has-text("Studio")');
-                const isGenerating = btn?.disabled || document.body.innerText.includes("Generating Content");
+                const buttons = Array.from(document.querySelectorAll('button'));
+                const studioBtn = buttons.find(b => b.innerText.includes('Studio'));
+                
+                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Content");
                 const v = document.querySelector('video');
+                
                 return { 
                     isGenerating,
-                    readyState: v? v.readyState : 0,
+                    readyState: v ? v.readyState : 0,
                     hasVideo: !!v
                 };
             });
             
             console.log(`📊 Generation Status: ${JSON.stringify(status)}`);
             if (!status.isGenerating && status.readyState >= 2) {
-                console.log("✅ Generation appears complete.");
+                console.log("✅ Generation complete.");
                 isDone = true;
                 break;
             }
