@@ -1,45 +1,49 @@
-"""
-Audio processing utilities.
-"""
-
 import numpy as np
 import soundfile as sf
 import librosa
 from typing import Tuple, Optional
-
+from scipy import signal
 
 def normalize_audio(
     audio: np.ndarray,
     target_db: float = -20.0,
     peak_limit: float = 0.85,
+    sample_rate: int = 24000
 ) -> np.ndarray:
     """
-    Normalize audio to target loudness with peak limiting.
+    Normalize audio to target loudness with high-pass filtering and peak limiting.
     
     Args:
         audio: Input audio array
         target_db: Target RMS level in dB
         peak_limit: Peak limit (0.0-1.0)
+        sample_rate: Sample rate for filtering
         
     Returns:
         Normalized audio array
     """
     # Convert to float32
     audio = audio.astype(np.float32)
+
+    # 1. Apply High-Pass Filter (HPF) to remove low-frequency rumble ("base shake")
+    # Voicebox/TTS often generates sub-harmonic artifacts
+    sos = signal.butter(10, 100, 'hp', fs=sample_rate, output='sos')
+    audio = signal.sosfilt(sos, audio)
     
-    # Calculate current RMS
+    # 2. Calculate current RMS
     rms = np.sqrt(np.mean(audio**2))
     
-    # Calculate target RMS
+    # 3. Calculate target RMS
     target_rms = 10**(target_db / 20)
     
-    # Apply gain
+    # 4. Apply gain
     if rms > 0:
         gain = target_rms / rms
         audio = audio * gain
     
-    # Peak limiting
-    audio = np.clip(audio, -peak_limit, peak_limit)
+    # 5. Soft peak limiting (tanh) to avoid harsh clipping
+    # This keeps peaks below peak_limit
+    audio = np.tanh(audio) * peak_limit
     
     return audio
 

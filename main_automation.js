@@ -73,7 +73,19 @@ async function main() {
             try {
                 // Generate audio with professional technical educator instructions
                 const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
-                audioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+                const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+                
+                // NEW: Slow down audio to 0.9x immediately after generation so it's used for the whole flow
+                logger.info("⏳ Slowing down audio to 0.9x via FFmpeg...");
+                const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
+                await new Promise((res, rej) => {
+                    ffmpeg(rawAudioPath)
+                        .audioFilters('atempo=0.9')
+                        .on('end', res)
+                        .on('error', rej)
+                        .save(slowedAudioPath);
+                });
+                audioPath = slowedAudioPath;
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
@@ -263,7 +275,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         headless: false,
         args: [
             '--auto-select-desktop-capture-source=Entire screen',
-            '--auto-select-tab-capture-source-by-title=Reel Composer',
+            '--auto-select-tab-capture-source-by-title=Reel Composer | AI Director\'s Studio',
             '--enable-usermedia-screen-capturing',
             '--use-fake-ui-for-media-stream',
             '--use-fake-device-for-media-stream',
@@ -275,7 +287,11 @@ async function runCompositor(vPath, sPath, vPrompt) {
         ]
     });
 
-    const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, acceptDownloads: true });
+    const context = await browser.newContext({ 
+        viewport: { width: 1080, height: 1920 }, // Vertical High-Res Viewport
+        acceptDownloads: true,
+        deviceScaleFactor: 2 // Boost pixel density for sharper recording
+    });
     const page = await context.newPage();
     let masterPath = "";
     let complete = false;
@@ -314,7 +330,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.2', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.7', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
@@ -331,8 +347,8 @@ async function runCompositor(vPath, sPath, vPrompt) {
                     '-y', 
                     '-c:v libx264', 
                     '-pix_fmt yuv420p',
-                    '-preset fast', 
-                    '-crf 22', 
+                    '-preset slow', 
+                    '-crf 18', 
                     '-profile:v main',
                     '-level:v 4.1',
                     '-r 30',
@@ -354,27 +370,40 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
     try {
         console.log("🌐 Navigating to composer...");
-        await page.goto('http://localhost:3000', { timeout: 90000, waitUntil: 'networkidle' });
+        await page.goto('http://localhost:3000', { timeout: 60000, waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(2000); // Small grace for local hydration
         
         const pass = page.locator('input[type="password"]');
-        await pass.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+        await pass.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {
+            console.log("ℹ️ No password field detected, assuming already logged in.");
+        });
         
         if (await pass.isVisible()) {
             console.log("🔑 Entering API key...");
             for (const key of uniqueKeys) {
+                console.log(`🔑 Trying API key: ${key.substring(0, 4)}...${key.substring(key.length - 4)}`);
                 await pass.fill(key);
                 await page.click('button:has-text("Enter Studio")');
+                
+                // Wait for either the success indicator or a failure message/timeout
                 const success = await Promise.race([
-                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 30000 }).then(() => true),
-                    page.waitForTimeout(31000).then(() => false)
+                    page.waitForSelector('#video-upload', { state: 'attached', timeout: 20000 }).then(() => true).catch(() => false),
+                    page.waitForTimeout(21000).then(() => false)
                 ]);
-                if (success) break;
-                await pass.fill('');
+
+                if (success) {
+                    console.log("✅ Login successful.");
+                    break;
+                }
+                console.log("❌ Key failed or timed out. Trying next...");
+                await pass.clear();
             }
         }
 
         console.log("📤 Uploading assets...");
-        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 60000 });
+        await page.waitForSelector('#video-upload', { state: 'attached', timeout: 60000 }).catch(err => {
+            throw new Error(`CRITICAL: Page failed to load #video-upload after login attempts. Error: ${err.message}`);
+        });
         await page.setInputFiles('#video-upload', vPath);
         await page.setInputFiles('#srt-upload', sPath);
         await page.waitForTimeout(5000);
@@ -388,8 +417,61 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await page.fill('textarea', vPrompt);
         await page.click('button:has-text("Studio")'); 
 
-        console.log("⏳ Waiting for visual generation...");
-        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 300000 });
+        console.log("⏳ Waiting for generation to complete...");
+        let isDone = false;
+        for (let i = 1; i <= 10; i++) { // Max 10 checks (10 mins)
+            await page.waitForTimeout(60000);
+            console.log(`⏳ Generation wait progress: ${i} minute(s) elapsed...`);
+            
+            // Keep tab active by moving mouse slightly
+            await page.mouse.move(500 + i, 500 + i);
+            
+            // Check if generation is active or if we're back in the editor state
+            const status = await page.evaluate(() => {
+                const buttons = Array.from(document.querySelectorAll('button'));
+                const studioBtn = buttons.find(b => b.innerText.includes('Studio'));
+                
+                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Content");
+                const v = document.querySelector('video');
+                
+                return { 
+                    isGenerating,
+                    readyState: v ? v.readyState : 0,
+                    hasVideo: !!v
+                };
+            });
+            
+            console.log(`📊 Generation Status: ${JSON.stringify(status)}`);
+            if (!status.isGenerating && status.readyState >= 2) {
+                console.log("✅ Generation complete.");
+                isDone = true;
+                break;
+            }
+        }
+        
+        if (!isDone) console.warn("⚠️ Warning: 10 minutes passed without clear 'Done' signal. Proceeding anyway.");
+
+        console.log("⏳ Looking for Rec & Export button...");
+        await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 30000 });
+
+        // Final check: Video must have duration and be ready
+        const finalCheck = await page.evaluate(() => {
+            const v = document.querySelector('video');
+            if (!v) return 'MISSING';
+            if (v.readyState < 2) return 'NOT_READY';
+            if (v.duration === 0 || isNaN(v.duration)) return 'INVALID_DURATION';
+            return 'OK';
+        });
+        
+        console.log(`🎬 Final Health Check: ${finalCheck}`);
+        if (finalCheck !== 'OK') {
+            console.warn(`⚠️ Warning: Video state is ${finalCheck}. Attempting to force reload src...`);
+            await page.evaluate(() => {
+                const v = document.querySelector('video');
+                if (v) { v.load(); v.play().catch(() => {}); }
+            });
+            await page.waitForTimeout(3000);
+        }
         
         console.log("🎬 Initiating Recording...");
         await page.click('button:has-text("Rec & Export")');

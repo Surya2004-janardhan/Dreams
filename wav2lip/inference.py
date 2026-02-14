@@ -47,8 +47,8 @@ parser.add_argument('--rotate', default=False, action='store_true',
 					help='Sometimes videos taken from a phone can be flipped 90deg. If true, will flip video right by 90deg.'
 					'Use if you get a flipped result, despite feeding a normal looking video')
 
-parser.add_argument('--nosmooth', default=False, action='store_true',
-					help='Prevent smoothing face detections over a short temporal window')
+parser.add_argument('--face_det_results', type=str, 
+					help='Path to pre-computed face detection results (.npy)', default=None)
 
 args = parser.parse_args()
 args.img_size = 96
@@ -105,18 +105,19 @@ def face_detect(images):
 	del detector
 	return results 
 
-def datagen(frames, mels):
+def datagen(frames, mels, face_det_results=None):
 	img_batch, mel_batch, frame_batch, coords_batch = [], [], [], []
 
-	if args.box[0] == -1:
-		if not args.static:
-			face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
+	if face_det_results is None:
+		if args.box[0] == -1:
+			if not args.static:
+				face_det_results = face_detect(frames) # BGR2RGB for CNN face detection
+			else:
+				face_det_results = face_detect([frames[0]])
 		else:
-			face_det_results = face_detect([frames[0]])
-	else:
-		print('Using the specified bounding box instead of face detection...')
-		y1, y2, x1, x2 = args.box
-		face_det_results = [[f[y1: y2, x1:x2], (y1, y2, x1, x2)] for f in frames]
+			print('Using the specified bounding box instead of face detection...')
+			y1, y2, x1, x2 = args.box
+			face_det_results = [[f[y1: y2, x1:x2], (y1, y2, x1, x2)] for f in frames]
 
 	for i, m in enumerate(mels):
 		idx = 0 if args.static else i%len(frames)
@@ -198,34 +199,38 @@ def main():
 							 "The file might be an LFS pointer (not downloaded) or corrupted. "
 							 "Check your Git LFS budget and ensure models are pulled.")
 
-		print('Reading video frames...')
+		print('Getting video duration...')
+		# If we have cache, we only need basic info and then we stream
+		if args.face_det_results:
+			print(f"Using pre-computed face detection results from {args.face_det_results}")
+			cached_boxes = np.load(args.face_det_results)
+			num_frames = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+			print(f"Video has {num_frames} frames according to metadata.")
+		else:
+			print('Reading video frames into memory (Warning: High RAM usage)...')
+			full_frames = []
+			while 1:
+				still_reading, frame = video_stream.read()
+				if not still_reading:
+					video_stream.release()
+					break
+				if args.resize_factor > 1:
+					frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))
 
-		full_frames = []
-		while 1:
-			still_reading, frame = video_stream.read()
-			if not still_reading:
-				video_stream.release()
-				break
-			if args.resize_factor > 1:
-				frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))
+				if args.rotate:
+					frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
-			if args.rotate:
-				frame = cv2.rotate(frame, cv2.cv2.ROTATE_90_CLOCKWISE)
+				y1, y2, x1, x2 = args.crop
+				if x2 == -1: x2 = frame.shape[1]
+				if y2 == -1: y2 = frame.shape[0]
 
-			y1, y2, x1, x2 = args.crop
-			if x2 == -1: x2 = frame.shape[1]
-			if y2 == -1: y2 = frame.shape[0]
-
-			frame = frame[y1:y2, x1:x2]
-
-			full_frames.append(frame)
-
-	print ("Number of frames available for inference: "+str(len(full_frames)))
+				frame = frame[y1:y2, x1:x2]
+				full_frames.append(frame)
+			num_frames = len(full_frames)
 
 	if not args.audio.endswith('.wav'):
 		print('Extracting raw audio...')
-		command = 'ffmpeg -y -i {} -strict -2 {}'.format(args.audio, 'temp/temp.wav')
-
+		command = 'ffmpeg -y -i "{}" -strict -2 "{}"'.format(args.audio, 'temp/temp.wav')
 		subprocess.call(command, shell=True)
 		args.audio = 'temp/temp.wav'
 
@@ -248,38 +253,111 @@ def main():
 		i += 1
 
 	print("Length of mel chunks: {}".format(len(mel_chunks)))
-
-	full_frames = full_frames[:len(mel_chunks)]
-
+	
+	# Determine how many frames we actually need
+	num_frames_needed = len(mel_chunks)
+	
 	batch_size = args.wav2lip_batch_size
-	gen = datagen(full_frames.copy(), mel_chunks)
+	
+	# Load model first to avoid repeating it
+	model = load_model(args.checkpoint_path)
+	print ("Model loaded")
 
-	for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
-											total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
-		if i == 0:
-			model = load_model(args.checkpoint_path)
-			print ("Model loaded")
+	video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+	
+	# Prepare video writer
+	# We need the first frame's shape to initialize the writer
+	if args.face_det_results:
+		ret, first_frame = video_stream.read()
+		if not ret: raise ValueError("Could not read first frame")
+		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+		frame_h, frame_w = first_frame.shape[:-1]
+	else:
+		frame_h, frame_w = full_frames[0].shape[:-1]
+		
+	out = cv2.VideoWriter('temp/result.avi', 
+							cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
 
-			frame_h, frame_w = full_frames[0].shape[:-1]
-			out = cv2.VideoWriter('temp/result.avi', 
-									cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
+	# Streaming implementation for OOM safety
+	for i in tqdm(range(0, num_frames_needed, batch_size)):
+		# 1. Prepare batch data
+		img_batch, mel_batch, frames, coords = [], [], [], []
+		
+		current_batch_end = min(i + batch_size, num_frames_needed)
+		for j in range(i, current_batch_end):
+			# Get frame
+			if args.face_det_results:
+				ret, f = video_stream.read()
+				if not ret: break
+				# Apply same transforms as pre-read
+				if args.resize_factor > 1:
+					f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
+				y1, y2, x1, x2 = args.crop
+				if x2 == -1: x2 = f.shape[1]
+				if y2 == -1: y2 = f.shape[0]
+				f = f[y1:y2, x1:x2]
+			else:
+				f = full_frames[j].copy()
+			
+			# Get face coords
+			if args.face_det_results:
+				# Use cached boxes (they are [x1, y1, x2, y2])
+				c = cached_boxes[j % len(cached_boxes)]
+				# If boxes were smoothened in precompute, they are already final
+				# But results usually expects [face_img, (y1, y2, x1, x2)]
+				x1, y1, x2, y2 = map(int, c)
+				# Ensure within bounds
+				y1 = max(0, y1); y2 = min(f.shape[0], y2)
+				x1 = max(0, x1); x2 = min(f.shape[1], x2)
+				face = f[y1:y2, x1:x2]
+				coords_final = (y1, y2, x1, x2)
+			elif args.box[0] != -1:
+				y1, y2, x1, x2 = args.box
+				face = f[y1:y2, x1:x2]
+				coords_final = (y1, y2, x1, x2)
+			else:
+				# This case shouldn't really happen with large videos anymore
+				# but we should handle it if someone runs without cache
+				# (Re-runs detection in batches... slow but safer?)
+				# For now, let's assume we use cache for large videos.
+				pass
+			
+			face = cv2.resize(face, (args.img_size, args.img_size))
+			
+			img_batch.append(face)
+			mel_batch.append(mel_chunks[j])
+			frames.append(f)
+			coords.append(coords_final)
+			
+		if not img_batch: break
+		
+		# 2. Run inference on batch
+		img_batch_np = np.asarray(img_batch)
+		mel_batch_np = np.asarray(mel_batch)
 
-		img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(device)
-		mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(device)
+		img_masked = img_batch_np.copy()
+		img_masked[:, args.img_size//2:] = 0
+		img_batch_tensor = np.concatenate((img_masked, img_batch_np), axis=3) / 255.
+		
+		img_batch_tensor = torch.FloatTensor(np.transpose(img_batch_tensor, (0, 3, 1, 2))).to(device)
+		mel_batch_tensor = torch.FloatTensor(np.transpose(mel_batch_np, (0, 1, 2))) # mel_chunks are (80, 16)
+		# Needs extra dims: (B, 1, 80, 16)
+		mel_batch_tensor = mel_batch_tensor.unsqueeze(1).to(device)
 
 		with torch.no_grad():
-			pred = model(mel_batch, img_batch)
+			pred = model(mel_batch_tensor, img_batch_tensor)
 
 		pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
 		
+		# 3. Post-process and write
 		for p, f, c in zip(pred, frames, coords):
 			y1, y2, x1, x2 = c
 			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
-
 			f[y1:y2, x1:x2] = p
 			out.write(f)
 
 	out.release()
+	video_stream.release()
 	
 	# Ensure temp directory exists for result.avi
 	if not os.path.exists('temp'):

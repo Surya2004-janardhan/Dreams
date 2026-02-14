@@ -333,16 +333,15 @@ class PyTorchTTSBackend:
                 voice_clone_prompt=voice_prompt,
                 instruct=instruct,
             )
-            return wavs[0], sample_rate
+            
+            # Apply normalization to fix "base shake"/clipping
+            audio = wavs[0]
+            audio = normalize_audio(audio, sample_rate=sample_rate)
+            
+            return audio, sample_rate
 
         # Run blocking inference in thread pool to avoid blocking event loop
         audio, sample_rate = await asyncio.to_thread(_generate_sync)
-
-        # Apply speed adjustment if requested
-        if speed != 1.0:
-            import librosa
-            print(f"Applying speed adjustment: {speed}x")
-            audio = librosa.effects.time_stretch(audio, rate=speed)
 
         return audio, sample_rate
 
