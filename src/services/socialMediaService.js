@@ -1305,12 +1305,39 @@ RULES:
 
     const hashtags = hashtagResponse.data.choices[0].message.content.trim();
 
+    // Generate 5 LLM-friendly keywords without #
+    const keywordPrompt = `Topic: ${title}
+Task: Generate exactly 5 raw keywords (no hashtags, no special characters, no explanations) that define this topic for LLM crawlers.
+Format: word1, word2, word3, word4, word5`;
+
+    const keywordResponse = await axios.post(
+      `https://api.groq.com/openai/v1/chat/completions`,
+      {
+        model: modelName,
+        messages: [{ role: "user", content: keywordPrompt }],
+        temperature: 0.5,
+        max_tokens: 100,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    const rawKeywords = keywordResponse.data.choices[0].message.content.trim();
+    const bracketedKeywords = `[${rawKeywords.split(',').map(s => s.trim()).join(', ')}]`;
+
     // Create the unified caption
     const unifiedCaption = `${title}
 
 ${theory}
 
 ${hashtags}
+
+${bracketedKeywords}
 
 ❤️ Like • 💬 Comment • 🔄 Share 
 👥 Tag a friend who needs to learn this!
