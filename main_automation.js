@@ -7,7 +7,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 require('dotenv').config();
 
 const { getNextTask, updateSheetStatus } = require('./src/services/sheetsService');
-const { generateScript } = require('./src/services/scriptService');
+const { generateScript, generateVisualPrompt } = require('./src/services/scriptService');
 const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
 const { generateSRT } = require('./src/services/newFeaturesService');
 const { createSubtitlesFromAudio } = require('./src/utils/subtitles');
@@ -133,35 +133,18 @@ async function main() {
         fs.copyFileSync(srtPath, path.resolve('subtitles.srt'));
         logger.info(`✅ Step 4 Complete: SRT generated in ${((Date.now() - step4Start)/1000).toFixed(2)}s`);
 
-        // Step 5: Visual Prompt
+        // Step 5: Visual Prompt (Migrated to Gemini)
         currentStep = "Visual Prompt Generation";
-        logger.info("🎨 Step 5: Creating visual prompt for technical animation...");
+        logger.info("🎨 Step 5: Creating visual prompt via Gemini...");
         const step5Start = Date.now();
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const groqPrompt = `
-        Topic: ${TOPIC}
-        Script: ${script}
         
-        Task: Create a high-fidelity visual animation storyboard for a 60-second technical reel.
+        const visualPrompt = await generateVisualPrompt(TOPIC, script);
         
-        VISUAL STRATEGY:
-        - STYLE: Clean, futuristic, icon-driven animation. 
-        - VISUALS: Use a continuous stream of relevant technical icons, symbols, and minimalist diagrams that morph and transition rhythmically.
-        - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
-        - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script.
-        - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
-        - COLOR: Professional, cohesive color palette (e.g., Deep Blues, Neons, or Tech Grays).
-        
-        OUTPUT FORMAT:
-        - Exactly 4-5 descriptive lines detailing the visual progression.
-        - Focus on ACTION and SPECIFIC ICONS. 
-        - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
-        `;
-        const completion = await groq.chat.completions.create({
-            messages: [{ role: "user", content: groqPrompt }],
-            model: "llama-3.3-70b-versatile",
-        });
-        const visualPrompt = completion.choices[0].message.content;
+        // Final guard: stop workflow if prompt is essentially empty
+        if (!visualPrompt || visualPrompt.length < 10) {
+            throw new Error("CRITICAL: Visual prompt generation returned no usable content. Aborting to avoid empty video.");
+        }
+
         fs.writeFileSync('visual_prompt.txt', visualPrompt);
         logger.info(`✅ Step 5 Complete: Visual prompt ready in ${((Date.now() - step5Start)/1000).toFixed(2)}s`);
 
@@ -449,7 +432,9 @@ async function runCompositor(vPath, sPath, vPrompt) {
             }
         }
         
-        if (!isDone) console.warn("⚠️ Warning: 10 minutes passed without clear 'Done' signal. Proceeding anyway.");
+        if (!isDone) {
+            throw new Error("CRITICAL: Visual generation timed out or failed to render in browser (10 minutes). Aborting to avoid black video.");
+        }
 
         console.log("⏳ Looking for Rec & Export button...");
         await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 30000 });

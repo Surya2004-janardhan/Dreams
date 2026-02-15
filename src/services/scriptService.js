@@ -68,26 +68,43 @@ const generateScript = async (topic, description = "") => {
 };
 
 /**
- * Generates a visual style prompt for the compositor based on the script.
+ * Generates a high-fidelity visual animation storyboard prompt for technical reels.
  */
-const generateVisualPrompt = async (script) => {
+const generateVisualPrompt = async (topic, script) => {
     const prompt = `
-    Analyze this technical script and describe a Motion Graphics style in exactly 3 lines.
-    Focus on: Brand colors (Neon/Cyber/Blueprint), Dynamic movement (Data streams, Glitches, Pulsating icons), and Layout.
-    Do NOT mention the speaker.
+    Topic: ${topic}
+    Script: ${script}
     
-    SCRIPT: "${script}"
+    Task: Create a high-fidelity visual animation storyboard for a technical reel.
+    
+    VISUAL STRATEGY:
+    - STYLE: Clean, futuristic, icon-driven animation. 
+    - VISUALS: Use a continuous stream of relevant technical icons, symbols, and minimalist diagrams that morph and transition rhythmically.
+    - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
+    - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script.
+    - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
+    - COLOR: Professional, cohesive color palette (e.g., Deep greens, Neons, or Tech Grays).
+    
+    OUTPUT FORMAT:
+    - Exactly 5-6 descriptive lines detailing the visual progression.
+    - Focus on ACTION and SPECIFIC ICONS. 
+    - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
     `;
     
     try {
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const visualDescription = response.text().trim();
-        logger.info("🎨 Visual prompt generated via Gemini");
+        
+        if (!visualDescription || visualDescription.length < 20) {
+            throw new Error("Gemini returned an empty or insufficient visual prompt.");
+        }
+        
+        logger.info("🎨 Visual prompt generated via Gemini (Length: " + visualDescription.length + ")");
         return visualDescription;
     } catch (e) {
-        logger.error("Failed to generate visual prompt via Gemini", e);
-        return "Neon Blueprint aesthetic, dynamic node-graph pulses, sharp tactical overlays.";
+        logger.error("❌ Failed to generate visual prompt via Gemini:", e.message);
+        throw e; // Rethrow to stop the pipeline
     }
 };
 
