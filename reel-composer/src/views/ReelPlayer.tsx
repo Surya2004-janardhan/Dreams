@@ -174,7 +174,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
     return (
       <div
-        className={`flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 rounded-2xl transition-all duration-300 ${isFullHtml ? 'backdrop-blur-md border border-white/10 shadow-2xl' : ''}`}
+        className={`flex flex-wrap justify-center items-center gap-x-2 gap-y-1 rounded-2xl transition-all duration-300 backdrop-blur-md shadow-2xl`}
         style={{
           minHeight: '60px',
           backgroundColor: subtitleBgColor,
@@ -182,7 +182,10 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
           paddingLeft: `${subtitlePaddingX}px`,
           paddingRight: `${subtitlePaddingX}px`,
           paddingTop: `${subtitlePaddingY}px`,
-          paddingBottom: `${subtitlePaddingY}px`
+          paddingBottom: `${subtitlePaddingY}px`,
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          wordSpacing: '2px'
         }}
       >
         {visibleWords.map((word, index) => {
@@ -201,11 +204,13 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
               `}
               style={{
                 fontSize: `${subtitleFontSize}px`,
-                color: isActive ? '#FFFFFF' : (isPast ? subtitleColor : `${subtitleColor}66`),
+                color: isActive ? '#FFFFFF' : (isPast ? subtitleColor : `${subtitleColor}99`),
                 textShadow: isActive
-                  ? '0 0 30px rgba(255, 255, 255, 0.6), 2px 2px 0px rgba(0,0,0,1)'
-                  : '2px 2px 0px rgba(0,0,0,1)',
-                fontFamily: subtitleFontFamily
+                  ? '0 0 30px rgba(255, 255, 255, 0.4), 2px 2px 0px rgba(0,0,0,0.8)'
+                  : '1px 1px 0px rgba(0,0,0,0.8)',
+                fontFamily: subtitleFontFamily,
+                fontWeight: isActive ? 900 : 800,
+                letterSpacing: '0.5px'
               }}
             >
               {word}
@@ -559,7 +564,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         </div>
 
         <div
-          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black"
+          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black flex items-center justify-center border-t border-white/5"
           style={layoutStyles.videoContainer}
         >
           {/* Main Video */}
@@ -567,7 +572,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             key={videoUrl}
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-cover object-bottom"
+            className="w-full h-full object-cover object-center"
             playsInline
             muted={false}
             onEnded={stopRecording}
