@@ -80,7 +80,7 @@ async function main() {
                 const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
                 await new Promise((res, rej) => {
                     ffmpeg(rawAudioPath)
-                        .audioFilters('atempo=0.86')
+                        .audioFilters('atempo=0.90')
                         .on('end', res)
                         .on('error', rej)
                         .save(slowedAudioPath);
@@ -318,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.17', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.16', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
@@ -403,7 +403,9 @@ async function runCompositor(vPath, sPath, vPrompt) {
         console.log("🎨 Filling animation prompt...");
         await page.waitForSelector('textarea', { state: 'visible', timeout: 60000 });
         await page.fill('textarea', vPrompt);
-        await page.click('button:has-text("Studio")'); 
+        
+        // Use a more specific selector for the "Enter Studio & Auto-Generate" button
+        await page.click('button:has-text("Enter Studio")'); 
 
         console.log("⏳ Waiting for generation to complete...");
         let isDone = false;
