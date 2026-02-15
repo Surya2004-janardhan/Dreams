@@ -79,12 +79,12 @@ const generateVisualPrompt = async (topic, script) => {
     
     VISUAL STRATEGY:
     - STYLE: High-energy, clean technical motion graphics. 
-    - VISUALS: Use a continuous stream of relevant technical icons, **relevant high-quality emojis**, and minimalist diagrams that morph and transition rhythmically.
-    - ANIMATION: Every scene MUST have **dynamic, cinematic movement** (e.g., pulsating nodes, data streams flowing, icons revolving in 3D). Avoid static frames.
-    - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
-    - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script with perfect timing.
-    - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
-    - COLOR: Professional, cohesive color palette (e.g., Deep greens, Neons, or Tech Grays).
+    - VISUALS: Use technical icons, **relevant emojis**, and minimalist diagrams. **Everything must be in constant motion**.
+    - TEXT IN VISUALS: Place any text/labels at the **TOP** of the visual area. Ensure clear vertical hierarchy.
+    - MOVEMENT: Use **dynamic live flows** (e.g., data streams, revolving nodes, morphing shapes). **ZERO static frames**.
+    - SYNC: Visuals must mirror script technicalities with kinetic energy.
+    - LAYOUT: Use "Layout splitout must be 0.5". Visuals occupy the top half, Video occupies the bottom half.
+    - COLOR: Deep Greens, Neons, and Tech Grays.
     
     OUTPUT FORMAT:
     - Exactly 5-6 descriptive lines detailing the visual progression.
