@@ -80,7 +80,7 @@ async function main() {
                 const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
                 await new Promise((res, rej) => {
                     ffmpeg(rawAudioPath)
-                        .audioFilters('atempo=0.9')
+                        .audioFilters('atempo=0.86')
                         .on('end', res)
                         .on('error', rej)
                         .save(slowedAudioPath);
@@ -318,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.18', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.17', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',

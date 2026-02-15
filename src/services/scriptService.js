@@ -78,13 +78,17 @@ const generateVisualPrompt = async (topic, script) => {
     Task: Create a high-fidelity visual animation storyboard for a technical reel.
     
     VISUAL STRATEGY:
-    - STYLE: High-energy, clean technical motion graphics. 
-    - VISUALS: Use technical icons, **relevant emojis**, and minimalist diagrams. **Everything must be in constant motion**.
-    - TEXT IN VISUALS: Place any text/labels at the **TOP** of the visual area. Ensure clear vertical hierarchy.
-    - MOVEMENT: Use **dynamic live flows** (e.g., data streams, revolving nodes, morphing shapes). **ZERO static frames**.
-    - SYNC: Visuals must mirror script technicalities with kinetic energy.
-    - LAYOUT: Use "Layout splitout must be 0.5". Visuals occupy the top half, Video occupies the bottom half.
-    - COLOR: Deep Greens, Neons, and Tech Grays.
+    - STYLE: Premium "Tech Influencer" motion graphics. Dark, cinematic, and high-fidelity.
+    - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
+    - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
+    - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
+    - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
+    - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
+    - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
+    - MOVEMENT: Every scene MUST have **dynamic kinetic flows**. Connect boxes with pulsating data lines. Use revolving progress circles and morphing nodes. **ZERO static frames**.
+    - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
+    - SYNC: Visuals must mirror script technicalities with kinetic energy and perfect timing.
+    - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
     
     OUTPUT FORMAT:
     - Exactly 5-6 descriptive lines detailing the visual progression.
