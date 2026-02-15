@@ -60,12 +60,12 @@ const App: React.FC = () => {
   const [bgMusicVolume, setBgMusicVolume] = useState(0.2);
 
   // Subtitle Style State
-  const [subtitleFontSize, setSubtitleFontSize] = useState(19);
+  const [subtitleFontSize, setSubtitleFontSize] = useState(32);
   const [subtitleFontFamily, setSubtitleFontFamily] = useState('Inter');
-  const [subtitleColor, setSubtitleColor] = useState('#fbbf24');
-  const [subtitleBgColor, setSubtitleBgColor] = useState('rgba(0, 0, 0, 0.8)');
-  const [subtitlePaddingX, setSubtitlePaddingX] = useState(16);
-  const [subtitlePaddingY, setSubtitlePaddingY] = useState(8);
+  const [subtitleColor, setSubtitleColor] = useState('#FFFFFF');
+  const [subtitleBgColor, setSubtitleBgColor] = useState('rgba(0, 0, 0, 1.0)');
+  const [subtitlePaddingX, setSubtitlePaddingX] = useState(24);
+  const [subtitlePaddingY, setSubtitlePaddingY] = useState(12);
 
   // Manage Video Object URL
   useEffect(() => {

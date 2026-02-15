@@ -78,10 +78,11 @@ const generateVisualPrompt = async (topic, script) => {
     Task: Create a high-fidelity visual animation storyboard for a technical reel.
     
     VISUAL STRATEGY:
-    - STYLE: Clean, futuristic, icon-driven animation. 
-    - VISUALS: Use a continuous stream of relevant technical icons, symbols, and minimalist diagrams that morph and transition rhythmically.
+    - STYLE: High-energy, clean technical motion graphics. 
+    - VISUALS: Use a continuous stream of relevant technical icons, **relevant high-quality emojis**, and minimalist diagrams that morph and transition rhythmically.
+    - ANIMATION: Every scene MUST have **dynamic, cinematic movement** (e.g., pulsating nodes, data streams flowing, icons revolving in 3D). Avoid static frames.
     - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
-    - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script.
+    - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script with perfect timing.
     - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
     - COLOR: Professional, cohesive color palette (e.g., Deep greens, Neons, or Tech Grays).
     
