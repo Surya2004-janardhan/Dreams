@@ -318,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.7', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.25', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
