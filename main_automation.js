@@ -286,14 +286,19 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
-        // Resolve BGM source (supporting multiple formats)
+        // Resolve BGM source (supporting multiple formats and casing)
         const bgmExtensions = ['.mp3', '.m4a', '.wav'];
+        const bgmNames = ['bgm', 'Bgm', 'BGM'];
         let bgmSrc = null;
-        for (const ext of bgmExtensions) {
-            const potentialPath = path.resolve(`bgm${ext}`);
-            if (fs.existsSync(potentialPath)) {
-                bgmSrc = potentialPath;
-                break;
+        
+        outer: for (const name of bgmNames) {
+            for (const ext of bgmExtensions) {
+                const potentialPath = path.resolve(`${name}${ext}`);
+                if (fs.existsSync(potentialPath)) {
+                    bgmSrc = potentialPath;
+                    console.log(`🎵 Found BGM: ${path.basename(bgmSrc)}`);
+                    break outer;
+                }
             }
         }
 
