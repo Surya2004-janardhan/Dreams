@@ -318,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.16', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.15', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
@@ -421,7 +421,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
                 const buttons = Array.from(document.querySelectorAll('button'));
                 const studioBtn = buttons.find(b => b.innerText.includes('Studio'));
                 
-                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Content");
+                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Scene...");
                 const v = document.querySelector('video');
                 
                 return { 
