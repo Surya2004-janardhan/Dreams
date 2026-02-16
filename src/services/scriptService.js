@@ -15,7 +15,7 @@ const getModel = () => {
     const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
     const initialGenAI = new GoogleGenerativeAI(initialKey);
     return { 
-        model: initialGenAI.getGenerativeModel({ model: "gemini-2.0-flash" }),
+        model: initialGenAI.getGenerativeModel({ model: "gemini-2.5-flash" }),
         keys: uniqueKeys 
     };
 };
