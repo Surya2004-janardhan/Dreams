@@ -85,9 +85,9 @@ const generateVisualPrompt = async (topic, script) => {
     - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
     - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
     - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
-    - MOVEMENT: Every scene MUST have **dynamic kinetic flows**. Connect boxes with pulsating data lines. Use revolving progress circles and morphing nodes. **ZERO static frames**.
+    - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
     - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
-    - SYNC: Visuals must mirror script technicalities with kinetic energy and perfect timing.
+    - SYNC: Visuals must mirror script technicalities with kinetic energy and perfect timing. Use dynamic or static elements based on the script's semantic flow.
     - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
     
     OUTPUT FORMAT:
