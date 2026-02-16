@@ -2,7 +2,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-const MODEL_ID = "gemini-1.5-flash"; // Using 1.5-flash for broader free-tier availability
+const MODEL_ID = "gemini-2.0-flash"; // Standardizing on 2.0 Flash as per user request
 
 const getModel = () => {
     const keys = [
