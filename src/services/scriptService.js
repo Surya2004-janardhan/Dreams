@@ -2,6 +2,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
+const MODEL_ID = "gemini-1.5-flash"; // Using 1.5-flash for broader free-tier availability
+
 const getModel = () => {
     const keys = [
         process.env.GEMINI_API_KEY,
@@ -15,7 +17,7 @@ const getModel = () => {
     const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
     const initialGenAI = new GoogleGenerativeAI(initialKey);
     return { 
-        model: initialGenAI.getGenerativeModel({ model: "gemini-2.5-flash" }),
+        model: initialGenAI.getGenerativeModel({ model: MODEL_ID }),
         keys: uniqueKeys 
     };
 };
@@ -30,7 +32,7 @@ async function retryWithFallback(fn) {
     for (const key of keys) {
         try {
             const genAI = new GoogleGenerativeAI(key);
-            const currentModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const currentModel = genAI.getGenerativeModel({ model: MODEL_ID });
             return await fn(currentModel);
         } catch (e) {
             lastError = e;
