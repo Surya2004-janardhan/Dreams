@@ -126,12 +126,13 @@ const generateVisualPrompt = async (topic, scriptText) => {
     - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
     - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
     - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
+    - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding between every visual component.
+    - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
     - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
     - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
     - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
     - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
     - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
-    - SYNC: Visuals must mirror script technicalities with kinetic energy and perfect timing. Use dynamic or static elements based on the script's semantic flow.
     - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
     
     OUTPUT FORMAT:

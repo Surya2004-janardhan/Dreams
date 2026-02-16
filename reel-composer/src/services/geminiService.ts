@@ -195,10 +195,9 @@ export const generateReelContent = async (
     You must output high-fidelity, polished UI/UX animation.
     1. **Color Palette**: Dark mode (#050505), Neon accents (Cyan/Magenta).
     2. **Animation Style (GSAP - SMOOTH & STAGED)**:
-       - **NO COLLISIONS:** Elements MUST NOT overlap or collide. Use CSS Flexbox/Grid for layout and animate within distinct containers.
-       - **ICON-DRIVEN STORYTELLING:** Use technical SVG icons (e.g., Lucide-style) or minimalist 3D-effect shapes.
-       - **CONTINUOUS SECONDARY MOTION:** Visuals must never be static. Use subtle background pulses, floating particles, or rotating symbols.
        - **STAGED TRANSITIONS:** Use GSAP stagger and clear entrance/exit animations for every scene. Elements should animate IN, stay active, and then animate OUT before the next scene starts.
+       - **NO-OVERLAP & Z-INDEX:** Text elements MUST have the highest \`z-index\` (min 100). Background animations and icons must NEVER obscure or cover words. Use \`transform: translateZ(0)\` on containers to prevent rendering glitches.
+       - **PRECISE CONNECTORS:** When drawing arrows or links between components, use absolute percentage coordinates (e.g., from Box A at \`left: 20%\` to Box B at \`left: 80%\`). Ensure arrows originate and terminate exactly at the container boundaries. Use SVG for complex paths for maximum precision.
        - **MINIMAL TEXT:** Display ONLY 1-3 critical keywords to emphasize the audio.
 
     ### JAVASCRIPT ROBUSTNESS RULES (CRITICAL)
@@ -275,9 +274,9 @@ export const generateReelContent = async (
     properties: {
       startTime: { type: Type.NUMBER },
       endTime: { type: Type.NUMBER },
-      layoutMode: { type: Type.STRING, enum: ['split', 'full-video', 'full-html', 'pip-html'] },
+      layoutMode: { type: Type.STRING, enum: ['split', 'full-video', 'full-html', 'pip-html'], format: 'enum' },
       splitRatio: { type: Type.NUMBER },
-      captionPosition: { type: Type.STRING, enum: ['top', 'bottom', 'center', 'hidden'] },
+      captionPosition: { type: Type.STRING, enum: ['top', 'bottom', 'center', 'hidden'], format: 'enum' },
       note: { type: Type.STRING }
     },
     required: ["startTime", "endTime", "layoutMode", "splitRatio", "captionPosition"]
