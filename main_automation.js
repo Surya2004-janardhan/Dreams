@@ -7,7 +7,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 require('dotenv').config();
 
 const { getNextTask, updateSheetStatus } = require('./src/services/sheetsService');
-const { generateScript } = require('./src/services/scriptService');
+const { generateScript, generateVisualPrompt } = require('./src/services/scriptService');
 const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
 const { generateSRT } = require('./src/services/newFeaturesService');
 const { createSubtitlesFromAudio } = require('./src/utils/subtitles');
@@ -71,16 +71,16 @@ async function main() {
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                // Generate audio with professional technical educator instructions
+                // Single-pass synthesis with professional technical educator instructions
                 const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
                 const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
                 
-                // NEW: Slow down audio to 0.9x immediately after generation so it's used for the whole flow
+                // NEW: Slow down audio to 0.9x immediately after generation
                 logger.info("⏳ Slowing down audio to 0.9x via FFmpeg...");
                 const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
                 await new Promise((res, rej) => {
                     ffmpeg(rawAudioPath)
-                        .audioFilters('atempo=0.9')
+                        .audioFilters('atempo=0.90')
                         .on('end', res)
                         .on('error', rej)
                         .save(slowedAudioPath);
@@ -133,35 +133,18 @@ async function main() {
         fs.copyFileSync(srtPath, path.resolve('subtitles.srt'));
         logger.info(`✅ Step 4 Complete: SRT generated in ${((Date.now() - step4Start)/1000).toFixed(2)}s`);
 
-        // Step 5: Visual Prompt
+        // Step 5: Visual Prompt (Migrated to Gemini)
         currentStep = "Visual Prompt Generation";
-        logger.info("🎨 Step 5: Creating visual prompt for technical animation...");
+        logger.info("🎨 Step 5: Creating visual prompt via Gemini...");
         const step5Start = Date.now();
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const groqPrompt = `
-        Topic: ${TOPIC}
-        Script: ${script}
         
-        Task: Create a high-fidelity visual animation storyboard for a 60-second technical reel.
+        const visualPrompt = await generateVisualPrompt(TOPIC, script);
         
-        VISUAL STRATEGY:
-        - STYLE: Clean, futuristic, icon-driven animation. 
-        - VISUALS: Use a continuous stream of relevant technical icons, symbols, and minimalist diagrams that morph and transition rhythmically.
-        - TEXT: Minimal text only. Use text only for critical keywords or labels (max 2-3 words at a time).
-        - SYNC: Ensure the visuals mirror the technical concepts mentioned in the script.
-        - LAYOUT: Use "Layout splitout must be 0.5" for a balanced composition.
-        - COLOR: Professional, cohesive color palette (e.g., Deep Blues, Neons, or Tech Grays).
-        
-        OUTPUT FORMAT:
-        - Exactly 4-5 descriptive lines detailing the visual progression.
-        - Focus on ACTION and SPECIFIC ICONS. 
-        - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
-        `;
-        const completion = await groq.chat.completions.create({
-            messages: [{ role: "user", content: groqPrompt }],
-            model: "llama-3.3-70b-versatile",
-        });
-        const visualPrompt = completion.choices[0].message.content;
+        // Final guard: stop workflow if prompt is essentially empty
+        if (!visualPrompt || visualPrompt.length < 10) {
+            throw new Error("CRITICAL: Visual prompt generation returned no usable content. Aborting to avoid empty video.");
+        }
+
         fs.writeFileSync('visual_prompt.txt', visualPrompt);
         logger.info(`✅ Step 5 Complete: Visual prompt ready in ${((Date.now() - step5Start)/1000).toFixed(2)}s`);
 
@@ -303,14 +286,19 @@ async function runCompositor(vPath, sPath, vPrompt) {
         const finalName = `FINAL_REEL_${Date.now()}.mp4`;
         const out = path.resolve(finalName);
         const audioSrc = path.resolve('merged_output.mp4');
-        // Resolve BGM source (supporting multiple formats)
+        // Resolve BGM source (supporting multiple formats and casing)
         const bgmExtensions = ['.mp3', '.m4a', '.wav'];
+        const bgmNames = ['bgm', 'Bgm', 'BGM'];
         let bgmSrc = null;
-        for (const ext of bgmExtensions) {
-            const potentialPath = path.resolve(`bgm${ext}`);
-            if (fs.existsSync(potentialPath)) {
-                bgmSrc = potentialPath;
-                break;
+        
+        outer: for (const name of bgmNames) {
+            for (const ext of bgmExtensions) {
+                const potentialPath = path.resolve(`${name}${ext}`);
+                if (fs.existsSync(potentialPath)) {
+                    bgmSrc = potentialPath;
+                    console.log(`🎵 Found BGM: ${path.basename(bgmSrc)}`);
+                    break outer;
+                }
             }
         }
 
@@ -330,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.7', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.10', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
@@ -415,7 +403,9 @@ async function runCompositor(vPath, sPath, vPrompt) {
         console.log("🎨 Filling animation prompt...");
         await page.waitForSelector('textarea', { state: 'visible', timeout: 60000 });
         await page.fill('textarea', vPrompt);
-        await page.click('button:has-text("Studio")'); 
+        
+        // Use a more specific selector for the "Enter Studio & Auto-Generate" button
+        await page.click('button:has-text("Enter Studio")'); 
 
         console.log("⏳ Waiting for generation to complete...");
         let isDone = false;
@@ -431,7 +421,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
                 const buttons = Array.from(document.querySelectorAll('button'));
                 const studioBtn = buttons.find(b => b.innerText.includes('Studio'));
                 
-                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Content");
+                const isGenerating = studioBtn?.disabled || document.body.innerText.includes("Generating Scene...");
                 const v = document.querySelector('video');
                 
                 return { 
@@ -449,7 +439,9 @@ async function runCompositor(vPath, sPath, vPrompt) {
             }
         }
         
-        if (!isDone) console.warn("⚠️ Warning: 10 minutes passed without clear 'Done' signal. Proceeding anyway.");
+        if (!isDone) {
+            throw new Error("CRITICAL: Visual generation timed out or failed to render in browser (10 minutes). Aborting to avoid black video.");
+        }
 
         console.log("⏳ Looking for Rec & Export button...");
         await page.waitForSelector('button:has-text("Rec & Export")', { timeout: 30000 });

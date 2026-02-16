@@ -2,9 +2,51 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-// gemini-2.5-flash
+// gemini-2.5-flash only use 2.5 flash fix it
+const MODEL_ID = "gemini-2.5-flash"; // Standardizing on 2.5 Flash as per user request
+
+const getModel = () => {
+    const keys = [
+        process.env.GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY_FOR_VISUALS,
+        process.env.GEMINI_API_KEY_FOR_AUDIO,
+        process.env.GEMINI_API_KEY_FOR_T2T
+    ].filter(Boolean);
+    const uniqueKeys = [...new Set(keys)];
+    
+    // Default to the first key for the initial instance
+    const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
+    const initialGenAI = new GoogleGenerativeAI(initialKey);
+    return { 
+        model: initialGenAI.getGenerativeModel({ model: MODEL_ID }),
+        keys: uniqueKeys 
+    };
+};
+
+let { model, keys } = getModel();
+
+/**
+ * Helper to retry a function with different API keys on failure.
+ */
+async function retryWithFallback(fn) {
+    let lastError;
+    for (const key of keys) {
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            const currentModel = genAI.getGenerativeModel({ model: MODEL_ID });
+            return await fn(currentModel);
+        } catch (e) {
+            lastError = e;
+            const msg = e.message || "";
+            if (msg.includes("API_KEY_INVALID") || msg.includes("expired") || msg.includes("429")) {
+                logger.warn(`⚠️ Gemini Key failed, trying next... Error: ${msg.substring(0, 50)}`);
+                continue;
+            }
+            throw e; 
+        }
+    }
+    throw lastError;
+}
 
 /**
  * Generates a viral, high-retention script for a 55-60 second technical reel.
@@ -38,9 +80,11 @@ const generateScript = async (topic, description = "") => {
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let script = response.text().trim();
+    const script = await retryWithFallback(async (m) => {
+        const result = await m.generateContent(prompt);
+        const response = await result.response;
+        return response.text().trim();
+    });
 
     // Aggressive cleanup: remove any lines that look like meta-explanation
     const lines = script.split('\n');
@@ -52,15 +96,15 @@ const generateScript = async (topic, description = "") => {
       return true;
     });
 
-    script = filteredLines.join(' ').trim();
+    let finalScript = filteredLines.join(' ').trim();
     
     // Clean up markdown markers and bracketed text
-    script = script.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+    finalScript = finalScript.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
 
-    const wordCount = script.split(/\s+/).filter(w => w.length > 0).length;
+    const wordCount = finalScript.split(/\s+/).filter(w => w.length > 0).length;
     logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
     
-    return script;
+    return finalScript;
   } catch (error) {
     logger.error("❌ Gemini Script generation error:", error.message);
     throw new Error(`Failed to generate viral script: ${error.message}`);
@@ -68,26 +112,51 @@ const generateScript = async (topic, description = "") => {
 };
 
 /**
- * Generates a visual style prompt for the compositor based on the script.
+ * Generates a high-fidelity visual animation storyboard prompt for technical reels.
  */
-const generateVisualPrompt = async (script) => {
+const generateVisualPrompt = async (topic, scriptText) => {
     const prompt = `
-    Analyze this technical script and describe a Motion Graphics style in exactly 3 lines.
-    Focus on: Brand colors (Neon/Cyber/Blueprint), Dynamic movement (Data streams, Glitches, Pulsating icons), and Layout.
-    Do NOT mention the speaker.
+    Topic: ${topic}
+    Script: ${scriptText}
     
-    SCRIPT: "${script}"
+    Task: Create a high-fidelity visual animation storyboard for a technical reel.
+    
+    VISUAL STRATEGY:
+    - STYLE: Premium "Tech Influencer" motion graphics. Dark, cinematic, and high-fidelity.
+    - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
+    - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
+    - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
+    - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding between every visual component.
+    - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
+    - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
+    - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
+    - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
+    - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
+    - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
+    - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
+    
+    OUTPUT FORMAT:
+    - Exactly 5-6 descriptive lines detailing the visual progression.
+    - Focus on ACTION and SPECIFIC ICONS. 
+    - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
     `;
     
     try {
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const visualDescription = response.text().trim();
-        logger.info("🎨 Visual prompt generated via Gemini");
+        const visualDescription = await retryWithFallback(async (m) => {
+            const result = await m.generateContent(prompt);
+            const response = await result.response;
+            return response.text().trim();
+        });
+        
+        if (!visualDescription || visualDescription.length < 20) {
+            throw new Error("Gemini returned an empty or insufficient visual prompt.");
+        }
+        
+        logger.info("🎨 Visual prompt generated via Gemini (Length: " + visualDescription.length + ")");
         return visualDescription;
     } catch (e) {
-        logger.error("Failed to generate visual prompt via Gemini", e);
-        return "Neon Blueprint aesthetic, dynamic node-graph pulses, sharp tactical overlays.";
+        logger.error("❌ Failed to generate visual prompt via Gemini:", e.message);
+        throw e; 
     }
 };
 
