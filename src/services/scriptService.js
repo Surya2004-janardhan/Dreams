@@ -2,8 +2,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-// gemini-2.5-flash
-const MODEL_ID = "gemini-2.5-flash"; // Standardizing on 2.0 Flash as per user request
+// gemini-2.5-flash only use 2.5 flash fix it
+const MODEL_ID = "gemini-2.5-flash"; // Standardizing on 2.5 Flash as per user request
 
 const getModel = () => {
     const keys = [
@@ -50,7 +50,6 @@ async function retryWithFallback(fn) {
 
 /**
  * Generates a viral, high-retention script for a 55-60 second technical reel.
- * RETURNS: { fullText: string, segments: [{ text: string, tone: string }] }
  */
 const generateScript = async (topic, description = "") => {
   const prompt = `
@@ -59,33 +58,53 @@ const generateScript = async (topic, description = "") => {
     ${description ? `CONTEXT: ${description}` : ""}
 
     ABSOLUTE RULES:
-    1. OUTPUT ONLY A JSON ARRAY OF OBJECTS. No Markdown, no labels.
-    2. JSON Format: [{"text": "sentence segment", "tone": "voice modulation instruction"}]
-    3. NO introductions ("Hey guys") or outtros ("Follow for more").
-    4. NO filler words. Each sentence must teach something concrete.
-    5. TONE tags must be short modulation cues like "surprised questioning", "excited discovery", "serious technical authoritative", "engaging inquisitive".
-    6. Language: Straight-cut technical educator.
+    1. OUTPUT ONLY THE SPOKEN WORDS. Nothing else. No titles, no labels, no meta-commentary.
+    2. NO introductions like "Hey guys", "Welcome", "Let me tell you", "Today we will".
+    3. NO outros like "Hope this helps", "Follow for more", "Let me know".
+    4. NO shortcut jargon or abbreviations. Spell things out. Say "Application Programming Interface" the first time, not just "API".
+    5. NO filler words or hype phrases.
 
-    WORD COUNT: Total text strictly between 140 and 160 words across all segments.
+    STYLE:
+    - Straight-cut and explanatory. Each sentence should teach something concrete.
+    - Sound like a knowledgeable colleague explaining a concept clearly, not a YouTuber chasing clicks.
+    - Use simple, clear language. If a concept is complex, break it down step by step.
+    - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
+    - Single continuous paragraph of spoken text. No line breaks, no bullet points.
+
+    STRUCTURE:
+    - Open directly with the core concept or a factual statement. No questions, no bait.
+    - Build explanation logically, adding one layer of depth at a time.
+    - End with a practical takeaway or real-world implication.
+
+    WORD COUNT: Strictly between 140 and 160 words.
   `;
 
   try {
-    const rawJson = await retryWithFallback(async (m) => {
+    const script = await retryWithFallback(async (m) => {
         const result = await m.generateContent(prompt);
         const response = await result.response;
         return response.text().trim();
     });
 
-    // Clean up potential markdown formatting if Gemini adds it
-    const jsonStr = rawJson.replace(/```json\n?|```/g, '').trim();
-    const segments = JSON.parse(jsonStr);
+    // Aggressive cleanup: remove any lines that look like meta-explanation
+    const lines = script.split('\n');
+    const filteredLines = lines.filter(line => {
+      const lower = line.toLowerCase();
+      if (lower.includes('here is') && lower.includes('script')) return false;
+      if (lower.includes('word count') || lower.includes('words long')) return false;
+      if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
+      return true;
+    });
 
-    const fullText = segments.map(s => s.text).join(' ');
-    const wordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
+    let finalScript = filteredLines.join(' ').trim();
     
-    logger.info(`✨ Atomic Script segments generated (Segments: ${segments.length}, Total Words: ${wordCount})`);
+    // Clean up markdown markers and bracketed text
+    finalScript = finalScript.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+
+    const wordCount = finalScript.split(/\s+/).filter(w => w.length > 0).length;
+    logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
     
-    return { fullText, segments };
+    return finalScript;
   } catch (error) {
     logger.error("❌ Gemini Script generation error:", error.message);
     throw new Error(`Failed to generate viral script: ${error.message}`);

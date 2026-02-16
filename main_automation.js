@@ -46,23 +46,24 @@ async function main() {
 
         // Step 1: Script
         currentStep = "Script Generation";
-        logger.info("📝 Step 1: Generating AI Script (JSON segments)...");
+        logger.info("📝 Step 1: Generating AI Script...");
         const step1Start = Date.now();
-        const scriptData = await generateScript(TOPIC);
-        const script = scriptData.fullText;
-        const segments = scriptData.segments;
-        logger.info(`✅ Step 1 Complete: Script generated with ${segments.length} expressive segments in ${((Date.now() - step1Start)/1000).toFixed(2)}s`);
+        const script = await generateScript(TOPIC);
+        logger.info(`✅ Step 1 Complete: Script generated in ${((Date.now() - step1Start)/1000).toFixed(2)}s`);
 
-        // Step 2: Audio (Atomic Synthesis via Voicebox)
-        currentStep = "Audio Generation (Atomic Voicebox)";
-        logger.info("🎤 Step 2: Performing Atomic Synthesis via Voicebox...");
+        // Step 2: Audio (Cloned via Voicebox)
+        currentStep = "Audio Generation (Voicebox)";
+        logger.info("🎤 Step 2: Generating Cloned Audio via Voicebox...");
         const step2Start = Date.now();
         let audioPath;
         
         // Configuration for Cloned Voice
         const REF_AUDIO = path.resolve('Base-audio.mp3'); 
-        const GEN_AUDIO_DIR = path.join(__dirname, 'audio', `session_${Date.now()}`);
-        if (!fs.existsSync(GEN_AUDIO_DIR)) fs.mkdirSync(GEN_AUDIO_DIR, { recursive: true });
+        const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
+        
+        if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
+            fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
+        }
 
         if (!fs.existsSync(REF_AUDIO)) {
             logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
@@ -70,44 +71,23 @@ async function main() {
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                const segmentPaths = [];
-                logger.info(`🗣️ Synthesizing ${segments.length} segments with expressive modulation...`);
+                // Single-pass synthesis with professional technical educator instructions
+                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
+                const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
                 
-                for (let i = 0; i < segments.length; i++) {
-                    const { text, tone } = segments[i];
-                    const segPath = path.join(GEN_AUDIO_DIR, `segment_${i}.wav`);
-                    
-                    logger.info(`   [${i+1}/${segments.length}] Tone: "${tone}" | Text: "${text.substring(0, 30)}..."`);
-                    const finalSegPath = await voiceboxService.generateClonedVoice(text, REF_AUDIO, segPath, null, tone);
-                    segmentPaths.push(finalSegPath);
-                }
-
-                // Merge Segments
-                logger.info("🎞️ Merging expressive segments...");
-                const mergedAudioPath = path.join(GEN_AUDIO_DIR, `merged_master.wav`);
+                // NEW: Slow down audio to 0.9x immediately after generation
+                logger.info("⏳ Slowing down audio to 0.9x via FFmpeg...");
+                const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
                 await new Promise((res, rej) => {
-                    let command = ffmpeg();
-                    segmentPaths.forEach(p => command = command.input(p));
-                    command
-                        .on('end', res)
-                        .on('error', rej)
-                        .mergeToFile(mergedAudioPath, GEN_AUDIO_DIR);
-                });
-                
-                // NEW: Slow down merged audio to 0.9x for the whole flow
-                logger.info("⏳ Slowing down master audio to 0.9x via FFmpeg...");
-                const slowedAudioPath = path.join(GEN_AUDIO_DIR, `slowed_master.wav`);
-                await new Promise((res, rej) => {
-                    ffmpeg(mergedAudioPath)
+                    ffmpeg(rawAudioPath)
                         .audioFilters('atempo=0.90')
                         .on('end', res)
                         .on('error', rej)
                         .save(slowedAudioPath);
                 });
                 audioPath = slowedAudioPath;
-
             } catch (vError) {
-                logger.error(`❌ Atomic Synthesis failed: ${vError.message}. Falling back to Gemini TTS.`);
+                logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
                 audioPath = audioResult.conversationFile;
             }
@@ -338,7 +318,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.14', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.10', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
