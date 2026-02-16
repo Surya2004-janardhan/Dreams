@@ -235,7 +235,7 @@ export const generateReelContent = async (
     - try not to clip out or overlap elements, design elements and animsation utilising the split ratio's html part screen realesate
     ### LAYOUT CONFIG REQUIREMENTS
     - 'layoutMode': 'split', 'full-video', 'full-html'.
-    - 'splitRatio': e.g., 0.60 (HTML takes top 60%).
+    - 'splitRatio': 0.5 (STRICT: USE 0.5 FOR ALL SPLIT LAYOUTS TO ENSURE PERFECT GAP BALANCE).
 
     ${isAudioOnly ? `
     ### AUDIO ONLY MODE
