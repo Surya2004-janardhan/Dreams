@@ -2,12 +2,52 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-// gemini-2.5-flash
+const getModel = () => {
+    const keys = [
+        process.env.GEMINI_API_KEY,
+        process.env.GEMINI_API_KEY_FOR_VISUALS,
+        process.env.GEMINI_API_KEY_FOR_AUDIO,
+        process.env.GEMINI_API_KEY_FOR_T2T
+    ].filter(Boolean);
+    const uniqueKeys = [...new Set(keys)];
+    
+    // Default to the first key for the initial instance
+    const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
+    const initialGenAI = new GoogleGenerativeAI(initialKey);
+    return { 
+        model: initialGenAI.getGenerativeModel({ model: "gemini-2.0-flash" }),
+        keys: uniqueKeys 
+    };
+};
+
+let { model, keys } = getModel();
+
+/**
+ * Helper to retry a function with different API keys on failure.
+ */
+async function retryWithFallback(fn) {
+    let lastError;
+    for (const key of keys) {
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            const currentModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            return await fn(currentModel);
+        } catch (e) {
+            lastError = e;
+            const msg = e.message || "";
+            if (msg.includes("API_KEY_INVALID") || msg.includes("expired") || msg.includes("429")) {
+                logger.warn(`⚠️ Gemini Key failed, trying next... Error: ${msg.substring(0, 50)}`);
+                continue;
+            }
+            throw e; 
+        }
+    }
+    throw lastError;
+}
 
 /**
  * Generates a viral, high-retention script for a 55-60 second technical reel.
+ * RETURNS: { fullText: string, segments: [{ text: string, tone: string }] }
  */
 const generateScript = async (topic, description = "") => {
   const prompt = `
@@ -16,51 +56,33 @@ const generateScript = async (topic, description = "") => {
     ${description ? `CONTEXT: ${description}` : ""}
 
     ABSOLUTE RULES:
-    1. OUTPUT ONLY THE SPOKEN WORDS. Nothing else. No titles, no labels, no meta-commentary.
-    2. NO introductions like "Hey guys", "Welcome", "Let me tell you", "Today we will".
-    3. NO outros like "Hope this helps", "Follow for more", "Let me know".
-    4. NO shortcut jargon or abbreviations. Spell things out. Say "Application Programming Interface" the first time, not just "API".
-    5. NO filler words or hype phrases.
+    1. OUTPUT ONLY A JSON ARRAY OF OBJECTS. No Markdown, no labels.
+    2. JSON Format: [{"text": "sentence segment", "tone": "voice modulation instruction"}]
+    3. NO introductions ("Hey guys") or outtros ("Follow for more").
+    4. NO filler words. Each sentence must teach something concrete.
+    5. TONE tags must be short modulation cues like "surprised questioning", "excited discovery", "serious technical authoritative", "engaging inquisitive".
+    6. Language: Straight-cut technical educator.
 
-    STYLE:
-    - Straight-cut and explanatory. Each sentence should teach something concrete.
-    - Sound like a knowledgeable colleague explaining a concept clearly, not a YouTuber chasing clicks.
-    - Use simple, clear language. If a concept is complex, break it down step by step.
-    - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
-    - Single continuous paragraph of spoken text. No line breaks, no bullet points.
-
-    STRUCTURE:
-    - Open directly with the core concept or a factual statement. No questions, no bait.
-    - Build explanation logically, adding one layer of depth at a time.
-    - End with a practical takeaway or real-world implication.
-
-    WORD COUNT: Strictly between 140 and 160 words.
+    WORD COUNT: Total text strictly between 140 and 160 words across all segments.
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let script = response.text().trim();
-
-    // Aggressive cleanup: remove any lines that look like meta-explanation
-    const lines = script.split('\n');
-    const filteredLines = lines.filter(line => {
-      const lower = line.toLowerCase();
-      if (lower.includes('here is') && lower.includes('script')) return false;
-      if (lower.includes('word count') || lower.includes('words long')) return false;
-      if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
-      return true;
+    const rawJson = await retryWithFallback(async (m) => {
+        const result = await m.generateContent(prompt);
+        const response = await result.response;
+        return response.text().trim();
     });
 
-    script = filteredLines.join(' ').trim();
-    
-    // Clean up markdown markers and bracketed text
-    script = script.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+    // Clean up potential markdown formatting if Gemini adds it
+    const jsonStr = rawJson.replace(/```json\n?|```/g, '').trim();
+    const segments = JSON.parse(jsonStr);
 
-    const wordCount = script.split(/\s+/).filter(w => w.length > 0).length;
-    logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
+    const fullText = segments.map(s => s.text).join(' ');
+    const wordCount = fullText.split(/\s+/).filter(w => w.length > 0).length;
     
-    return script;
+    logger.info(`✨ Atomic Script segments generated (Segments: ${segments.length}, Total Words: ${wordCount})`);
+    
+    return { fullText, segments };
   } catch (error) {
     logger.error("❌ Gemini Script generation error:", error.message);
     throw new Error(`Failed to generate viral script: ${error.message}`);
@@ -70,10 +92,10 @@ const generateScript = async (topic, description = "") => {
 /**
  * Generates a high-fidelity visual animation storyboard prompt for technical reels.
  */
-const generateVisualPrompt = async (topic, script) => {
+const generateVisualPrompt = async (topic, scriptText) => {
     const prompt = `
     Topic: ${topic}
-    Script: ${script}
+    Script: ${scriptText}
     
     Task: Create a high-fidelity visual animation storyboard for a technical reel.
     
@@ -97,9 +119,11 @@ const generateVisualPrompt = async (topic, script) => {
     `;
     
     try {
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const visualDescription = response.text().trim();
+        const visualDescription = await retryWithFallback(async (m) => {
+            const result = await m.generateContent(prompt);
+            const response = await result.response;
+            return response.text().trim();
+        });
         
         if (!visualDescription || visualDescription.length < 20) {
             throw new Error("Gemini returned an empty or insufficient visual prompt.");
@@ -109,7 +133,7 @@ const generateVisualPrompt = async (topic, script) => {
         return visualDescription;
     } catch (e) {
         logger.error("❌ Failed to generate visual prompt via Gemini:", e.message);
-        throw e; // Rethrow to stop the pipeline
+        throw e; 
     }
 };
 
