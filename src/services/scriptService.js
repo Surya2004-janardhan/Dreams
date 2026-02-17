@@ -66,8 +66,8 @@ const generateScript = async (topic, description = "") => {
 
     STYLE:
     - Straight-cut and explanatory. Each sentence should teach something concrete.
-    - Sound like a knowledgeable colleague explaining a concept clearly, not a YouTuber chasing clicks.
-    - Use simple, clear language. If a concept is complex, break it down step by step.
+    - **NATURAL PACING**: Write for human speech. Use varying sentence lengths to create a natural rhythm.
+    - **PUNCTUATION**: Use clear periods and commas. This is vital for the TTS/Voicebox to insert natural pauses.
     - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
     - Single continuous paragraph of spoken text. No line breaks, no bullet points.
 
@@ -115,49 +115,69 @@ const generateScript = async (topic, description = "") => {
  * Generates a high-fidelity visual animation storyboard prompt for technical reels.
  */
 const generateVisualPrompt = async (topic, scriptText) => {
-    const prompt = `
-    Topic: ${topic}
-    Script: ${scriptText}
-    
-    Task: Create a high-fidelity visual animation storyboard for a technical reel.
-    
-    VISUAL STRATEGY:
-    - STYLE: Premium "Tech Influencer" motion graphics. Dark, cinematic, and high-fidelity.
-    - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
-    - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
-    - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
-    - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding between every visual component.
-    - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
-    - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
-    - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
-    - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
-    - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
-    - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
-    - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
-    
-    OUTPUT FORMAT:
-    - Exactly 5-6 descriptive lines detailing the visual progression.
-    - Focus on ACTION and SPECIFIC ICONS. 
-    - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
-    `;
-    
-    try {
-        const visualDescription = await retryWithFallback(async (m) => {
-            const result = await m.generateContent(prompt);
-            const response = await result.response;
-            return response.text().trim();
-        });
-        
-        if (!visualDescription || visualDescription.length < 20) {
-            throw new Error("Gemini returned an empty or insufficient visual prompt.");
+    const MAX_RETRIES = 3;
+    let lastError;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const prompt = `
+            Topic: ${topic}
+            Script: ${scriptText}
+            
+            Task: Create a high-fidelity visual animation storyboard for a technical reel.
+            
+            VISUAL STRATEGY:
+            - STYLE: Premium "Tech Influencer" motion graphics. Dark, cinematic, and high-fidelity.
+            - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
+            - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
+            - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
+            - **ANIMATION FOCUS**: Animations must be the **majority part takers** of the screen. Prioritize dynamic, kinetic flow over static layout.
+            - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding.
+            - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
+            - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
+            - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
+            - HEADERS: Use **Bold, Top-Middle aligned technical headers**. Ensure they are placed high enough to stay clear of the central animation area.
+            - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
+            - TEXT IN VISUALS: Keep text minimal and **top-aligned** to avoid cluttering the recording area.
+            - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
+            
+            OUTPUT FORMAT:
+            - Exactly 5-6 descriptive lines detailing the visual progression.
+            - Focus on ACTION and SPECIFIC ICONS. 
+            - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
+            `;
+
+            const visualDescription = await retryWithFallback(async (m) => {
+                const result = await m.generateContent(prompt);
+                const response = await result.response;
+                return response.text().trim();
+            });
+
+            // VALIDATION: Ensure prompt is not empty, not too short, and contains no "hallucination markers"
+            const isInvalidType = !visualDescription || visualDescription.length < 50;
+            const hasPlaceholders = /\[PLACEHOLDER\]|\[INSERT.*?\]|TODO|FIXME/i.test(visualDescription);
+            const isTooGeneric = visualDescription.toLowerCase().includes("show a video") && !visualDescription.toLowerCase().includes("icon");
+
+            if (isInvalidType || hasPlaceholders || isTooGeneric) {
+                logger.warn(`⚠️ Visual prompt validation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
+                if (attempt < MAX_RETRIES) {
+                    await new Promise(r => setTimeout(r, 2000)); // Grace period before retry
+                    continue;
+                }
+                throw new Error("Visual prompt failed validation after multiple attempts.");
+            }
+
+            logger.info("🎨 Visual prompt validated and generated successfully.");
+            return visualDescription;
+
+        } catch (e) {
+            lastError = e;
+            logger.error(`❌ Visual prompt error (Attempt ${attempt}/${MAX_RETRIES}): ${e.message}`);
+            if (attempt === MAX_RETRIES) throw e;
+            await new Promise(r => setTimeout(r, 2000));
         }
-        
-        logger.info("🎨 Visual prompt generated via Gemini (Length: " + visualDescription.length + ")");
-        return visualDescription;
-    } catch (e) {
-        logger.error("❌ Failed to generate visual prompt via Gemini:", e.message);
-        throw e; 
     }
+    throw lastError;
 };
 
 module.exports = {

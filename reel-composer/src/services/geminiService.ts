@@ -196,6 +196,8 @@ export const generateReelContent = async (
     1. **Color Palette**: Dark mode (#050505), Neon accents (Cyan/Magenta).
     2. **Animation Style (GSAP - SMOOTH & STAGED)**:
        - **STAGED TRANSITIONS:** Use GSAP stagger and clear entrance/exit animations for every scene. Elements should animate IN, stay active, and then animate OUT before the next scene starts.
+       - **ANIMATION DOMINANCE:** Visual animations must be the **primary part takers** of the screen. Text/Keywords should be secondary and unobtrusive.
+       - **TOP-MIDDLE HEADERS:** Position title/keyword text in the **Top-Middle** of the container. Use a cleaner, smaller font size (Target: **27px**).
        - **NO-OVERLAP & Z-INDEX:** Text elements MUST have the highest \`z-index\` (min 100). Background animations and icons must NEVER obscure or cover words. Use \`transform: translateZ(0)\` on containers to prevent rendering glitches.
        - **PRECISE CONNECTORS:** When drawing arrows or links between components, use absolute percentage coordinates (e.g., from Box A at \`left: 20%\` to Box B at \`left: 80%\`). Ensure arrows originate and terminate exactly at the container boundaries. Use SVG for complex paths for maximum precision.
        - **MINIMAL TEXT:** Display ONLY 1-3 critical keywords to emphasize the audio.
