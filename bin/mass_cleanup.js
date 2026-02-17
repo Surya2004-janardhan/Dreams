@@ -69,21 +69,42 @@ async function cleanupFacebook() {
     const accessToken = process.env.FACEBOOK_ACCESS_TOKEN;
     const baseUrl = "https://graph.facebook.com/v23.0";
 
+    if (!pageId || !accessToken) {
+        logger.error("❌ Facebook Cleanup Skipped: FACEBOOK_PAGE_ID or FACEBOOK_ACCESS_TOKEN missing in .env");
+        return;
+    }
+
     try {
         let deletedCount = 0;
         let hasMore = true;
         let nextUrl = `${baseUrl}/${pageId}/feed?access_token=${accessToken}`;
 
         while (hasMore && nextUrl) {
-            const response = await axios.get(nextUrl);
+            let response;
+            try {
+                response = await axios.get(nextUrl);
+            } catch (getErr) {
+                logger.error(`❌ Failed to fetch Facebook feed: ${getErr.message}`);
+                if (getErr.response) logger.error(`Response Data: ${JSON.stringify(getErr.response.data)}`);
+                break;
+            }
+
             const posts = response.data.data || [];
             
-            if (posts.length === 0) break;
+            if (posts.length === 0) {
+                logger.info("ℹ️ No more Facebook posts found.");
+                break;
+            }
 
             for (const post of posts) {
                 logger.info(`  🗑️ Deleting Facebook Post: ${post.id}`);
-                await axios.delete(`${baseUrl}/${post.id}?access_token=${accessToken}`);
-                deletedCount++;
+                try {
+                    await axios.delete(`${baseUrl}/${post.id}?access_token=${accessToken}`);
+                    deletedCount++;
+                } catch (delErr) {
+                    logger.error(`  ⚠️ Failed to delete post ${post.id}: ${delErr.message}`);
+                    if (delErr.response) logger.error(`  Response Data: ${JSON.stringify(delErr.response.data)}`);
+                }
                 await sleep(3000); // 3s delay
             }
 
@@ -91,7 +112,8 @@ async function cleanupFacebook() {
         }
         logger.info(`✅ Facebook Cleanup Complete. Total deleted: ${deletedCount}`);
     } catch (error) {
-        logger.error(`❌ Facebook Cleanup Failed: ${error.message}`);
+        logger.error(`❌ Facebook Cleanup Error: ${error.message}`);
+        if (error.response) logger.error(`Response Data: ${JSON.stringify(error.response.data)}`);
     }
 }
 
