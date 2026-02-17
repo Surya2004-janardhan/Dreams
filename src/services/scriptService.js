@@ -66,8 +66,8 @@ const generateScript = async (topic, description = "") => {
 
     STYLE:
     - Straight-cut and explanatory. Each sentence should teach something concrete.
-    - Sound like a knowledgeable colleague explaining a concept clearly, not a YouTuber chasing clicks.
-    - Use simple, clear language. If a concept is complex, break it down step by step.
+    - **NATURAL PACING**: Write for human speech. Use varying sentence lengths to create a natural rhythm.
+    - **PUNCTUATION**: Use clear periods and commas. This is vital for the TTS/Voicebox to insert natural pauses.
     - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
     - Single continuous paragraph of spoken text. No line breaks, no bullet points.
 
@@ -131,13 +131,14 @@ const generateVisualPrompt = async (topic, scriptText) => {
             - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
             - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
             - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
-            - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding between every visual component.
+            - **ANIMATION FOCUS**: Animations must be the **majority part takers** of the screen. Prioritize dynamic, kinetic flow over static layout.
+            - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding.
             - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
             - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
             - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
-            - HEADERS: Use **Bold, center-aligned technical headers** at the top top.
+            - HEADERS: Use **Bold, Top-Middle aligned technical headers**. Ensure they are placed high enough to stay clear of the central animation area.
             - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
-            - TEXT IN VISUALS: Keep text minimal and top-aligned to avoid cluttering the recording area.
+            - TEXT IN VISUALS: Keep text minimal and **top-aligned** to avoid cluttering the recording area.
             - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
             
             OUTPUT FORMAT:

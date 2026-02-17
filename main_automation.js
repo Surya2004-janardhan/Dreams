@@ -72,20 +72,11 @@ async function main() {
         } else {
             try {
                 // Single-pass synthesis with professional technical educator instructions
-                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
+                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear. Speak naturally with brief pauses at punctuation.";
                 const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
                 
-                // NEW: Slow down audio to 0.9x immediately after generation
-                logger.info("⏳ Slowing down audio to 0.9x via FFmpeg...");
-                const slowedAudioPath = path.join(__dirname, 'audio', `slowed_voice_${Date.now()}.wav`);
-                await new Promise((res, rej) => {
-                    ffmpeg(rawAudioPath)
-                        .audioFilters('atempo=0.90')
-                        .on('end', res)
-                        .on('error', rej)
-                        .save(slowedAudioPath);
-                });
-                audioPath = slowedAudioPath;
+                // Pacing: Use raw audio directly for natural flow (slowdown removed as requested)
+                audioPath = rawAudioPath;
             } catch (vError) {
                 logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);
@@ -318,7 +309,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
 
             if (hasBgm) {
                 filterComplex.push({
-                    filter: 'volume', options: '0.12', inputs: '2:a', outputs: 'lowBgm'
+                    filter: 'volume', options: '0.09', inputs: '2:a', outputs: 'lowBgm'
                 });
                 filterComplex.push({
                     filter: 'amix',
