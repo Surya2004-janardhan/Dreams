@@ -85,6 +85,10 @@ parser.add_argument('--restorer', type=str, default=None,
 parser.add_argument('--restorer_path', type=str, default=None,
 					help='Path to restorer model weights')
 
+# Performance & Stability Arguments
+parser.add_argument('--nosmooth', default=False, action='store_true',
+					help='Prevent smoothing face detections over a short temporal window')
+
 args = parser.parse_args()
 args.img_size = 96
 
@@ -100,20 +104,38 @@ def get_smoothened_boxes(boxes, T):
 		boxes[i] = np.mean(window, axis=0)
 	return boxes
 
-def face_detect(images):
-	detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
-											flip_input=False, device=device)
+def face_detect(images, detector=None):
+	if detector is None:
+		print("Initializing face detector...")
+		detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
+												flip_input=False, device=device)
+
+	# Memory-Safe Downscaling for detection (Internal)
+	# Detection doesn't need high res. 360p is plenty.
+	detection_images = []
+	scale_factors = []
+	for img in images:
+		h, w = img.shape[:2]
+		max_dim = 360
+		if h > max_dim or w > max_dim:
+			scale = max_dim / float(max(h, w))
+			img_small = cv2.resize(img, (int(w * scale), int(h * scale)))
+			detection_images.append(img_small)
+			scale_factors.append(scale)
+		else:
+			detection_images.append(img)
+			scale_factors.append(1.0)
 
 	batch_size = args.face_det_batch_size
 	
 	while 1:
 		predictions = []
 		try:
-			for i in tqdm(range(0, len(images), batch_size)):
-				predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
+			for i in range(0, len(detection_images), batch_size):
+				predictions.extend(detector.get_detections_for_batch(np.array(detection_images[i:i + batch_size])))
 		except RuntimeError:
 			if batch_size == 1: 
-				raise RuntimeError('Image too big to run face detection on GPU. Please use the --resize_factor argument')
+				raise RuntimeError('Image too big for detection even with downscaling.')
 			batch_size //= 2
 			print('Recovering from OOM error; New batch size: {}'.format(batch_size))
 			continue
@@ -121,23 +143,23 @@ def face_detect(images):
 
 	results = []
 	pady1, pady2, padx1, padx2 = args.pads
-	for rect, image in zip(predictions, images):
+	for rect, image, scale in zip(predictions, images, scale_factors):
 		if rect is None:
-			cv2.imwrite('temp/faulty_frame.jpg', image) # check this frame where the face was not detected.
+			cv2.imwrite('temp/faulty_frame.jpg', image)
 			raise ValueError('Face not detected! Ensure the video contains a face in all the frames.')
 
-		y1 = max(0, rect[1] - pady1)
-		y2 = min(image.shape[0], rect[3] + pady2)
-		x1 = max(0, rect[0] - padx1)
-		x2 = min(image.shape[1], rect[2] + padx2)
+		# Scale coordinates back to original size
+		y1 = max(0, int(rect[1] / scale) - pady1)
+		y2 = min(image.shape[0], int(rect[3] / scale) + pady2)
+		x1 = max(0, int(rect[0] / scale) - padx1)
+		x2 = min(image.shape[1], int(rect[2] / scale) + padx2)
 		
 		results.append([x1, y1, x2, y2])
 
 	boxes = np.array(results)
 	if not args.nosmooth: boxes = get_smoothened_boxes(boxes, T=5)
-	results = [[image[y1: y2, x1:x2], (y1, y2, x1, x2)] for image, (x1, y1, x2, y2) in zip(images, boxes)]
-
-	del detector
+	
+	results = [(y1, y2, x1, x2) for (x1, y1, x2, y2) in boxes]
 	return results 
 
 def datagen(frames, mels, face_det_results=None):
@@ -157,7 +179,11 @@ def datagen(frames, mels, face_det_results=None):
 	for i, m in enumerate(mels):
 		idx = 0 if args.static else i%len(frames)
 		frame_to_save = frames[idx].copy()
-		face, coords = face_det_results[idx].copy()
+		
+		# face_det_results now only contains coordinates
+		coords = face_det_results[idx]
+		y1, y2, x1, x2 = coords
+		face = frame_to_save[y1:y2, x1:x2]
 
 		face = cv2.resize(face, (args.img_size, args.img_size))
 			
@@ -327,22 +353,47 @@ def main():
 	face_det_results = None
 	if not args.face_det_results and args.box[0] == -1:
 		print('✨ Run: Automatic face detection (Streaming mode)...')
-		# Read a chunk for detection if not cached
 		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
-		detection_frames = []
-		for _ in range(num_frames):
-			ret, f = video_stream.read()
-			if not ret: break
-			if args.resize_factor > 1:
-				f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
-			y1, y2, x1, x2 = args.crop
-			if x2 == -1: x2 = f.shape[1]
-			if y2 == -1: y2 = f.shape[0]
-			detection_frames.append(f[y1:y2, x1:x2])
 		
-		face_det_results = face_detect(detection_frames)
+		detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D, 
+												flip_input=False, device=device)
+		
+		# Process in smaller chunks to keep RAM low
+		all_coords = []
+		chunk_size = 64 # Further reduced chunk size for high-res safety
+		for chunk_start in tqdm(range(0, num_frames, chunk_size), desc="Detecting Faces"):
+			detection_frames = []
+			for _ in range(min(chunk_size, num_frames - chunk_start)):
+				ret, f = video_stream.read()
+				if not ret: break
+				
+				# Optimization: Resize for detection only
+				# We keep 'f' for detection but don't hold full res in memory if possible
+				if args.resize_factor > 1:
+					f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
+				
+				y1, y2, x1, x2 = args.crop
+				if x2 == -1: x2 = f.shape[1]
+				if y2 == -1: y2 = f.shape[0]
+				f = f[y1:y2, x1:x2]
+				
+				# If frame is huge (e.g. 4K), we downsample even more for the detection buffer
+				h, w = f.shape[:2]
+				if h > 720: 
+					scale = 720.0 / h
+					f_small = cv2.resize(f, (int(w * scale), int(h * scale)))
+					detection_frames.append(f_small)
+				else:
+					detection_frames.append(f)
+			
+			if detection_frames:
+				chunk_coords = face_detect(detection_frames, detector=detector)
+				all_coords.extend(chunk_coords)
+				del detection_frames
+		
+		face_det_results = all_coords
+		del detector # Cleanup detector from GPU
 		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
-		del detection_frames # Free RAM after detection
 
 	# Streaming implementation for OOM safety
 	for i in tqdm(range(0, num_frames_needed, batch_size)):
@@ -352,22 +403,32 @@ def main():
 		current_batch_end = min(i + batch_size, num_frames_needed)
 		for j in range(i, current_batch_end):
 			# Get frame
-			if args.face_det_results:
+			if full_frames is None:
 				ret, f = video_stream.read()
-				if not ret: break
-				# Apply same transforms as pre-read
+				if not ret:
+					# End of video reached; if we still need frames, loop back to the start
+					video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+					ret, f = video_stream.read()
+					if not ret: break # Should not happen unless video is corrupted
+				
+				# Apply transforms
 				if args.resize_factor > 1:
 					f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
+				if args.rotate:
+					f = cv2.rotate(f, cv2.ROTATE_90_CLOCKWISE)
+				
 				y1, y2, x1, x2 = args.crop
 				if x2 == -1: x2 = f.shape[1]
 				if y2 == -1: y2 = f.shape[0]
 				f = f[y1:y2, x1:x2]
 			else:
-				f = full_frames[j].copy()
+				# Use j % len(full_frames) to support video looping or single-frame static images
+				idx = j % len(full_frames)
+				f = full_frames[idx].copy()
 			
 			# Get face coords
 			if args.face_det_results:
-				# Use cached boxes (they are [x1, y1, x2, y2])
+				# Use cached boxes
 				c = cached_boxes[j % len(cached_boxes)]
 				x1, y1, x2, y2 = map(int, c)
 				y1 = max(0, y1); y2 = min(f.shape[0], y2)
@@ -375,8 +436,10 @@ def main():
 				face = f[y1:y2, x1:x2]
 				coords_final = (y1, y2, x1, x2)
 			elif face_det_results is not None:
-				# Use results from automatic detection
-				face, coords_final = face_det_results[j % len(face_det_results)]
+				# Use results from automatic detection (stored as coords)
+				coords_final = face_det_results[j % len(face_det_results)]
+				y1, y2, x1, x2 = coords_final
+				face = f[y1:y2, x1:x2]
 			elif args.box[0] != -1:
 				y1, y2, x1, x2 = args.box
 				face = f[y1:y2, x1:x2]
@@ -435,9 +498,10 @@ def main():
 	out.release()
 	video_stream.release()
 	
-	# Ensure temp directory exists for result.avi
-	if not os.path.exists('temp'):
-		os.makedirs('temp')
+	# Ensure output directory exists for outfile
+	out_dir = os.path.dirname(args.outfile)
+	if out_dir != '' and not os.path.exists(out_dir):
+		os.makedirs(out_dir)
 
 	command = 'ffmpeg -y -i "{}" -i "{}" -strict -2 -q:v 1 "{}"'.format(args.audio, 'temp/result.avi', args.outfile)
 	subprocess.check_call(command, shell=True)
