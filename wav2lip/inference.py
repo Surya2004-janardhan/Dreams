@@ -84,6 +84,8 @@ parser.add_argument('--restorer', type=str, default=None,
 					help='Face restorer name (e.g., gfpgan)')
 parser.add_argument('--restorer_path', type=str, default=None,
 					help='Path to restorer model weights')
+parser.add_argument('--skip_gfpgan', action='store_true',
+					help='Skip restoration even if restorer is specified (useful for debugging)')
 
 # Performance & Stability Arguments
 parser.add_argument('--nosmooth', default=False, action='store_true',
@@ -157,7 +159,7 @@ def face_detect(images, detector=None):
 		results.append([x1, y1, x2, y2])
 
 	boxes = np.array(results)
-	if not args.nosmooth: boxes = get_smoothened_boxes(boxes, T=5)
+	if not args.nosmooth: boxes = get_smoothened_boxes(boxes, T=5) # ONLY return coordinates relative to the ORIGINAL frames passed in
 	
 	results = [(y1, y2, x1, x2) for (x1, y1, x2, y2) in boxes]
 	return results 
@@ -315,7 +317,7 @@ def main():
 
 	# Initialize Restorer
 	restorer = None
-	if args.restorer == 'gfpgan':
+	if args.restorer == 'gfpgan' and not args.skip_gfpgan:
 		if not HAS_GFPGAN:
 			print("❌ Error: gfpgan package not installed. Skipping restoration.")
 		elif not args.restorer_path or not os.path.exists(args.restorer_path):
@@ -324,7 +326,7 @@ def main():
 			print(f"✨ Initializing GFPGAN Restorer with weights: {args.restorer_path}")
 			restorer = GFPGANer(
 				model_path=args.restorer_path,
-				upscale=1, # We only want restoration, not necessarily upscaling the whole video
+				upscale=1,
 				arch='clean',
 				channel_multiplier=2,
 				device=device
@@ -371,20 +373,17 @@ def main():
 				# We keep 'f' for detection but don't hold full res in memory if possible
 				if args.resize_factor > 1:
 					f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
+				if args.rotate:
+					f = cv2.rotate(f, cv2.ROTATE_90_CLOCKWISE)
 				
-				y1, y2, x1, x2 = args.crop
-				if x2 == -1: x2 = f.shape[1]
-				if y2 == -1: y2 = f.shape[0]
-				f = f[y1:y2, x1:x2]
+				y1_c, y2_c, x1_c, x2_c = args.crop
+				if x2_c == -1: x2_c = f.shape[1]
+				if y2_c == -1: y2_c = f.shape[0]
+				f = f[y1_c:y2_c, x1_c:x2_c]
 				
-				# If frame is huge (e.g. 4K), we downsample even more for the detection buffer
-				h, w = f.shape[:2]
-				if h > 720: 
-					scale = 720.0 / h
-					f_small = cv2.resize(f, (int(w * scale), int(h * scale)))
-					detection_frames.append(f_small)
-				else:
-					detection_frames.append(f)
+				# Keep it FULL RES for detection_frames so face_detect 
+				# can return coordinates valid for the original frame
+				detection_frames.append(f)
 			
 			if detection_frames:
 				chunk_coords = face_detect(detection_frames, detector=detector)
@@ -445,14 +444,16 @@ def main():
 				face = f[y1:y2, x1:x2]
 				coords_final = (y1, y2, x1, x2)
 			else:
-				# Fallback to center crop if everything fails (should not happen now)
+				# Fallback to center crop
 				h, w = f.shape[:2]
 				face = f[h//4:h//2, w//4:w//2]
 				coords_final = (h//4, h//2, w//4, w//2)
 			
-			face = cv2.resize(face, (args.img_size, args.img_size))
+			# Convert face to RGB for the model
+			face_rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+			face_rgb = cv2.resize(face_rgb, (args.img_size, args.img_size))
 			
-			img_batch.append(face)
+			img_batch.append(face_rgb)
 			mel_batch.append(mel_chunks[j])
 			frames.append(f)
 			coords.append(coords_final)
@@ -482,17 +483,30 @@ def main():
 			y1, y2, x1, x2 = c
 			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
 			
+			# Wav2Lip output is RGB (from the model), result frame 'f' is BGR (OpenCV)
+			# We MUST convert back to BGR to avoid the "blue color filter" look
+			p_bgr = cv2.cvtColor(p, cv2.COLOR_RGB2BGR)
+			
 			if restorer is not None:
-				# Enhance the generated face region
-				# GFPGAN works best on the full face crop
-				# We temporarily paste it to get the full face enhanced
-				f_copy = f.copy()
-				f_copy[y1:y2, x1:x2] = p
-				_, _, restored_img = restorer.enhance(f_copy, has_aligned=False, only_center_face=False, paste_back=True)
-				if restored_img is not None:
-					f = restored_img
+				try:
+					# Paste the BGR patch into a copy for restoration
+					f_copy = f.copy()
+					f_copy[y1:y2, x1:x2] = p_bgr
+					
+					# Enhance with GFPGAN (this creates a seamless face)
+					_, _, restored_img = restorer.enhance(f_copy, has_aligned=False, only_center_face=False, paste_back=True)
+					if restored_img is not None:
+						f = restored_img
+					else:
+						# Fallback if restoration fails
+						f[y1:y2, x1:x2] = p_bgr
+				except Exception as e:
+					print(f"⚠️ Restoration failed for a frame: {e}. Falling back to standard sync.")
+					f[y1:y2, x1:x2] = p_bgr
+			else:
+				# Standard mode (no restorer)
+				f[y1:y2, x1:x2] = p_bgr
 
-			f[y1:y2, x1:x2] = p if restorer is None else f[y1:y2, x1:x2]
 			out.write(f)
 
 	out.release()
