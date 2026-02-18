@@ -8,6 +8,35 @@ import torch, face_detection
 from models import Wav2Lip
 import platform
 
+# GFPGAN Integration & Compatibility Patch
+try:
+	import torchvision.transforms.functional as F
+	import torchvision.transforms as T
+	import sys
+
+	# Monkey-patch for basicsr (dependency of GFPGAN) which fails on newer torchvision
+	if not hasattr(T, 'functional_tensor'):
+		# Create a virtual module if it's missing
+		from types import ModuleType
+		mock_module = ModuleType('torchvision.transforms.functional_tensor')
+		# Copy all functions from functional to the mock module
+		for attr in dir(F):
+			if not attr.startswith('__'):
+				setattr(mock_module, attr, getattr(F, attr))
+		sys.modules['torchvision.transforms.functional_tensor'] = mock_module
+		T.functional_tensor = mock_module
+		print("🔧 Applied torchvision.transforms.functional_tensor monkey-patch for GFPGAN.")
+
+	import basicsr
+	from gfpgan import GFPGANer
+	HAS_GFPGAN = True
+except ImportError as e:
+	print(f"⚠️ GFPGAN Import Warning: {e}")
+	HAS_GFPGAN = False
+except Exception as e:
+	print(f"⚠️ GFPGAN Initialization Warning: {e}")
+	HAS_GFPGAN = False
+
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
 parser.add_argument('--checkpoint_path', type=str, 
@@ -49,6 +78,12 @@ parser.add_argument('--rotate', default=False, action='store_true',
 
 parser.add_argument('--face_det_results', type=str, 
 					help='Path to pre-computed face detection results (.npy)', default=None)
+
+# GFPGAN Arguments
+parser.add_argument('--restorer', type=str, default=None,
+					help='Face restorer name (e.g., gfpgan)')
+parser.add_argument('--restorer_path', type=str, default=None,
+					help='Path to restorer model weights')
 
 args = parser.parse_args()
 args.img_size = 96
@@ -155,9 +190,9 @@ def datagen(frames, mels, face_det_results=None):
 		yield img_batch, mel_batch, frame_batch, coords_batch
 
 mel_step_size = 16
-# Forced to CPU for stability as requested by the user
-device = 'cpu'
-print('Using {} for inference (Safe Mode).'.format(device))
+# Detect device: Use CUDA if available, unless forced to CPU
+device = 'cuda' if torch.cuda.is_available() and os.environ.get('FORCE_CPU') != 'true' else 'cpu'
+print('Using {} for inference.'.format(device))
 
 def _load(checkpoint_path):
 	if device == 'cuda':
@@ -207,26 +242,15 @@ def main():
 			num_frames = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
 			print(f"Video has {num_frames} frames according to metadata.")
 		else:
-			print('Reading video frames into memory (Warning: High RAM usage)...')
-			full_frames = []
-			while 1:
-				still_reading, frame = video_stream.read()
-				if not still_reading:
-					video_stream.release()
-					break
-				if args.resize_factor > 1:
-					frame = cv2.resize(frame, (frame.shape[1]//args.resize_factor, frame.shape[0]//args.resize_factor))
-
-				if args.rotate:
-					frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
-
-				y1, y2, x1, x2 = args.crop
-				if x2 == -1: x2 = frame.shape[1]
-				if y2 == -1: y2 = frame.shape[0]
-
-				frame = frame[y1:y2, x1:x2]
-				full_frames.append(frame)
-			num_frames = len(full_frames)
+			print('Checking video availability (Streaming mode enabled)...')
+			# Just count frames without loading them all into RAM
+			num_frames = int(video_stream.get(cv2.CAP_PROP_FRAME_COUNT))
+			if num_frames == 0:
+				# Fallback if metadata is missing
+				while video_stream.grab(): num_frames += 1
+				video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+			print(f"Video has {num_frames} frames.")
+			full_frames = None # Use None to signal streaming mode
 
 	if not args.audio.endswith('.wav'):
 		print('Extracting raw audio...')
@@ -263,20 +287,62 @@ def main():
 	model = load_model(args.checkpoint_path)
 	print ("Model loaded")
 
+	# Initialize Restorer
+	restorer = None
+	if args.restorer == 'gfpgan':
+		if not HAS_GFPGAN:
+			print("❌ Error: gfpgan package not installed. Skipping restoration.")
+		elif not args.restorer_path or not os.path.exists(args.restorer_path):
+			print(f"❌ Error: Restorer path {args.restorer_path} not found. Skipping restoration.")
+		else:
+			print(f"✨ Initializing GFPGAN Restorer with weights: {args.restorer_path}")
+			restorer = GFPGANer(
+				model_path=args.restorer_path,
+				upscale=1, # We only want restoration, not necessarily upscaling the whole video
+				arch='clean',
+				channel_multiplier=2,
+				device=device
+			)
+
 	video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
 	
 	# Prepare video writer
 	# We need the first frame's shape to initialize the writer
-	if args.face_det_results:
-		ret, first_frame = video_stream.read()
-		if not ret: raise ValueError("Could not read first frame")
-		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
-		frame_h, frame_w = first_frame.shape[:-1]
-	else:
-		frame_h, frame_w = full_frames[0].shape[:-1]
+	ret, first_frame = video_stream.read()
+	if not ret: raise ValueError("Could not read first frame")
+	video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+	if args.resize_factor > 1:
+		first_frame = cv2.resize(first_frame, (first_frame.shape[1]//args.resize_factor, first_frame.shape[0]//args.resize_factor))
+	y1, y2, x1, x2 = args.crop
+	if x2 == -1: x2 = first_frame.shape[1]
+	if y2 == -1: y2 = first_frame.shape[0]
+	first_frame = first_frame[y1:y2, x1:x2]
+	frame_h, frame_w = first_frame.shape[:-1]
 		
 	out = cv2.VideoWriter('temp/result.avi', 
 							cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
+
+	# Pre-compute face boxes if not using cache and not using static image
+	face_det_results = None
+	if not args.face_det_results and args.box[0] == -1:
+		print('✨ Run: Automatic face detection (Streaming mode)...')
+		# Read a chunk for detection if not cached
+		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+		detection_frames = []
+		for _ in range(num_frames):
+			ret, f = video_stream.read()
+			if not ret: break
+			if args.resize_factor > 1:
+				f = cv2.resize(f, (f.shape[1]//args.resize_factor, f.shape[0]//args.resize_factor))
+			y1, y2, x1, x2 = args.crop
+			if x2 == -1: x2 = f.shape[1]
+			if y2 == -1: y2 = f.shape[0]
+			detection_frames.append(f[y1:y2, x1:x2])
+		
+		face_det_results = face_detect(detection_frames)
+		video_stream.set(cv2.CAP_PROP_POS_FRAMES, 0)
+		del detection_frames # Free RAM after detection
 
 	# Streaming implementation for OOM safety
 	for i in tqdm(range(0, num_frames_needed, batch_size)):
@@ -303,24 +369,23 @@ def main():
 			if args.face_det_results:
 				# Use cached boxes (they are [x1, y1, x2, y2])
 				c = cached_boxes[j % len(cached_boxes)]
-				# If boxes were smoothened in precompute, they are already final
-				# But results usually expects [face_img, (y1, y2, x1, x2)]
 				x1, y1, x2, y2 = map(int, c)
-				# Ensure within bounds
 				y1 = max(0, y1); y2 = min(f.shape[0], y2)
 				x1 = max(0, x1); x2 = min(f.shape[1], x2)
 				face = f[y1:y2, x1:x2]
 				coords_final = (y1, y2, x1, x2)
+			elif face_det_results is not None:
+				# Use results from automatic detection
+				face, coords_final = face_det_results[j % len(face_det_results)]
 			elif args.box[0] != -1:
 				y1, y2, x1, x2 = args.box
 				face = f[y1:y2, x1:x2]
 				coords_final = (y1, y2, x1, x2)
 			else:
-				# This case shouldn't really happen with large videos anymore
-				# but we should handle it if someone runs without cache
-				# (Re-runs detection in batches... slow but safer?)
-				# For now, let's assume we use cache for large videos.
-				pass
+				# Fallback to center crop if everything fails (should not happen now)
+				h, w = f.shape[:2]
+				face = f[h//4:h//2, w//4:w//2]
+				coords_final = (h//4, h//2, w//4, w//2)
 			
 			face = cv2.resize(face, (args.img_size, args.img_size))
 			
@@ -353,7 +418,18 @@ def main():
 		for p, f, c in zip(pred, frames, coords):
 			y1, y2, x1, x2 = c
 			p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
-			f[y1:y2, x1:x2] = p
+			
+			if restorer is not None:
+				# Enhance the generated face region
+				# GFPGAN works best on the full face crop
+				# We temporarily paste it to get the full face enhanced
+				f_copy = f.copy()
+				f_copy[y1:y2, x1:x2] = p
+				_, _, restored_img = restorer.enhance(f_copy, has_aligned=False, only_center_face=False, paste_back=True)
+				if restored_img is not None:
+					f = restored_img
+
+			f[y1:y2, x1:x2] = p if restorer is None else f[y1:y2, x1:x2]
 			out.write(f)
 
 	out.release()
