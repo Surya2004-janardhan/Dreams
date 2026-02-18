@@ -254,6 +254,7 @@ def main():
 	else:
 		video_stream = cv2.VideoCapture(args.face)
 		fps = video_stream.get(cv2.CAP_PROP_FPS)
+		full_frames = None # Ensure it is defined for streaming mode
 
 		if fps <= 0:
 			# Likely an LFS pointer or corrupted file
