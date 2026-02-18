@@ -1,119 +1,126 @@
-# 🎬 Ultimate AI Content Automation (Dreams Pipeline)
+# 🎬 AI Content Automation Prototype (Dreams Pipeline)
 
-Welcome to a professional "Ghost Creator" pipeline. This system transforms technical topics from a Google Sheet into high-retention, fully lip-synced vertical videos (Reels/Shorts) using a multi-agent AI architecture.
+This project is a high-fidelity technical prototype for a multi-agent AI video production pipeline. It automates the transition from structured data (Google Sheets) to fully realized, lip-synced vertical educational reels using a hybrid Node.js/Python architecture.
 
-**No cameras, no microphones, no manual editing. 24/7 autonomous production.**
-
----
-
-### **💡How it works: General**
-1.  **Selection**: The system picks a topic from your Google Sheet.
-2.  **Writing**: An AI writes a short, viral script about that topic.
-3.  **Cloning**: Your voice is cloned so the video sounds exactly like you.
-4.  **Animating**: A "digital twin" video is created where your lips move to match the new voice.
-5.  **Posting**: The final video is automatically uploaded to Instagram, YouTube, and Facebook.
-
-*It’s essentially a 24/7 social media team that never sleeps.*
+> [!NOTE]
+> This is a **technical prototype** for experimentation. It documents the feasibility of zero-shot voice cloning and programmatic motion graphics in a cloud-automated environment.
 
 ---
 
-## 🚀 The workflow (How it works)
+## 🏗️ Technical Architecture & Lifecycle
 
-1.  **Ingestion**: The system polls a **Google Sheet** for new topics.
-2.  **Scripting**: **Gemini 2.0 Pro** generates a "Viral Loop" script (Pattern Interrupt → Technical Value → Infinite Loop).
-3.  **Voice Cloning**: **Voicebox (Qwen3-TTS)** clones your voice DNA from a 30s sample (`Base-audio.mp3`).
-4.  **Neural Lip-Sync**: **Wav2Lip** re-animates the mouth of your actor (`Base-vedio.mp4`) to match the cloned audio.
-5.  **Visual Composition**: A **React/GSAP** engine rendered via Playwright captures "Swiss-Style" technical overlays.
-6.  **Broadcast**: Videos are multi-streamed to **YouTube Shorts, Instagram, and Facebook**.
+The pipeline is orchestrated by a central Node.js process that manages the lifecycle of each "task" (video generation).
+
+### The Automation Flow
+1. **Ingestion**: `main_automation.js` polls a Google Sheet via Service Account.
+2. **Scripting**: Gemini 2.0 Flash generates a 140-160 word technical script with natural rhythmic pacing and punctuation for synthesized pauses.
+3. **Voice Cloning**: The script is sent to the `voicebox` (Python/Torch) service, which performs zero-shot cloning using a 30s reference (`Base-audio.mp3`).
+4. **Graphic Composition**: `scriptService.js` generates a visual storyboard. `reel-composer` (React/GSAP) renders this as a dynamic HTML5 animation.
+5. **Neural Lip-Sync**: The synthesized audio and the "actor" video (`Base-vedio.mp4`) are processed by `wav2lip` (Python/GAN) to animate the mouth region.
+6. **Rendering**: Playwright captures the high-fidelity (50Mbps) canvas animation from the local React server.
+7. **FFmpeg Merge**: Final audio (Narrative + BGM + Normalization) is mixed with the lip-sync video and technical overlays.
+8. **Deployment**: The final MP4 is uploaded to YouTube, Instagram, and Facebook via respective Graph and OAuth2 APIs.
+
+```mermaid
+graph LR
+    subgraph Input
+    A[Google Sheet]
+    end
+    
+    subgraph Scripting
+    B[Gemini 2.0]
+    end
+    
+    subgraph Audio
+    C[Voicebox Python]
+    end
+    
+    subgraph Visuals
+    D[React/GSAP]
+    E[Playwright]
+    end
+    
+    subgraph LipSync
+    F[Wav2Lip Python]
+    end
+    
+    A --> B --> C & D
+    D --> E
+    C & E & F --> G[FFmpeg Mix]
+    G --> H[Social Upload]
+```
 
 ---
 
-## 🛠️ Global Setup & Installation
+## 🛠️ Project Setup Guide
 
 ### 1. Prerequisites
-*   **Node.js**: v20 or higher
-*   **Python**: 3.10.x (Essential for Torch/Transformers compatibility)
-*   **FFMpeg**: Installed on system path
-*   **Hardware**: 16GB RAM minimum. NVIDIA GPU (8GB+ VRAM) highly recommended for local high-speed processing.
+- **Node.js**: v20 or higher.
+- **Python**: 3.10.x (Essential for Torch/Transformers compatibility).
+- **FFmpeg**: System path installation required.
+- **Hardware**: 16GB RAM minimum. NVIDIA GPU (8GB+ VRAM) is highly recommended for reasonable local speeds.
 
-### 2. Local Installation
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd Ai-content-automation
-
-# Install Node dependencies
-npm install
-cd reel-composer && npm install && cd ..
-
-# Install Python dependencies
-pip install -r wav2lip/requirements.txt
-pip install -r voicebox/requirements.txt
-```
-
-### 3. External Asset Hosting (Crucial)
-To bypass GitHub LFS bandwidth limits, large models are hosted on **Google Drive**. 
-The system automatically downloads these during the GitHub Actions run:
-*   `wav2lip_gan.pth` (415MB) - The main lip-sync weights.
-*   `s3fd.pth` (90MB) - The face detector weights.
-*   `Base-vedio.mp4` (100MB+) - Your high-quality "Actor" footage.
+### 2. Service Account & API Setup
+- **Google Cloud**:
+  1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
+  2. Enable **Google Sheets API** and **YouTube Data API v3**.
+  3. Create a **Service Account**, download the JSON key, and paste it into `GOOGLE_CREDENTIALS` in `.env`.
+- **Meta Developers**:
+  1. Register an app in the [Meta For Developers](https://developers.facebook.com/) portal.
+  2. Add **Facebook Login** and **Instagram Graph API**.
+  3. Use the **Graph API Explorer** to generate a Long-Lived Page Access Token for `FACEBOOK_ACCESS_TOKEN`.
+- **YouTube OAuth**:
+  1. Create OAuth 2.0 Client IDs in Google Cloud.
+  2. Use the provided utility `bin/test_oauth2_youtube.js` to generate a `YOUTUBE_REFRESH_TOKEN`.
 
 ---
 
-## 🤖 Automating with GitHub Actions
+## 🔑 Environment Variable Reference (.env)
 
-The pipeline runs autonomously twice daily (8:00 AM & 8:00 PM IST). 
-
-### Required GitHub Secrets
-To make the automation work, you **MUST** add these into your GitHub Repository Secrets (`Settings > Secrets and variables > Actions`):
-
-| Secret Name | Description |
-| :--- | :--- |
-| `GEMINI_API_KEY` | Your Google AI Studio API Key |
-| `GOOGLE_SHEET_ID` | The ID of your content spreadsheet |
-| `GOOGLE_CREDENTIALS` | Your Google Service Account JSON |
-| `SUPABASE_URL` | For hosting video artifacts |
-| `SUPABASE_SERVICE_ROLE_KEY` | For cloud storage access |
-| `INSTAGRAM_ACCESS_TOKEN` | Meta Graph API token |
-| `YOUTUBE_REFRESH_TOKEN` | OAuth2 token for YouTube uploads |
-
----
-
-## 🏗️ Project Structure
-```text
-├── main_automation.js      # The Orchestrator (The "Brain")
-├── wav2lip/                # Neural Lip-sync Engine (Python)
-├── voicebox/               # Voice Cloning Engine (Python)
-├── reel-composer/          # Visual Compositor (React/GSAP/Vite)
-├── src/services/           # Logic Bridges (Gemini, Social API, FFmpeg)
-├── .github/workflows/      # CI/CD Production Configuration
-└── Base-vedio.mp4          # Your "Face" Asset (Downloadable via GDrive)
-```
-
----
-
-## 📊 Performance & Optimization
-
-| Runtime | Environment | Speed |
+| Key | Purpose | Example/Default |
 | :--- | :--- | :--- |
-| **GPU (NVIDIA)** | Local PC | ~2 minutes / 60s video (Fast) |
-| **CPU (Free Tier)** | GitHub Actions | ~50 minutes / 60s video (Intensive) |
-
-**Note**: In GitHub Actions, we use `spawn` with real-time streaming logs. You can monitor the `Wav2Lip Progress` bar directly in the workflow console to ensure the system is "alive."
-
----
-
-## 📜 Usage Instructions
-
-### Local Development
-1.  Run `cd reel-composer && npm run dev` to start the graphics server.
-2.  Run `node main_automation.js` in the root folder.
-3.  Check the `final_video/` folder for the result.
-
-### Production
-Simply push your code to the `main` branch. The `.github/workflows/reels-automation.yml` will handle the environment setup, model downloads from Google Drive, and the full automation loop.
+| `GEMINI_API_KEY` | Primary LLM engine for scripting/visuals | `AIza...` |
+| `GOOGLE_SHEET_ID` | The ID of your content tracking spreadsheet | `1-BkP4...` |
+| `FACEBOOK_PAGE_ID` | Numeric ID of your target FB Page | `7909...` |
+| `INSTAGRAM_ACCOUNT_ID` | Numeric ID of the linked IG Business account | `1784...` |
+| `VOICEBOX_MODEL_SIZE` | Size of the TTS model to load | `1.7B` |
+| `FORCE_CPU` | Set to `true` to skip CUDA if local GPU is missing | `true` |
+| `DANGER_ZONE_UNLOCK` | Safety flag for `bin/mass_cleanup.js` | `false` |
+| `SUPABASE_URL` | Cloud storage for video artifact backup | `https://...` |
 
 ---
 
-*Built for creators who value high-density technical value over manual manual effort.*
+## 📂 Directory Structure
 
+```text
+├── main_automation.js      # The Brain (Central Orchestrator)
+├── bin/                    # Dev utilities (Cleanup, OAuth testing, Diagnostics)
+├── voicebox/               # Python/Torch Voice Cloning backend
+│   └── backend/            # FastAPI wrappers for zero-shot synthesis
+├── wav2lip/                # Neural Lip-sync GAN (Python)
+├── reel-composer/          # React/Vite/GSAP Visual engine
+│   └── src/services/       # geminiService.ts (Visual generation logic)
+├── src/                    # Core Logic
+│   ├── services/           # scriptService.js, audioService.js, etc.
+│   └── config/             # Logger and environment settings
+└── final_video/            # Output directory for rendered reels
+```
+
+---
+
+## 📐 Design Decisions & Rationale
+
+- **Headless Capture (Playwright)**: We use Playwright to record a React/GSAP frontend because it allows for high-precision, frame-perfect recording of CSS/JS animations that traditional video editors cannot easily reproduce programmatically.
+- **GSAP Staging**: Animations are "Staged." GSAP seek logic is synchronized with the audio duration to ensure technical callouts appear exactly when the narrator mentions them.
+- **Single-Pass Audio**: We avoid chunked audio generation to prevent "vocal jitter" (changes in tone/pitch between sentences). Generating 60s in one pass preserves the cloned voice's emotional consistency.
+- **Anti-Collision Math**: Visual prompts use coordinate-based instructions (e.g., "Box A at left: 20%") to prevent overlapping elements, a common failure point in generative layouts.
+
+---
+
+## 🔮 Future Roadmap
+
+- **GFPGAN Integration**: Add a face-restoration pass to the `wav2lip` output to sharpen lip regions in 4K renders.
+- **Auto-Trending Hot-Swap**: Integration with TikTok trends API to automatically adjust BGM and pacing based on current viral audio patterns.
+- **Semantic Scene Parsing**: Moving beyond a single "Visual Storyboard" to a multi-scene architecture where the background environment changes based on the script's intent.
+
+---
