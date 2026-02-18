@@ -66,6 +66,18 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
             args.push('--face_det_results', cachePath);
             logger.info(`📦 Using pre-computed face boxes: ${cachePath}`);
         }
+
+        // Add GFPGAN Premium Restoration if requested
+        if (options.restorer === 'gfpgan' || process.env.USE_PREMIUM_WAV2LIP === 'true') {
+            const restorerPath = options.restorerPath || path.join(wav2lipDir, 'checkpoints/GFPGANv1.4.pth');
+            if (fs.existsSync(restorerPath)) {
+                args.push('--restorer', 'gfpgan');
+                args.push('--restorer_path', restorerPath);
+                logger.info(`✨ Premium Mode: Using GFPGAN face restoration.`);
+            } else {
+                logger.warn(`⚠️ GFPGAN model not found at ${restorerPath}. Skipping premium restoration.`);
+            }
+        }
         
         const proc = spawn('python', args, { cwd: wav2lipDir });
 
