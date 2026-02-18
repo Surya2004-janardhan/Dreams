@@ -1,0 +1,7 @@
+indicf5
+torch
+transformers
+numpy
+scipy
+soundfile
+pydub

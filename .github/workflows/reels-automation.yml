@@ -17,6 +17,19 @@ jobs:
     timeout-minutes: 340
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed, 
+          # but we need the 15GB+ for IndicF5 models and checkpoints.
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
@@ -74,10 +87,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
 
-      - name: Install Python Dependencies (Wav2Lip & Voicebox)
+      - name: Install Python Dependencies (Wav2Lip, Voicebox, IndicF5)
         run: |
           pip install -r wav2lip/requirements.txt
           pip install -r voicebox/requirements.txt
+          pip install -r requirements-indic.txt
           # Specific addition from voicebox README if needed
           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
