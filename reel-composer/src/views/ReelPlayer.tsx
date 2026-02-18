@@ -174,7 +174,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
     return (
       <div
-        className={`flex flex-wrap justify-center items-center gap-x-2 gap-y-1 rounded-2xl transition-all duration-300 backdrop-blur-md shadow-2xl`}
+        className={`flex flex-wrap justify-center items-center gap-x-[9px] gap-y-1 rounded-2xl transition-all duration-300 backdrop-blur-md shadow-2xl`}
         style={{
           minHeight: '60px',
           backgroundColor: subtitleBgColor,
@@ -185,7 +185,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
           paddingBottom: `${subtitlePaddingY}px`,
           backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255,255,255,0.1)',
-          wordSpacing: '2px'
+          wordSpacing: '3px'
         }}
       >
         {visibleWords.map((word, index) => {
