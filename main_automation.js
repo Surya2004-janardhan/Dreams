@@ -93,15 +93,16 @@ async function main() {
             }
         }
         
-        /* GEMINI TTS FALLBACK (Commented out)
-        if (fs.existsSync(CACHE_AUDIO)) {
-            logger.info("♻️ Using cached audio_cache.wav to save API quota.");
-            audioPath = CACHE_AUDIO;
-        } else {
-            const audioResult = await generateAudioWithBatchingStrategy(script);
-            audioPath = audioResult.conversationFile;
+        // Final Audio Pacing Adjustment (0.94x speed)
+        try {
+            logger.info("⏳ Adjusting audio speed to 0.94x for natural pacing...");
+            const adjustedAudioPath = path.join(path.dirname(audioPath), `slowed_${path.basename(audioPath)}`);
+            await adjustAudioSpeed(audioPath, adjustedAudioPath, 0.94);
+            audioPath = adjustedAudioPath;
+        } catch (speedError) {
+            logger.error(`⚠️ Failed to adjust audio speed: ${speedError.message}. Using original audio.`);
         }
-        */
+
         logger.info(`✅ Step 2 Complete: Audio ready at ${audioPath} (${((Date.now() - step2Start)/1000).toFixed(2)}s)`);
 
         // Step 3: Wav2Lip Sync (Dynamic Talking Head)
@@ -541,6 +542,22 @@ async function runCompositor(vPath, sPath, vPrompt) {
         await browser.close();
     }
     return masterPath;
+}
+
+/**
+ * Adjusts the playback speed of an audio file using FFmpeg atempo filter.
+ * @param {string} input - Path to input audio
+ * @param {string} output - Path to output audio
+ * @param {number} speed - Speed ratio (e.g., 0.94)
+ */
+async function adjustAudioSpeed(input, output, speed) {
+    return new Promise((resolve, reject) => {
+        ffmpeg(input)
+            .audioFilters(`atempo=${speed}`)
+            .save(output)
+            .on('end', () => resolve(output))
+            .on('error', (err) => reject(err));
+    });
 }
 
 main();
