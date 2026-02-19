@@ -1,0 +1,23 @@
+services:
+  automation:
+    build: .
+    container_name: ai-automation
+    # Enable NVIDIA GPU support
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    env_file:
+      - .env
+    volumes:
+      - ./audio:/app/audio
+      - ./recordings:/app/recordings
+      - ./final_video:/app/final_video
+      - ./results:/app/results
+      - ./subtitles:/app/subtitles
+    # Interactive mode for debugging if needed
+    stdin_open: true
+    tty: true
