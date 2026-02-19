@@ -58,9 +58,9 @@ async function main() {
         let audioPath;
         
         // Configuration for Cloned Voice
-        const REF_AUDIO = path.resolve('punju-voice.mp3'); 
-        const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
-        const REF_TEXT = "Hi, I'm testing my voice for cloning."; // Transcript for punju-voice.mp3
+        const REF_AUDIO = path.join(__dirname, 'Base-audio.mp3');
+        const GEN_AUDIO = path.join(__dirname, 'audio', 'voice_output.wav');
+        const REF_TEXT = "Hello there! this is your expressive indian voice that can be used for advertisements or story narrations.";
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
             fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
