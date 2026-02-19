@@ -19,7 +19,7 @@ const generateSRT = async (audioPath, apiKey) => {
   const audioData = fs.readFileSync(audioPath);
   const base64Data = audioData.toString("base64");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
   
   // Strict schema for subtitles
   const subtitleSchema = {
@@ -128,7 +128,7 @@ const generateReelContent = async (
   srtText,
   topicContext,
   apiKey = process.env.GEMINI_API_KEY_FOR_VISUALS || process.env.GEMINI_API_KEY,
-  modelName = "gemini-1.5-flash",
+  modelName = "gemini-2.5-flash",
   visualPrompt = "Dynamic and modern",
   theme = { primary: "#00f3ff", accent: "#ff0055", background: "#050505", name: "Default" }
 ) => {
