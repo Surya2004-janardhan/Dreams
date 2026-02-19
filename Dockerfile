@@ -1,5 +1,5 @@
-# Use NVIDIA CUDA base for GPU acceleration
-FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+# Use a standard Ubuntu base (Universal for CPU/GPU)
+FROM ubuntu:22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -33,19 +33,19 @@ RUN npm install
 # Install Playwright browsers and dependencies
 RUN npx playwright install --with-deps chromium
 
-# Copy Voicebox requirements and install
+# Copy requirements files
 COPY voicebox/requirements.txt ./voicebox/requirements.txt
-RUN pip3 install --no-cache-dir -r voicebox/requirements.txt
-
-# Copy Wav2Lip requirements and install
 COPY wav2lip/requirements.txt ./wav2lip/requirements.txt
+
+# Install Python dependencies (Standard PyTorch will work on CPU/GPU)
+RUN pip3 install --no-cache-dir -r voicebox/requirements.txt
 RUN pip3 install --no-cache-dir -r wav2lip/requirements.txt
 
 # Copy the rest of the application code
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p audio recordings final_video results temp
+RUN mkdir -p audio recordings final_video results temp subtitles
 
 # Set default command
 CMD ["node", "main_automation.js"]
