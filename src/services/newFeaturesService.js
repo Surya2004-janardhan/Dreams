@@ -113,10 +113,11 @@ ${srt}
    - USE THE PROVIDED COLOR PALETTE (${theme.name}).
    - 9:16 Portrait Aspect Ratio.
    - Must be a single self-contained HTML string.
+   - **IMPORTANT**: If in 'split' mode, the layout will be 40% (0.4) video and 60% (0.6) HTML. Ensure your CSS and animations account for this.
    
 2. Layout Configuration (JSON):
    - Define when to show HTML vs Video.
-   - List of objects with startTime, endTime, layoutMode ('split', 'full-video', 'full-html'), splitRatio (0.0 to 1.0).
+   - List of objects with startTime, endTime, layoutMode ('split', 'full-video', 'full-html'), splitRatio (FOR MODE 'split', ALWAYS USE 0.4).
 
 Return JSON with keys: "html", "layoutConfig".
 `;
