@@ -126,6 +126,16 @@ jobs:
         run: npx playwright install-deps chromium
 
 
+      - name: Cache IndicF5 & HuggingFace Models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/indicf5
+          key: ${{ runner.os }}-indicf5-models-v1
+          restore-keys: |
+            ${{ runner.os }}-indicf5-models-
+
       - name: Start Frontend App
         run: |
           cd reel-composer

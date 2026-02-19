@@ -10,7 +10,6 @@ const { getNextTask, updateSheetStatus } = require('./src/services/sheetsService
 const { generateScript, generateVisualPrompt } = require('./src/services/scriptService');
 const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
 const VoiceboxService = require('./src/services/voiceboxService');
-const IndicF5Service = require('./src/services/indicF5Service');
 const { syncLip } = require('./src/services/wav2lipService');
 const { generateSRT } = require('./src/services/newFeaturesService');
 const { createSubtitlesFromAudio } = require('./src/utils/subtitles');
@@ -59,33 +58,23 @@ async function main() {
         let audioPath;
         
         // Configuration for Cloned Voice
-        const REF_AUDIO = path.resolve('Base-audio.mp3'); 
+        const REF_AUDIO = path.resolve('punju-voice.mp3'); 
         const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
+        const REF_TEXT = "Hi, I'm testing my voice for cloning."; // Transcript for punju-voice.mp3
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
             fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
         }
 
         if (!fs.existsSync(REF_AUDIO)) {
-            logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
+            logger.warn(`⚠️ punju-voice.mp3 not found in root. Falling back to Gemini TTS.`);
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
         } else {
             try {
-                // Check if script contains Telugu characters (indicates bilingual content)
-                const hasTelugu = /[\u0C00-\u0C7F]/.test(script);
-                
-                if (hasTelugu) {
-                    logger.info("🇮🇳 Telugu detected! Using IndicF5 for high-quality bilingual cloning...");
-                    // Transcribe reference audio for IndicF5 if needed (placeholder for now, matching Voicebox param)
-                    // For now we assume the reference text is either known or we can use a generic representative text
-                    const REF_TEXT = "Hello everyone, this is my voice for testing."; 
-                    audioPath = await IndicF5Service.generateBilingualVoice(script, REF_AUDIO, REF_TEXT, GEN_AUDIO);
-                } else {
-                    logger.info("🗣️ Using Voicebox for English-only cloning...");
-                    const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear.";
-                    audioPath = await VoiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
-                }
+                logger.info(`🗣️ Using Voicebox (IndicF5) for cloning with ${path.basename(REF_AUDIO)}...`);
+                // VoiceboxService now handles bilingual logic and chunking internally
+                audioPath = await VoiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, REF_TEXT);
             } catch (vError) {
                 logger.error(`❌ Synthesis failed: ${vError.message}. Falling back to Gemini TTS.`);
                 const audioResult = await generateAudioWithBatchingStrategy(script);

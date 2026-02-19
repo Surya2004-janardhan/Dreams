@@ -8,78 +8,106 @@ const logger = require('../config/logger');
  */
 class VoiceboxService {
     constructor() {
-        this.voiceboxDir = path.resolve(__dirname, '../../voicebox');
-        this.pythonScript = path.join(this.voiceboxDir, 'main.py');
+        this.rootDir = path.resolve(__dirname, '../../');
+        this.bridgeScript = path.join(this.rootDir, 'indicf5_bridge.py');
     }
 
     /**
-     * Generates a cloned voice audio file.
-     * @param {string} text - The text to synthesize.
-     * @param {string} refAudioPath - Path to the reference audio sample (e.g., Base-audio.mp3).
-     * @param {string} outputPath - Path to save the generated audio.
-     * @param {string} [instruct] - Optional style instruction.
-     * @param {number} [speed] - Speech speed ratio (default: 0.9).
-     * @returns {Promise<string>} - Path to the generated audio file.
+     * Internal helper to split text into chunks for safe generation.
      */
-    async generateClonedVoice(text, refAudioPath, outputPath, refText = null, instruct = null, speed = 1.0) {
-        if (!fs.existsSync(this.voiceboxDir)) {
-            throw new Error(`Voicebox directory not found at: ${this.voiceboxDir}`);
-        }
+    _chunkText(text, maxWords = 40) {
+        const sentences = text.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [text];
+        const chunks = [];
+        let currentChunk = "";
 
+        for (const sentence of sentences) {
+            const wordCount = (currentChunk + sentence).split(/\s+/).length;
+            if (wordCount > maxWords && currentChunk) {
+                chunks.push(currentChunk.trim());
+                currentChunk = sentence;
+            } else {
+                currentChunk += sentence;
+            }
+        }
+        if (currentChunk) chunks.push(currentChunk.trim());
+        return chunks;
+    }
+
+    /**
+     * Generates a cloned voice audio file using IndicF5.
+     */
+    async generateClonedVoice(text, refAudioPath, outputPath, refText = "This is a reference audio sample.", instruct = null, speed = 1.0) {
         const absRefAudioPath = path.resolve(refAudioPath);
         const absOutputPath = path.resolve(outputPath);
-
-        // Build CLI command
-        let command = `python "${this.pythonScript}" --text "${text.replace(/"/g, '\\"')}" --audio "${absRefAudioPath}" --output "${absOutputPath}"`;
-        if (refText) {
-            command += ` --ref_text "${refText.replace(/"/g, '\\"')}"`;
+        
+        // Chunking check: If text is long, process in smaller pieces to avoid OOM
+        const chunks = this._chunkText(text);
+        if (chunks.length > 1) {
+            logger.info(`📦 Long script detected (${chunks.length} chunks). Using segmented synthesis.`);
+            const chunkPaths = [];
+            for (let i = 0; i < chunks.length; i++) {
+                const chunkOutput = path.join(path.dirname(absOutputPath), `chunk_${i}_${path.basename(absOutputPath)}`);
+                await this._synthesizeSingle(chunks[i], absRefAudioPath, chunkOutput, refText);
+                chunkPaths.push(chunkOutput);
+            }
+            
+            // Merge chunks using FFmpeg
+            logger.info("🧵 Stitching audio chunks together...");
+            await this._mergeAudio(chunkPaths, absOutputPath);
+            
+            // Cleanup chunks
+            chunkPaths.forEach(p => fs.unlinkSync(p));
+            return absOutputPath;
         }
 
-        logger.info(`🗣️ Starting Voicebox Synthesis...`);
-        logger.debug(`Command: ${command}`);
+        return this._synthesizeSingle(text, absRefAudioPath, absOutputPath, refText);
+    }
 
+    async _synthesizeSingle(text, refAudioPath, outputPath, refText) {
+        logger.info(`🗣️ IndicF5 Synthesis: "${text.substring(0, 40)}..."`);
+        
         return new Promise((resolve, reject) => {
             const args = [
-                this.pythonScript,
-                '--text', text,
-                '--audio', absRefAudioPath,
-                '--output', absOutputPath
+                this.bridgeScript,
+                text,
+                refAudioPath,
+                refText,
+                outputPath
             ];
-            if (refText) {
-                args.push('--ref_text', refText);
-            }
-            if (instruct) {
-                args.push('--instruct', instruct);
-            }
-            if (speed) {
-                args.push('--speed', speed.toString());
-            }
 
-            const proc = spawn('python', args, { cwd: this.voiceboxDir });
+            const proc = spawn('python', args, { cwd: this.rootDir });
 
             proc.stdout.on('data', (data) => {
                 const output = data.toString().trim();
-                if (output) logger.info(`[Voicebox] ${output}`);
+                // Filter out non-essential logs to keep terminal clean
+                if (output && !output.includes('Loading model')) logger.info(`[IndicF5] ${output}`);
             });
 
             proc.stderr.on('data', (data) => {
                 const output = data.toString().trim();
-                if (output) logger.debug(`[Voicebox Stderr] ${output}`);
+                if (output) logger.debug(`[IndicF5 Stderr] ${output}`);
             });
 
             proc.on('close', (code) => {
-                if (code !== 0) {
-                    logger.error(`❌ Voicebox Synthesis Failed with code ${code}`);
-                    return reject(new Error(`Voicebox failed with code ${code}`));
-                }
+                if (code !== 0) return reject(new Error(`IndicF5 failed with code ${code}`));
+                if (!fs.existsSync(outputPath)) return reject(new Error(`IndicF5 output missing: ${outputPath}`));
+                resolve(outputPath);
+            });
+        });
+    }
 
-                if (!fs.existsSync(absOutputPath)) {
-                    return reject(new Error(`Voicebox finished but output file was NOT found at: ${absOutputPath}`));
-                }
+    async _mergeAudio(paths, outputPath) {
+        const mergeFile = path.join(path.dirname(outputPath), 'merge_list.txt');
+        const content = paths.map(p => `file '${path.resolve(p)}'`).join('\n');
+        fs.writeFileSync(mergeFile, content);
 
-                const stats = fs.statSync(absOutputPath);
-                logger.info(`✅ Voicebox Synthesis Successful: ${outputPath} (${(stats.size/1024).toFixed(2)} KB)`);
-                resolve(absOutputPath);
+        return new Promise((resolve, reject) => {
+            const args = ['-f', 'concat', '-safe', '0', '-i', mergeFile, '-c', 'copy', '-y', outputPath];
+            const proc = spawn('ffmpeg', args);
+            proc.on('close', (code) => {
+                fs.unlinkSync(mergeFile);
+                if (code === 0) resolve(outputPath);
+                else reject(new Error(`FFmpeg merge failed with code ${code}`));
             });
         });
     }

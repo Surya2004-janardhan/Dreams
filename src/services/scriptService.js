@@ -58,23 +58,19 @@ const generateScript = async (topic, description = "") => {
     ${description ? `CONTEXT: ${description}` : ""}
 
     ABSOLUTE RULES:
-    1. OUTPUT ONLY THE SPOKEN WORDS. Nothing else. No titles, no labels, no meta-commentary.
-    2. NO introductions like "Hey guys", "Welcome", "Let me tell you", "Today we will".
-    3. NO outros like "Hope this helps", "Follow for more", "Let me know".
-    4. NO shortcut jargon or abbreviations. Spell things out. Say "Application Programming Interface" the first time, not just "API".
-    5. NO filler words or hype phrases.
+    1. **LANGUAGE**: Use a natural mix of **Telugu and English** (Hinglish/Telugish style).
+    2. **SCRIPT**: Use Telugu script (తెలుగు) for Telugu words and Latin script for English technical terms.
+    3. OUTPUT ONLY THE SPOKEN WORDS. Nothing else. No titles, no labels, no meta-commentary.
+    4. NO introductions like "Hey guys", "Welcome", "Let me tell you", "Today we will".
+    5. NO outros like "Hope this helps", "Follow for more", "Let me know".
+    6. NO shortcut jargon or abbreviations. Spell things out.
+    7. NO filler words or hype phrases.
 
     STYLE:
     - Straight-cut and explanatory. Each sentence should teach something concrete.
-    - **NATURAL PACING**: Write for human speech. Use varying sentence lengths to create a natural rhythm.
+    - **NATURAL BILINGUAL FLOW**: The switch between Telugu and English should feel natural for a tech influencer context.
     - **PUNCTUATION**: Use clear periods and commas. This is vital for the TTS/Voicebox to insert natural pauses.
-    - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
     - Single continuous paragraph of spoken text. No line breaks, no bullet points.
-
-    STRUCTURE:
-    - Open directly with the core concept or a factual statement. No questions, no bait.
-    - Build explanation logically, adding one layer of depth at a time.
-    - End with a practical takeaway or real-world implication.
 
     WORD COUNT: Strictly between 140 and 160 words.
   `;
