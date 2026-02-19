@@ -57,24 +57,19 @@ const generateScript = async (topic, description = "") => {
     TOPIC: ${topic}
     ${description ? `CONTEXT: ${description}` : ""}
 
-    ABSOLUTE RULES:
-    1. OUTPUT ONLY THE SPOKEN WORDS. Nothing else. No titles, no labels, no meta-commentary.
-    2. NO introductions like "Hey guys", "Welcome", "Let me tell you", "Today we will".
-    3. NO outros like "Hope this helps", "Follow for more", "Let me know".
-    4. NO shortcut jargon or abbreviations. Spell things out. Say "Application Programming Interface" the first time, not just "API".
-    5. NO filler words or hype phrases.
+    CRITICAL RULES:
+    1. **SIMPLE ENGLISH**: Use very simple, easy-to-understand English. Avoid big words and complex sentences. 
+    2. **EXPLAIN LIKE A FRIEND**: Speak naturally. Explain things simply, as if you are talking to a friend who is new to the topic.
+    3. **KEEP TECHNICAL TERMS**: Use the correct technical words (like "API", "Load Balancer"), but explain everything else in the simplest way possible.
+    4. NO introductions like "Hey guys", "Welcome", or "Today we will".
+    5. NO outros like "Follow for more" or "Let me know".
+    6. Spell out acronyms the first time (e.g., "Application Programming Interface").
+    7. OUTPUT ONLY THE SPOKEN WORDS. No titles, meta-commentary, or formatting.
 
     STYLE:
-    - Straight-cut and explanatory. Each sentence should teach something concrete.
-    - **NATURAL PACING**: Write for human speech. Use varying sentence lengths to create a natural rhythm.
-    - **PUNCTUATION**: Use clear periods and commas. This is vital for the TTS/Voicebox to insert natural pauses.
-    - Flow naturally from one point to the next using phrases like "What this means is...", "The reason this matters is...", "In practice...".
-    - Single continuous paragraph of spoken text. No line breaks, no bullet points.
-
-    STRUCTURE:
-    - Open directly with the core concept or a factual statement. No questions, no bait.
-    - Build explanation logically, adding one layer of depth at a time.
-    - End with a practical takeaway or real-world implication.
+    - Clear and direct. Every sentence should teach one simple thing.
+    - Single continuous paragraph. No line breaks or bullet points.
+    - Use clear periods and commas for natural TTS pauses.
 
     WORD COUNT: Strictly between 140 and 160 words.
   `;
@@ -124,27 +119,23 @@ const generateVisualPrompt = async (topic, scriptText) => {
             Topic: ${topic}
             Script: ${scriptText}
             
-            Task: Create a high-fidelity visual animation storyboard for a technical reel.
+            Task: Create a clear and simple visual plan for a technical reel.
             
             VISUAL STRATEGY:
-            - STYLE: Premium "Tech Influencer" motion graphics. Dark, cinematic, and high-fidelity.
-            - BACKGROUND: Use **dark topographic line textures** (flowing abstract terrain) as the base layer.
-            - COMPONENTS: Place technical concepts inside **sleek boxes with glowing neon borders**. 
-            - COMPOSITION: Use a **strict grid-based alignment**. Ensure components are centered and balanced.
-            - **ANIMATION FOCUS**: Animations must be the **majority part takers** of the screen. Prioritize dynamic, kinetic flow over static layout.
-            - **ANTI-COLLISION**: ABSOLUTELY NO overlapping elements. Icons must never cover text. Maintain clear padding.
-            - **CONNECTOR PRECISION**: All arrows, links, or data flows must have **precise start and end points**. Describe them as "connecting the right-center of Box A to the left-center of Box B". NO floating or misaligned lines.
-            - SCALING: Maintain **proportional icon weights**. E.g., a "User" icon must have similar visual scale/impact as a "Server/CDN" component. NO oversized or tiny elements.
-            - SPACING: **Minimize awkward gaps**. Position connected components close enough to feel part of a unified flow. Use a max of 2-3 main elements on screen at once for clarity.
-            - HEADERS: Use **Bold, Top-Middle aligned technical headers**. Ensure they are placed high enough to stay clear of the central animation area.
-            - MOVEMENT: Visuals must represent the **semantic meaning** of the script. Icons and animations must be **apt to what is being said**. Allow for static moments if they aid clarity. Prioritize **representative icons** and clear representations over generic motion.
-            - TEXT IN VISUALS: Keep text minimal and **top-aligned** to avoid cluttering the recording area.
-            - COLOR: Deep Blacks, Cyber Blues, Neon Greens, and Tech Grays.
-            
+            - **STYLE**: Clean, modern, and very easy to follow. 
+            - **SIMPLE LANGUAGE**: Describe visuals in simple English. Avoid "big words" in your description.
+            - BACKGROUND: Deep dark background with subtle glowing lines.
+            - COMPONENTS: Technical items should be in clear, glowing boxes.
+            - **ANIMATION FOCUS**: Make sure the animations are the main focus of the screen.
+            - NO OVERLAP: Make sure no text or icons cover each other.
+            - CONNECTIONS: Clearly describe how lines connect one box to another (e.g., "draw a line from Box A to Box B").
+            - BALANCE: Keep everything centered and neat. No oversized or tiny icons.
+            - HEADERS: Use simple, bold headings at the very top.
+            - MATCH THE SCRIPT: Visuals must match the words being spoken at that moment.
+
             OUTPUT FORMAT:
-            - Exactly 5-6 descriptive lines detailing the visual progression.
-            - Focus on ACTION and SPECIFIC ICONS. 
-            - Avoid generic descriptions like "show a video of X". Instead, use "Animate a revolving 3D CPU icon with data pulse lines".
+            - Exactly 5-6 simple lines describing the visual steps.
+            - Focus on clear actions like "Show a spinning icon" or "Move the box to the right."
             `;
 
             const visualDescription = await retryWithFallback(async (m) => {

@@ -19,7 +19,7 @@ const generateSRT = async (audioPath, apiKey) => {
   const audioData = fs.readFileSync(audioPath);
   const base64Data = audioData.toString("base64");
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
   
   // Strict schema for subtitles
   const subtitleSchema = {
@@ -113,10 +113,11 @@ ${srt}
    - USE THE PROVIDED COLOR PALETTE (${theme.name}).
    - 9:16 Portrait Aspect Ratio.
    - Must be a single self-contained HTML string.
+   - **IMPORTANT**: If in 'split' mode, the layout will be 40% (0.4) video and 60% (0.6) HTML. Ensure your CSS and animations account for this.
    
 2. Layout Configuration (JSON):
    - Define when to show HTML vs Video.
-   - List of objects with startTime, endTime, layoutMode ('split', 'full-video', 'full-html'), splitRatio (0.0 to 1.0).
+   - List of objects with startTime, endTime, layoutMode ('split', 'full-video', 'full-html'), splitRatio (FOR MODE 'split', ALWAYS USE 0.4).
 
 Return JSON with keys: "html", "layoutConfig".
 `;
@@ -127,7 +128,7 @@ const generateReelContent = async (
   srtText,
   topicContext,
   apiKey = process.env.GEMINI_API_KEY_FOR_VISUALS || process.env.GEMINI_API_KEY,
-  modelName = "gemini-1.5-flash",
+  modelName = "gemini-2.5-flash",
   visualPrompt = "Dynamic and modern",
   theme = { primary: "#00f3ff", accent: "#ff0055", background: "#050505", name: "Default" }
 ) => {

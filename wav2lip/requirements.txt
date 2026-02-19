@@ -16,3 +16,6 @@ spaces
 python-multipart
 uvicorn
 fastapi
+gfpgan
+facexlib
+realesrgan
