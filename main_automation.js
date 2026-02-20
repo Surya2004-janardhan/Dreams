@@ -41,6 +41,12 @@ async function main() {
         task = await getNextTask();
         logger.info(`✅ Step 0 Complete: Task fetched in ${((Date.now() - step0Start)/1000).toFixed(2)}s`);
         
+        // IMMEDIATE LOCK: Set status to Processing to avoid double-runs
+        if (task.rowId > 0) {
+            logger.info(`🔒 Locking Row ${task.rowId} as "Processing"...`);
+            await updateSheetStatus(task.rowId, "Processing");
+        }
+
         const TOPIC = task.idea;
         logger.info(`📝 Target Topic: "${TOPIC}"`);
 
