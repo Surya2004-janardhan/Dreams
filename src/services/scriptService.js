@@ -3,7 +3,8 @@ const logger = require("../config/logger");
 
 // Initialize Gemini
 // gemini-2.5-flash only use 2.5 flash fix it
-const MODEL_ID = "gemini-2.5-flash"; // Standardizing on 2.5 Flash as per user request
+const MODEL_ID = "gemini-2.5-flash"; // Standard for scripts
+const VISUALS_MODEL_ID = "gemini-3-flash-preview"; // Enhanced for visuals as per user request
 
 const getModel = () => {
     const keys = [
@@ -28,12 +29,12 @@ let { model, keys } = getModel();
 /**
  * Helper to retry a function with different API keys on failure.
  */
-async function retryWithFallback(fn) {
+async function retryWithFallback(fn, modelId = MODEL_ID) {
     let lastError;
     for (const key of keys) {
         try {
             const genAI = new GoogleGenerativeAI(key);
-            const currentModel = genAI.getGenerativeModel({ model: MODEL_ID });
+            const currentModel = genAI.getGenerativeModel({ model: modelId });
             return await fn(currentModel);
         } catch (e) {
             lastError = e;
@@ -116,11 +117,13 @@ const generateVisualPrompt = async (topic, scriptText) => {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
             const prompt = `
+            Task: Create a clear and simple visual plan for a technical reel.
             Topic: ${topic}
             Script: ${scriptText}
             
-            Task: Create a clear and simple visual plan for a technical reel.
-            
+            BASE VISUAL PROMPT:
+            "Cinematic abstract visualization of ${topic}, minimalist tech-noir aesthetic, deep obsidian and charcoal color palette, high-contrast lighting with subtle neon accents, sharp macro photography style, sleek matte textures, sophisticated data-driven motion, clean geometric lines, professional studio atmosphere, ultra-modern, zero human figures, zero text."
+
             VISUAL STRATEGY:
             - **STYLE**: Clean, modern, and very easy to follow. 
             - **SIMPLE LANGUAGE**: Describe visuals in simple English. Avoid "big words" in your description.
@@ -142,7 +145,7 @@ const generateVisualPrompt = async (topic, scriptText) => {
                 const result = await m.generateContent(prompt);
                 const response = await result.response;
                 return response.text().trim();
-            });
+            }, VISUALS_MODEL_ID);
 
             // VALIDATION: Ensure prompt is not empty, not too short, and contains no "hallucination markers"
             const isInvalidType = !visualDescription || visualDescription.length < 50;
