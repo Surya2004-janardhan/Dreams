@@ -81,10 +81,3 @@ You'll need a few "keys" to let the AI talk to different services. Create a file
 *   **Lip-Sync Quality**: For the best results, use a video (`Base-vedio.mp4`) where the person is looking directly at the camera.
 
 ---
-
-## 🔮 What's Next?
-We're working on making the lip-sync even sharper and adding "Smart Trends" so your videos automatically match what's popular on TikTok and Reels!
-
----
-
-Developed with ❤️ for creators using the Dreams Pipeline.
