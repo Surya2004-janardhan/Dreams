@@ -4,8 +4,12 @@ on:
   schedule:
     # 1 AM IST = 19:30 UTC
     - cron: '30 19 * * *'
+    #3 am ist 
+    - cron: '30 21 * * *'
     # 1 PM IST = 7:30 UTC
     - cron: '30 7 * * *'
+    #idk ist
+    - cron: '30 9 * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
