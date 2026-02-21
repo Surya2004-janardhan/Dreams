@@ -4,7 +4,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+indicf5_models/
+
+gfpgan/weights/
+Base-vedio_new*
 # Python virtual environments
+
+wav2lip/checkpoints/
+wav2lip/results/
+voicebox/data/cache/
 venv/
 .venv/
 env/
@@ -88,7 +96,7 @@ new/
 temp*
 final_v*
 audio/
-automation_log*
+automation_log*.log
 # Test cache (expensive API results)
 test_cache/
 archive/
