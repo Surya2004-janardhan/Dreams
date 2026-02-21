@@ -96,7 +96,7 @@ new/
 temp*
 final_v*
 audio/
-automation_log*
+automation_log*.log
 # Test cache (expensive API results)
 test_cache/
 archive/
