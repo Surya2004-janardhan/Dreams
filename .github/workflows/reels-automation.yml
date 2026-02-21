@@ -1,163 +1,163 @@
-name: Reels Automation Pipeline
+# name: Reels Automation Pipeline
 
-on:
-  push:
-    branches:
-      - develop-visual
-  schedule:
-    # 8:00 AM IST (2:30 AM UTC)
-    - cron: '30 2 * * *'
-    # 8:00 PM IST (2:30 PM UTC)
-    - cron: '30 14 * * *'
-  workflow_dispatch:
+# on:
+#   push:
+#     branches:
+#       - develop-visual
+#   schedule:
+#     # 8:00 AM IST (2:30 AM UTC)
+#     - cron: '30 2 * * *'
+#     # 8:00 PM IST (2:30 PM UTC)
+#     - cron: '30 14 * * *'
+#   workflow_dispatch:
 
-jobs:
-  automation:
-    runs-on: ubuntu-latest
-    timeout-minutes: 340
+# jobs:
+#   automation:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 340
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          lfs: false # Manual LFS fetching to enable caching
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           lfs: false # Manual LFS fetching to enable caching
 
-      - name: Install gdown
-        run: pip install gdown
+#       - name: Install gdown
+#         run: pip install gdown
 
-      - name: Download Models and Base Video
-        run: |
-          mkdir -p wav2lip/checkpoints
-          mkdir -p wav2lip/face_detection/detection/sfd
+#       - name: Download Models and Base Video
+#         run: |
+#           mkdir -p wav2lip/checkpoints
+#           mkdir -p wav2lip/face_detection/detection/sfd
           
-          # Delete existing pointer files to ensure fresh download
-          rm -f wav2lip/checkpoints/wav2lip_gan.pth
-          rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
-          rm -f Base-vedio.mp4
+#           # Delete existing pointer files to ensure fresh download
+#           rm -f wav2lip/checkpoints/wav2lip_gan.pth
+#           rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
+#           rm -f Base-vedio.mp4
 
-          # Download using gdown
-          gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
-          gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
-          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O Base-vedio.mp4
-          wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
+#           # Download using gdown
+#           gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
+#           gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
+#           gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O Base-vedio.mp4
+#           wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
 
-      - name: Verify Downloads
-        run: |
-          ls -lh wav2lip/checkpoints/wav2lip_gan.pth
-          ls -lh wav2lip/face_detection/detection/sfd/s3fd.pth
-          ls -lh Base-vedio.mp4
-          # Exit if files are suspiciously small (LFS pointers are ~1KB)
-          [ $(stat -c%s "Base-vedio.mp4") -gt 1000000 ] || { echo "❌ Base-vedio.mp4 is too small!"; exit 1; }
+#       - name: Verify Downloads
+#         run: |
+#           ls -lh wav2lip/checkpoints/wav2lip_gan.pth
+#           ls -lh wav2lip/face_detection/detection/sfd/s3fd.pth
+#           ls -lh Base-vedio.mp4
+#           # Exit if files are suspiciously small (LFS pointers are ~1KB)
+#           [ $(stat -c%s "Base-vedio.mp4") -gt 1000000 ] || { echo "❌ Base-vedio.mp4 is too small!"; exit 1; }
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 20
+#           cache: 'npm'
 
-      - name: Install Root Dependencies
-        run: npm install
+#       - name: Install Root Dependencies
+#         run: npm install
 
-      - name: Install Frontend Dependencies
-        run: |
-          cd reel-composer
-          npm install
+#       - name: Install Frontend Dependencies
+#         run: |
+#           cd reel-composer
+#           npm install
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: 'pip'
+#       - name: Setup Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.10'
+#           cache: 'pip'
 
-      - name: Install System Dependencies for Wav2Lip & OpenCV
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
+#       - name: Install System Dependencies for Wav2Lip & OpenCV
+#         run: |
+#           sudo apt-get update
+#           sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
 
-      - name: Install Python Dependencies (Wav2Lip & Voicebox)
-        run: |
-          pip install -r wav2lip/requirements.txt
-          pip install -r voicebox/requirements.txt
-          # Specific addition from voicebox README if needed
-          # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
+#       - name: Install Python Dependencies (Wav2Lip & Voicebox)
+#         run: |
+#           pip install -r wav2lip/requirements.txt
+#           pip install -r voicebox/requirements.txt
+#           # Specific addition from voicebox README if needed
+#           # pip install git+https://github.com/QwenLM/Qwen3-TTS.git 
 
-      - name: Cache Face Detection Bounding Boxes
-        uses: actions/cache@v4
-        id: face-cache
-        with:
-          path: Base-vedio.npy
-          # IMPORTANT: Update this key when you change the Base-vedio Drive link above
-          key: ${{ runner.os }}-face-boxes-v1-1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1
+#       - name: Cache Face Detection Bounding Boxes
+#         uses: actions/cache@v4
+#         id: face-cache
+#         with:
+#           path: Base-vedio.npy
+#           # IMPORTANT: Update this key when you change the Base-vedio Drive link above
+#           key: ${{ runner.os }}-face-boxes-v1-1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1
 
-      - name: Pre-compute Face Boxes (if cache miss)
-        if: steps.face-cache.outputs.cache-hit != 'true'
-        run: |
-          # batch_size=2 keeps RAM under 7GB for 1080p videos on free runners
-          python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 2
-      - name: Cache Playwright Browsers
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json', 'reel-composer/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
+#       - name: Pre-compute Face Boxes (if cache miss)
+#         if: steps.face-cache.outputs.cache-hit != 'true'
+#         run: |
+#           # batch_size=2 keeps RAM under 7GB for 1080p videos on free runners
+#           python wav2lip/precompute_face.py --video Base-vedio.mp4 --output Base-vedio.npy --batch_size 2
+#       - name: Cache Playwright Browsers
+#         uses: actions/cache@v4
+#         id: playwright-cache
+#         with:
+#           path: ~/.cache/ms-playwright
+#           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json', 'reel-composer/package-lock.json') }}
+#           restore-keys: |
+#             ${{ runner.os }}-playwright-
 
-      - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install chromium --with-deps
+#       - name: Install Playwright Browsers
+#         if: steps.playwright-cache.outputs.cache-hit != 'true'
+#         run: npx playwright install chromium --with-deps
 
-      - name: Install Playwright Dependencies (if cache hit)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+#       - name: Install Playwright Dependencies (if cache hit)
+#         if: steps.playwright-cache.outputs.cache-hit == 'true'
+#         run: npx playwright install-deps chromium
 
 
-      - name: Start Frontend App
-        run: |
-          cd reel-composer
-          npm run dev -- --port 3000 &
-          echo "Waiting for frontend to start on port 3000..."
-          npx wait-on http://localhost:3000 --timeout 60000
+#       - name: Start Frontend App
+#         run: |
+#           cd reel-composer
+#           npm run dev -- --port 3000 &
+#           echo "Waiting for frontend to start on port 3000..."
+#           npx wait-on http://localhost:3000 --timeout 60000
 
-      - name: Run Reels Automation Pipeline
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" node main_automation.js
-        env:
+#       - name: Run Reels Automation Pipeline
+#         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" node main_automation.js
+#         env:
           
-          PORT: 3000
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_FOR_VISUALS: ${{ secrets.GEMINI_API_KEY_FOR_VISUALS }}
-          GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
-          GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
-          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
-          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
-          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
-          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          USE_PREMIUM_WAV2LIP: 'true'
-          FORCE_CPU: 'true'
+#           PORT: 3000
+#           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+#           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+#           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+#           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+#           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+#           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+#           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+#           GEMINI_API_KEY_FOR_VISUALS: ${{ secrets.GEMINI_API_KEY_FOR_VISUALS }}
+#           GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
+#           GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
+#           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+#           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+#           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+#           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+#           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+#           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+#           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+#           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+#           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+#           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+#           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+#           USE_PREMIUM_WAV2LIP: 'true'
+#           FORCE_CPU: 'true'
 
-      - name: Upload Logs and Artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: automation-artifacts
-          path: |
-            FINAL_REEL_*.mp4
-            merged_output.mp4
-            subtitles.srt
-            visual_prompt.txt
-            error_screenshot_*.png
-            error.log
-            combined.log
+#       - name: Upload Logs and Artifacts
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: automation-artifacts
+#           path: |
+#             FINAL_REEL_*.mp4
+#             merged_output.mp4
+#             subtitles.srt
+#             visual_prompt.txt
+#             error_screenshot_*.png
+#             error.log
+#             combined.log

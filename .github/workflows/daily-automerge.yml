@@ -1,37 +1,37 @@
-name: Daily Auto-Merge (develop-visual -> main)
+# name: Daily Auto-Merge (develop-visual -> main)
 
-on:
-  schedule:
-    # 12:00 AM IST = 18:30 UTC
-    - cron: '30 18 * * *'
-  workflow_dispatch: # Allow manual trigger
+# on:
+#   schedule:
+#     # 12:00 AM IST = 18:30 UTC
+#     - cron: '30 18 * * *'
+#   workflow_dispatch: # Allow manual trigger
 
-jobs:
-  automerge:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Fetch all history for all branches
+# jobs:
+#   automerge:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout Code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0 # Fetch all history for all branches
 
-      - name: Setup Git User
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+#       - name: Setup Git User
+#         run: |
+#           git config user.name "github-actions[bot]"
+#           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Fetch and Merge develop-visual into main
-        run: |
-          git checkout main
-          echo "Attempting to merge origin/develop-visual into main..."
+#       - name: Fetch and Merge develop-visual into main
+#         run: |
+#           git checkout main
+#           echo "Attempting to merge origin/develop-visual into main..."
           
-          # Try the merge without committing to check for conflicts
-          if git merge origin/develop-visual --no-ff --no-commit; then
-            echo "✅ No conflicts detected. Finalizing merge."
-            git commit -m "chore: daily auto-merge develop-visual into main"
-            git push origin main
-          else
-            echo "❌ Conflicts detected! Aborting merge to keep main clean."
-            git merge --abort
-            exit 0 # Exit successfully but without pushing
-          fi
+#           # Try the merge without committing to check for conflicts
+#           if git merge origin/develop-visual --no-ff --no-commit; then
+#             echo "✅ No conflicts detected. Finalizing merge."
+#             git commit -m "chore: daily auto-merge develop-visual into main"
+#             git push origin main
+#           else
+#             echo "❌ Conflicts detected! Aborting merge to keep main clean."
+#             git merge --abort
+#             exit 0 # Exit successfully but without pushing
+#           fi

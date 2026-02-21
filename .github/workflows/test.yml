@@ -1,101 +1,101 @@
-name: NodeJS - Posts Workflow Test
+# name: NodeJS - Posts Workflow Test
 
-on:
-  workflow_dispatch:
+# on:
+#   workflow_dispatch:
 
-jobs:
-  run-posts-workflow-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: false
+# jobs:
+#   run-posts-workflow-test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#         with:
+#           lfs: false
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+#       - name: Use Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: 18
 
-      - name: Install dependencies
-        run: npm install
+#       - name: Install dependencies
+#         run: npm install
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+#       - name: Install FFmpeg
+#         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Run server and trigger /workflow/auto
-        run: |
-          node server.js &
-          SERVER_PID=$!
-          echo "Server started with PID $SERVER_PID"
-          sleep 5
+#       - name: Run server and trigger /workflow/auto
+#         run: |
+#           node server.js &
+#           SERVER_PID=$!
+#           echo "Server started with PID $SERVER_PID"
+#           sleep 5
 
-          echo "Triggering /workflow/auto..."
-          curl -X POST http://localhost:${PORT:-3000}/workflow/auto
+#           echo "Triggering /workflow/auto..."
+#           curl -X POST http://localhost:${PORT:-3000}/workflow/auto
 
-          echo "Checking environment variables..."
-          echo "SUPABASE_URL: ${SUPABASE_URL:0:20}..."
-          echo "SUPABASE_ANON_KEY length: ${#SUPABASE_ANON_KEY}"
-          echo "SUPABASE_BUCKET: $SUPABASE_BUCKET"
+#           echo "Checking environment variables..."
+#           echo "SUPABASE_URL: ${SUPABASE_URL:0:20}..."
+#           echo "SUPABASE_ANON_KEY length: ${#SUPABASE_ANON_KEY}"
+#           echo "SUPABASE_BUCKET: $SUPABASE_BUCKET"
 
-          echo "Testing Supabase connectivity..."
-          SUPABASE_TEST=$(curl -s -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" "$SUPABASE_URL/rest/v1/" 2>&1)
-          echo "Supabase test response: $SUPABASE_TEST"
+#           echo "Testing Supabase connectivity..."
+#           SUPABASE_TEST=$(curl -s -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" "$SUPABASE_URL/rest/v1/" 2>&1)
+#           echo "Supabase test response: $SUPABASE_TEST"
 
-          if [[ "$SUPABASE_TEST" == *"html"* ]]; then
-            echo "❌ Supabase is returning HTML - likely authentication or service issue"
-            exit 1
-          else
-            echo "✅ Supabase connectivity OK"
-          fi
+#           if [[ "$SUPABASE_TEST" == *"html"* ]]; then
+#             echo "❌ Supabase is returning HTML - likely authentication or service issue"
+#             exit 1
+#           else
+#             echo "✅ Supabase connectivity OK"
+#           fi
 
-          echo "Monitoring workflow status..."
-          for i in {1..60}; do
-            echo "Checking status (attempt $i/60)..."
-            STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status)
-            echo "Status response: $STATUS"
+#           echo "Monitoring workflow status..."
+#           for i in {1..60}; do
+#             echo "Checking status (attempt $i/60)..."
+#             STATUS=$(curl -s http://localhost:${PORT:-3000}/workflow/status)
+#             echo "Status response: $STATUS"
             
-            # Check if workflow completed or failed
-            if echo "$STATUS" | grep -q '"status":"completed"'; then
-              echo "✅ Workflow completed successfully!"
-              break
-            elif echo "$STATUS" | grep -q '"status":"failed"'; then
-              echo "❌ Workflow failed!"
-              echo "Full status: $STATUS"
-              exit 1
-            fi
+#             # Check if workflow completed or failed
+#             if echo "$STATUS" | grep -q '"status":"completed"'; then
+#               echo "✅ Workflow completed successfully!"
+#               break
+#             elif echo "$STATUS" | grep -q '"status":"failed"'; then
+#               echo "❌ Workflow failed!"
+#               echo "Full status: $STATUS"
+#               exit 1
+#             fi
             
-            sleep 10
-          done
+#             sleep 10
+#           done
 
-          echo "Waiting remaining time..."
-          sleep 300
-          kill $SERVER_PID
-          echo "Server stopped"
+#           echo "Waiting remaining time..."
+#           sleep 300
+#           kill $SERVER_PID
+#           echo "Server stopped"
 
-        env:
-          PORT: ${{ secrets.PORT }}
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
-          POSTS_SHEET_ID: ${{ secrets.POSTS_SHEET_ID }}
-          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          OAUTH_ACCESS_TOKEN: ${{ secrets.OAUTH_ACCESS_TOKEN }}
-          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_API_KEY_FOR_IMAGES_1: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_1 }}
-          GEMINI_API_KEY_FOR_IMAGES_2: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_2 }}
-          GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
-          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
-          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
-          FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
-          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
-          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
-          GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
+#         env:
+#           PORT: ${{ secrets.PORT }}
+#           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+#           GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+#           POSTS_SHEET_ID: ${{ secrets.POSTS_SHEET_ID }}
+#           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+#           OAUTH_ACCESS_TOKEN: ${{ secrets.OAUTH_ACCESS_TOKEN }}
+#           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+#           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+#           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+#           GEMINI_API_KEY_FOR_IMAGES_1: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_1 }}
+#           GEMINI_API_KEY_FOR_IMAGES_2: ${{ secrets.GEMINI_API_KEY_FOR_IMAGES_2 }}
+#           GEMINI_API_KEY_FOR_AUDIO: ${{ secrets.GEMINI_API_KEY_FOR_AUDIO }}
+#           INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+#           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+#           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+#           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+#           EMAIL_USER: ${{ secrets.EMAIL_USER }}
+#           EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+#           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+#           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+#           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+#           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+#           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+#           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+#           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+#           GEMINI_API_KEY_FOR_T2T: ${{ secrets.GEMINI_API_KEY_FOR_T2T }}
