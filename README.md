@@ -1,90 +1,83 @@
-# 🎥 AI Reels Automation Pipeline v3.0
+# 🎬 Dreams AI Video Maker(Reels/shorts/)
 
-The ultimate automated system for generating and distributing professional tech reels. This system integrates high-velocity technical scripting, GSAP-powered browser visualizers, and multi-platform social media distribution.
+Welcome! This project is a powerful tool that automatically turns your ideas (written in a Google Sheet) into high-quality, professional-looking AI videos for Instagram, YouTube, and Facebook. 
 
-## 🚀 Overview
-
-This repository automates the entire lifecycle of a tech influencer/educator:
-1.  **Task Pulling**: Fetches technical topics from Google Sheets.
-2.  **Scripting**: Generates zero-fluff, information-dense scripts using Groq (Llama 3.3).
-3.  **Vocal Synthesis**: Synthesizes narration via Gemini Multimodal.
-4.  **Visual Composition**: Automates a GSAP-based frontend at `reel-composer` to record premium visuals.
-5.  **Multi-Social Upload**: Simultaneously posts to YouTube Shorts, Instagram Reels, and Facebook.
-6.  **Reporting**: Emails the owner success logs or error post-mortems.
+It handles everything: writing the script, cloning your voice, creating beautiful animations, and even making your lips move in sync with the audio.
 
 ---
 
-## 🏗️ Project Structure
-
-```text
-├── main_automation.js     # Master Entry Point (Sheet -> Post)
-├── automate_frontend.js   # (Legacy) Visual compositor logic
-├── base-vedio.mp4         # Target background for reels
-├── reel-composer/         # GSAP Visualizer App (Run: npm run dev)
-├── src/
-│   ├── services/
-│   │   ├── sheetsService.js    # Google Sheets Integration
-│   │   ├── scriptService.js    # Groq-powered technical scripting
-│   │   ├── audioService.js     # Gemini-powered voice synthesis
-│   │   ├── socialMediaService.js # YouTube, Insta, FB Uploaders
-│   │   └── emailService.js     # SMTP Error & Success alerts
-│   └── routes/                 # API Endpoints (via server.js)
-├── .github/workflows/         # Scheduled automation (8am/8pm IST)
-├── archive/                   # Legacy tests and old scripts
-└── final_video/               # Directory for exported masters
-```
+> [!NOTE]
+> This is a **technical prototype** for experimentation. It documents the feasibility of zero-shot voice cloning and programmatic motion graphics in a cloud-automated environment.
 
 ---
 
-## 🛠️ Getting Started
-
-### 1. Installation
-Install root dependencies and Playwright browsers:
-```bash
-npm install
-npx playwright install chromium --with-deps
-```
-
-Install Frontend dependencies:
-```bash
-cd reel-composer
-npm install
-```
-
-### 2. Environment Setup
-Create a `.env` in the root (see `.env.example` if available) with:
-- `GROQ_API_KEY`, `GEMINI_API_KEY`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`
-- `INSTAGRAM_ACCESS_TOKEN`, `FACEBOOK_ACCESS_TOKEN`
-- `EMAIL_USER`, `EMAIL_APP_PASSWORD`
-- `GOOGLE_SHEET_ID`
-
-### 3. Running the Pipeline
-
-**Step 1: Start Visualizer**
-```bash
-cd reel-composer
-npm run dev
-```
-
-**Step 2: Start Automation**
-```bash
-# In a new terminal
-node main_automation.js
-```
+## 🌟 Why this is cool
+*   **Your Voice, Your AI**: It uses just 30 seconds of your audio to speak in your voice for any script.
+*   **Smart Visuals**: It doesn't just show static images; it builds dynamic, technical animations that match the topic.
+*   **Fully Automatic**: Once you set it up, you just update a spreadsheet, and the AI does the rest—even uploading the video for you!
 
 ---
 
-## 🤖 GitHub Automation
-The system is configured to run automatically via GitHub Actions:
-- **Triggers**: Every push to `develop` or **Cron Schedule** (8 AM and 8 PM IST).
-- **Environment**: Runs headless Playwright recording on Linux runners.
-- **Artifacts**: Final master videos are saved as workflow artifacts for manual download.
+## 🚀 Quick Start (The Easiest Way)
+
+If you have **Docker** installed, you can skip the complex setup and run everything in a "bundle":
+
+1.  Open your terminal.
+2.  Type: `docker-compose up --build`
+3.  Sit back and watch the AI work!
 
 ---
 
-## 🧠 Strategic Content Philosophy (V3)
-- **Zero Fluff**: No "Hello everyone" or bush-beating.
-- **High Velocity**: 150-200 technical words in ~50 seconds.
-- **Premium Aesthetics**: Swiss typography and cyber-technical GSAP transitions.
-- **Master Quality**: 50Mbps video recording with synchronized HQ audio remuxing.
+## 🛠️ Step-by-Step Manual Setup
+
+If you prefer to run it directly on your computer, follow these 3 simple steps:
+
+### 1. The Basics
+*   **Node.js**: Install version 20 or newer.
+*   **Python**: Install version 3.10.
+*   **FFmpeg**: Make sure this is installed on your system (it's what mixes the audio and video).
+*   **Hardware**: You'll need at least 16GB of RAM. If you have an NVIDIA GPU, everything will run much faster!
+
+### 2. Connect Your Apps (The .env file)
+You'll need a few "keys" to let the AI talk to different services. Create a file named `.env` in the main folder and add these:
+
+| What it's for | Key Name | Where to find it |
+| :--- | :--- | :--- |
+| **The AI Brain** | `GEMINI_API_KEY` | Get this from Google AI Studio. |
+| **Your Spreadsheet** | `GOOGLE_SHEET_ID` | The ID of the Google Sheet where you write your topics. |
+| **Facebook & IG** | `FACEBOOK_ACCESS_TOKEN` | Created in your Meta Developer portal. |
+| **Voice Size** | `VOICEBOX_MODEL_SIZE` | Use `1.7B` for the best quality. |
+
+### 3. Let's Build!
+1.  Install the project dependencies:
+    ```bash
+    npm install
+    pip install -r voicebox/requirements.txt
+    pip install -r wav2lip/requirements.txt
+    ```
+2.  Install the browser that records the screen:
+    ```bash
+    npx playwright install --with-deps chromium
+    ```
+3.  Start the automation:
+    ```bash
+    node main_automation.js
+    ```
+
+---
+
+## 📁 What's Inside?
+*   **`main_automation.js`**: The "Boss" that tells everyone what to do.
+*   **`voicebox/`**: The part that learns and speaks in your voice.
+*   **`wav2lip/`**: The "Lip-Sync" engine that makes the video talk.
+*   **`reel-composer/`**: The "Artist" that creates the cool technical animations.
+*   **`final_video/`**: This is where your finished videos go!
+
+---
+
+## 💡 Pro Tips
+*   **Simple is better**: When writing topics in your sheet, be clear and direct.
+*   **Reference Audio**: Make sure your `Base-audio.mp3` is clear and doesn't have background noise.
+*   **Lip-Sync Quality**: For the best results, use a video (`Base-vedio.mp4`) where the person is looking directly at the camera.
+
+---

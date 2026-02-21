@@ -1,0 +1,16 @@
+1
+00:00:00,320 --> 00:00:03,920
+AI is taking over. Many think it's too complex.
+
+2
+00:00:04,240 --> 00:00:07,920
+But AI is just a tool. It helps us with tasks
+
+3
+00:00:08,160 --> 00:00:11,360
+like virtual assistants and chatbots, making our lives
+
+4
+00:00:11,860 --> 00:00:14,240
+easier. The future is here. Let's adapt.
+

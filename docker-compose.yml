@@ -1,0 +1,26 @@
+services:
+  automation:
+    build: .
+    container_name: ai-automation
+    
+    # --- GPU SETUP (Uncomment the lines below ONLY if you have an NVIDIA GPU) ---
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    # --- END GPU SETUP ---
+
+    env_file:
+      - .env
+    volumes:
+      - ./audio:/app/audio
+      - ./recordings:/app/recordings
+      - ./final_video:/app/final_video
+      - ./results:/app/results
+      - ./subtitles:/app/subtitles
+    # Interactive mode for debugging
+    stdin_open: true
+    tty: true

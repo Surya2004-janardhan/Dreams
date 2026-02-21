@@ -1,18 +1,17 @@
 
-import { GoogleGenAI, Type, Schema, Modality } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType as Type } from "@google/generative-ai";
+import type { Schema } from "@google/generative-ai";
 import { GeneratedContent } from "@/types.ts";
 import { constructPrompt } from "@/src/utils/promptTemplates.ts";
 import { fileToBase64, pcmToWav, extractAudioBlob } from "@/src/utils/audioHelpers.ts";
 
 export const validateGeminiConnection = async (apiKey: string, modelName: string): Promise<boolean> => {
   if (!apiKey) return false;
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
   try {
+    const model = genAI.getGenerativeModel({ model: modelName });
     // Simple verification call
-    await ai.models.generateContent({
-      model: modelName,
-      contents: "Test connection.",
-    });
+    await model.generateContent("Test connection.");
     return true;
   } catch (e) {
     console.error("API Key Validation Failed:", e);
@@ -35,10 +34,9 @@ export const generateSRT = async (
   mediaFile: File | Blob,
   apiKey: string
 ): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   // OPTIMIZATION: If input is a video, extract the audio track first.
-  // Sending pure Audio (WAV) to Gemini significantly improves timestamp accuracy compared to processing video frames.
   let fileToProcess = mediaFile;
   let mimeType = mediaFile.type;
 
@@ -56,7 +54,8 @@ export const generateSRT = async (
   const base64Data = await fileToBase64(fileToProcess);
 
   // Use Flash for speed and multimodal capability
-  const model = 'gemini-2.5-flash';
+  const modelName = 'gemini-2.0-flash';
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   // Define a strict schema for subtitles to prevent formatting hallucinations
   const subtitleSchema: Schema = {
@@ -73,36 +72,39 @@ export const generateSRT = async (
   };
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType || 'audio/mp3',
-              data: base64Data
-            }
-          },
-          {
-            text: `You are a professional captioning assistant.
-            Extract the transcript from this audio with EXTREME TIMING PRECISION.
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType || 'audio/mp3',
+                data: base64Data
+              }
+            },
+            {
+              text: `You are a professional captioning assistant.
+              Extract the transcript from this audio with EXTREME TIMING PRECISION.
 
-            CRITICAL RULES:
-            1. Timestamps must align perfectly with the audio waveform.
-            2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
-            3. Do NOT hallucinate. Only transcribe what is clearly spoken.
-            4. If there is silence, do not create segments.
-            `
-          }
-        ]
-      },
-      config: {
+              CRITICAL RULES:
+              1. Timestamps must align perfectly with the audio waveform.
+              2. Break text into naturally spoken short chunks (max 3-5 words per chunk).
+              3. Do NOT hallucinate. Only transcribe what is clearly spoken.
+              4. If there is silence, do not create segments.
+              `
+            }
+          ]
+        }
+      ],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: subtitleSchema
       }
     });
 
-    const segments = JSON.parse(response.text || "[]");
+    const response = await result.response;
+    const segments = JSON.parse(response.text() || "[]");
 
     // Convert JSON segments to SRT String
     let srtOutput = "";
@@ -128,28 +130,29 @@ export const generateTTS = async (
   voice: 'male' | 'female',
   apiKey: string
 ): Promise<Blob> => {
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
   // Correct model for TTS
-  const model = 'gemini-2.5-flash-preview-tts';
+  const modelName = 'gemini-2.0-flash-preview-tts';
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   // Map to Gemini Voices
   // Female: Kore, Male: Charon
   const voiceName = voice === 'female' ? 'Kore' : 'Charon';
 
   try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: { parts: [{ text }] },
-      config: {
-        responseModalities: [Modality.AUDIO],
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName }
           }
         }
-      }
+      } as any
     });
 
+    const response = await result.response;
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!base64Audio) throw new Error("No audio data returned");
 
@@ -182,7 +185,7 @@ export const generateReelContent = async (
     throw new Error("API Key is missing. Please enter it in the settings.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   const systemInstruction = `
     You are a world-class Motion Graphics Designer and Creative Technologist for high-retention social media video (Reels/TikTok).
@@ -192,10 +195,11 @@ export const generateReelContent = async (
     You must output high-fidelity, polished UI/UX animation.
     1. **Color Palette**: Dark mode (#050505), Neon accents (Cyan/Magenta).
     2. **Animation Style (GSAP - SMOOTH & STAGED)**:
-       - **NO COLLISIONS:** Elements MUST NOT overlap or collide. Use CSS Flexbox/Grid for layout and animate within distinct containers.
-       - **ICON-DRIVEN STORYTELLING:** Use technical SVG icons (e.g., Lucide-style) or minimalist 3D-effect shapes.
-       - **CONTINUOUS SECONDARY MOTION:** Visuals must never be static. Use subtle background pulses, floating particles, or rotating symbols.
        - **STAGED TRANSITIONS:** Use GSAP stagger and clear entrance/exit animations for every scene. Elements should animate IN, stay active, and then animate OUT before the next scene starts.
+       - **ANIMATION DOMINANCE:** Visual animations must be the **primary part takers** of the screen. Text/Keywords should be secondary and unobtrusive.
+       - **TOP-MIDDLE HEADERS:** Position title/keyword text in the **Top-Middle** of the container. Use a cleaner, smaller font size (Target: **27px**).
+       - **NO-OVERLAP & Z-INDEX:** Text elements MUST have the highest \`z-index\` (min 100). Background animations and icons must NEVER obscure or cover words. Use \`transform: translateZ(0)\` on containers to prevent rendering glitches.
+       - **PRECISE CONNECTORS:** When drawing arrows or links between components, use absolute percentage coordinates (e.g., from Box A at \`left: 20%\` to Box B at \`left: 80%\`). Ensure arrows originate and terminate exactly at the container boundaries. Use SVG for complex paths for maximum precision.
        - **MINIMAL TEXT:** Display ONLY 1-3 critical keywords to emphasize the audio.
 
     ### JAVASCRIPT ROBUSTNESS RULES (CRITICAL)
@@ -232,7 +236,7 @@ export const generateReelContent = async (
     - try not to clip out or overlap elements, design elements and animsation utilising the split ratio's html part screen realesate
     ### LAYOUT CONFIG REQUIREMENTS
     - 'layoutMode': 'split', 'full-video', 'full-html'.
-    - 'splitRatio': e.g., 0.60 (HTML takes top 60%).
+    - 'splitRatio': 0.5 (STRICT: USE 0.5 FOR ALL SPLIT LAYOUTS TO ENSURE PERFECT GAP BALANCE).
 
     ${isAudioOnly ? `
     ### AUDIO ONLY MODE
@@ -272,9 +276,9 @@ export const generateReelContent = async (
     properties: {
       startTime: { type: Type.NUMBER },
       endTime: { type: Type.NUMBER },
-      layoutMode: { type: Type.STRING, enum: ['split', 'full-video', 'full-html', 'pip-html'] },
+      layoutMode: { type: Type.STRING, enum: ['split', 'full-video', 'full-html', 'pip-html'], format: 'enum' },
       splitRatio: { type: Type.NUMBER },
-      captionPosition: { type: Type.STRING, enum: ['top', 'bottom', 'center', 'hidden'] },
+      captionPosition: { type: Type.STRING, enum: ['top', 'bottom', 'center', 'hidden'], format: 'enum' },
       note: { type: Type.STRING }
     },
     required: ["startTime", "endTime", "layoutMode", "splitRatio", "captionPosition"]
@@ -290,22 +294,26 @@ export const generateReelContent = async (
     required: ["html", "layoutConfig"]
   };
 
+  const model = genAI.getGenerativeModel({
+    model: modelName,
+    systemInstruction: systemInstruction
+  });
+
   try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        systemInstruction: systemInstruction,
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-      },
+      } as any,
     });
 
-    const result = JSON.parse(response.text || "{}");
+    const response = await result.response;
+    const resultJson = JSON.parse(response.text() || "{}");
 
     // --- REEL HELPER API INJECTION ---
     // Instead of just a shim, we inject a robust helper library to prevent common AI mistakes.
-    if (result.html) {
+    if (resultJson.html) {
       const reelHelperScript = `<script>
             /* REEL COMPOSER STANDARD LIBRARY */
             (function() {
@@ -335,11 +343,11 @@ export const generateReelContent = async (
         </script>`;
 
       // Inject immediately after <head> for earliest execution
-      result.html = result.html.replace('<head>', '<head>' + reelHelperScript);
+      resultJson.html = resultJson.html.replace('<head>', '<head>' + reelHelperScript);
     }
     // -----------------------------
 
-    return result as GeneratedContent;
+    return resultJson as any as GeneratedContent;
   } catch (error: any) {
     console.error("Gemini Generation Error:", error);
     let message = "Failed to generate content.";

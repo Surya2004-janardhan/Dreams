@@ -29,11 +29,11 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
   fullScreenMode,
   toggleFullScreen,
   bgMusicUrl,
-  bgMusicVolume = 0.2,
-  subtitleFontSize = 32,
+  bgMusicVolume = 0.7,
+  subtitleFontSize = 29,
   subtitleFontFamily = 'Inter',
   subtitleColor = '#FFFFFF',
-  subtitleBgColor = 'rgba(0,0,0,0.8)',
+  subtitleBgColor = 'rgba(0, 0, 0, 1.0)',
   subtitlePaddingX = 16,
   subtitlePaddingY = 8
 }) => {
@@ -174,7 +174,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
 
     return (
       <div
-        className={`flex flex-wrap justify-center items-center gap-x-1.5 gap-y-1 rounded-2xl transition-all duration-300 ${isFullHtml ? 'backdrop-blur-md border border-white/10 shadow-2xl' : ''}`}
+        className={`flex flex-wrap justify-center items-center gap-x-2 gap-y-1 rounded-2xl transition-all duration-300 backdrop-blur-md shadow-2xl`}
         style={{
           minHeight: '60px',
           backgroundColor: subtitleBgColor,
@@ -182,7 +182,10 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
           paddingLeft: `${subtitlePaddingX}px`,
           paddingRight: `${subtitlePaddingX}px`,
           paddingTop: `${subtitlePaddingY}px`,
-          paddingBottom: `${subtitlePaddingY}px`
+          paddingBottom: `${subtitlePaddingY}px`,
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          wordSpacing: '2px'
         }}
       >
         {visibleWords.map((word, index) => {
@@ -201,11 +204,13 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
               `}
               style={{
                 fontSize: `${subtitleFontSize}px`,
-                color: isActive ? '#fbbf24' : (isPast ? subtitleColor : `${subtitleColor}66`),
+                color: isActive ? '#FFFFFF' : (isPast ? subtitleColor : `${subtitleColor}99`),
                 textShadow: isActive
-                  ? '0 0 30px rgba(250, 204, 21, 0.6), 2px 2px 0px rgba(0,0,0,1)'
-                  : '2px 2px 0px rgba(0,0,0,0.8)',
-                fontFamily: subtitleFontFamily
+                  ? '0 0 30px rgba(255, 255, 255, 0.4), 2px 2px 0px rgba(0,0,0,0.8)'
+                  : '1px 1px 0px rgba(0,0,0,0.8)',
+                fontFamily: subtitleFontFamily,
+                fontWeight: isActive ? 900 : 800,
+                letterSpacing: '0.5px'
               }}
             >
               {word}
@@ -428,60 +433,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     return types.find(type => MediaRecorder.isTypeSupported(type)) || '';
   };
 
-  // --- Nuclear Fix: Canvas Proxy for Video Capture ---
-  // This ensures the video frame is ALWAYS repainted, bypassing browser-level optimization "freezes"
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // --- Nuclear Fix: Canvas Proxy for Video Capture REMOVED (Causing black visuals)
 
-  useEffect(() => {
-    if (!isRecording) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
-
-    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
-    if (!ctx) return;
-
-    let animId: number;
-    let jitter = 0;
-    const draw = () => {
-      if (video.readyState >= 2) {
-        // Calculate "cover" logic manually for the canvas drawing
-        const canvasAspect = canvas.width / canvas.height;
-        const videoAspect = video.videoWidth / video.videoHeight;
-
-        let drawWidth = canvas.width;
-        let drawHeight = canvas.height;
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (videoAspect > canvasAspect) {
-          // Video is wider than canvas (Horizontal -> Letterbox)
-          drawWidth = canvas.width;
-          drawHeight = canvas.width / videoAspect;
-          offsetY = (canvas.height - drawHeight) / 2;
-        } else {
-          // Video is taller than canvas (Tall -> Pillarbox)
-          drawHeight = canvas.height;
-          drawWidth = canvas.height * videoAspect;
-          offsetX = (canvas.width - drawWidth) / 2;
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
-
-        // Jitter Hack: Forces the browser to see a "change" in current pixels
-        // prevents the encoder from sleeping on static video frames.
-        jitter = (jitter + 1) % 2;
-        ctx.fillStyle = `rgba(255,255,255,${0.02 + (jitter * 0.001)})`;
-        ctx.fillRect(0, 0, 1, 1);
-      }
-      animId = requestAnimationFrame(draw);
-    };
-
-    draw();
-    return () => cancelAnimationFrame(animId);
-  }, [isRecording]);
 
   const startRecording = async () => {
     try {
@@ -575,6 +528,11 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
     }
   };
 
+  // Expose to window for automation/debug
+  useEffect(() => {
+    (window as any).stopRecording = stopRecording;
+  }, []);
+
   return (
     <div className={`flex flex-col items-center justify-center ${fullScreenMode ? 'fixed inset-0 z-50 bg-black' : 'h-full'}`}>
 
@@ -582,8 +540,8 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         id="recording-target"
         className="relative bg-black overflow-hidden shadow-2xl border border-gray-800 rounded-none"
         style={{
-          width: fullScreenMode ? 'calc(90vh * 9 / 16)' : '360px',
-          height: fullScreenMode ? '90vh' : '640px',
+          width: fullScreenMode ? 'calc(90vh * 9 / 16)' : '540px',
+          height: fullScreenMode ? '90vh' : '960px',
           aspectRatio: '9/16',
           maxWidth: '100%',
           cursor: isRecording ? 'none' : 'default',
@@ -606,7 +564,7 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
         </div>
 
         <div
-          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black"
+          className="absolute bottom-0 left-0 w-full overflow-hidden bg-black flex items-center justify-center border-t border-white/5"
           style={layoutStyles.videoContainer}
         >
           {/* Main Video */}
@@ -614,20 +572,11 @@ export const ReelPlayer: React.FC<ReelPlayerProps> = ({
             key={videoUrl}
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-cover object-bottom"
+            className="w-full h-full object-cover object-center"
             playsInline
             muted={false}
             onEnded={stopRecording}
           />
-          {/* PRO COMPOSITOR CANVAS - True Master Quality Rendering */}
-          {isRecording && (
-            <canvas
-              ref={canvasRef}
-              width={2160}
-              height={3840}
-              className="absolute inset-0 w-full h-full object-cover z-[40]"
-            />
-          )}
           {/* Background Music - Hidden */}
           <audio
             ref={audioRef}

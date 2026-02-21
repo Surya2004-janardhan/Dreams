@@ -1,0 +1,8 @@
+venv/
+.git/
+results/*
+temp/*
+__pycache__/
+*.pth
+*.mp4
+*.avi

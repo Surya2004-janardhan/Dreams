@@ -99,8 +99,30 @@ audio/
 automation_log*
 # Test cache (expensive API results)
 test_cache/
+archive/
+genuine_cache/
 
 # new/
-BASE-VEDIO.mp4
+# BASE-VEDIO.mp4
 # Video files are tracked with Git LFS (see .gitattributes)
 # Large video files should be committed with Git LFS to avoid size limits
+
+# Wav2Lip Weights
+# wav2lip/**/*.pth (Tracked via LFS)
+
+
+# voicebox//
+
+Base-vedio_new*
+
+tts.txt
+
+gfpgan/
+
+test.mp3
+
+audio.mp3
+
+test_voice_modular.js
+
+indicf5_models/

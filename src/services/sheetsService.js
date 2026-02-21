@@ -48,6 +48,10 @@ const getNextTask = async (sheetId = null) => {
     const descriptionIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("description")
     );
+    // Support for 2-column sheet: "scripts", "status"
+    const scriptsColIndex = headers.findIndex(
+      (h) => h && h.toLowerCase().includes("scripts")
+    );
     const statusIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("status")
     );
@@ -111,7 +115,8 @@ const getNextTask = async (sheetId = null) => {
         const taskData = {
           rowId: i + 1, // Google Sheets is 1-indexed
           sno: row[snoIndex] || "",
-          idea: row[ideaIndex] || "", // This will now correctly get the title
+          idea: row[ideaIndex] || row[scriptsColIndex] || "", // Fallback to scripts Col
+          scripts: row[scriptsColIndex] || "",
           description: row[descriptionIndex] || "",
           status: row[statusIndex] || "Not Posted",
           ytLink: row[ytLinkIndex] || "",

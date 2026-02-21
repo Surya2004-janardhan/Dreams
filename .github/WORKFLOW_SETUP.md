@@ -13,12 +13,12 @@ Your workflow requires 4 secrets to be configured in GitHub:
 2. Settings → Secrets and variables → Actions → "New repository secret"
 3. Add each of these secrets:
 
-| Secret Name | Description |
-|---|---|
-| `EMAIL_USER` | `studypurp01@gmail.com` |
-| `EMAIL_PASS` | `jxim sdhx jwkr ebtb` |
-| `RECIPIENT_EMAIL` | `chintalajanardhan2004@gmail.com` |
-| `GOOGLE_CREDENTIALS_JSON` | Base64 encoded Google credentials.json file |
+| Secret Name                        | Description                        |
+|------------------------------------|------------------------------------|
+| `EMAIL_USER`                       | `studypurp01@gmail.com`            |
+| `EMAIL_PASS`                       | `jxim sdhx jwkr ebtb`              |
+| `RECIPIENT_EMAIL`                  | `chintalajanardhan2004@gmail.com`  |
+| `GOOGLE_CREDENTIALS_JSON`          | Base6 Google credentials.json file |
 
 ### 2. Create GOOGLE_CREDENTIALS_JSON Secret
 
