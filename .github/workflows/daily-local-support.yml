@@ -79,5 +79,6 @@ jobs:
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          USE_PREMIUM_WAV2LIP: 'true'
           FORCE_CPU: 'true'
         run: node src/local-support/automation_logic.js
