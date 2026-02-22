@@ -41,9 +41,9 @@ const getNextTask = async (sheetId = null) => {
     const ideaIndex = headers.findIndex(
       (h) =>
         h &&
-        (h.toLowerCase().includes("idea") ||
-          h.toLowerCase().includes("title") ||
-          h.toLowerCase().includes("topic"))
+        (h.toLowerCase() === "title" || 
+         h.toLowerCase().includes("idea") ||
+         h.toLowerCase().includes("topic"))
     );
     const descriptionIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("description")
@@ -58,7 +58,9 @@ const getNextTask = async (sheetId = null) => {
     const ytLinkIndex = headers.findIndex(
       (h) =>
         h &&
-        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
+        (h.toLowerCase().includes("yt") || 
+         h.toLowerCase().includes("youtube") || 
+         h.toLowerCase() === "links")
     );
     const instaLinkIndex = headers.findIndex(
       (h) =>
@@ -193,7 +195,9 @@ const updateSheetStatus = async (
     const ytLinkIndex = headers.findIndex(
       (h) =>
         h &&
-        (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube"))
+        (h.toLowerCase().includes("yt") || 
+         h.toLowerCase().includes("youtube") || 
+         h.toLowerCase() === "links")
     );
     const instaLinkIndex = headers.findIndex(
       (h) =>

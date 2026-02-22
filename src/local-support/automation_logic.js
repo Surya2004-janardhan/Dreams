@@ -108,7 +108,9 @@ async function runDailyAutomation() {
         // 8. Notification & Sheet Update
         currentStep = "Notifications";
         if (task.rowId > 0) {
-            await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink, srtUpload.publicLink, "Email Sent");
+            // Updated for: Title, scripts, status, Links, Timestamp
+            // We put the primary video link in the 'Links' column.
+            await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink);
         }
 
         // Send specialized download-focused email
