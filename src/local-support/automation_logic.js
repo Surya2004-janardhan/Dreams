@@ -6,7 +6,6 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const { getNextTask, updateSheetStatus } = require('../services/sheetsService');
-const { generateScript } = require('../services/scriptService');
 const { createSubtitlesFromAudio } = require('../utils/subtitles');
 const { uploadToSupabaseAndGetLink } = require('../services/socialMediaService');
 const { sendSuccessNotification, sendErrorNotification, sendLocalSupportNotification } = require('../services/emailService');
@@ -18,6 +17,7 @@ const logger = require("../config/logger");
  * Minimal Automation Logic for Daily Support
  * Runs: Topic -> Script -> Audio -> LipSync -> Supabase -> Email
  * Skips: Dynamic HTML visuals and Reel Composer
+ * No AI Script Generation - Uses Sheet Data Directly
  */
 async function runDailyAutomation() {
     logger.info("📅 STARTING DAILY LOCAL-SUPPORT AUTOMATION");
@@ -27,10 +27,9 @@ async function runDailyAutomation() {
     let supabaseInfo = null;
 
     try {
-        // 1. Fetch task (Specialized for 2-column: scripts, status)
+        // 1. Fetch task (Specialized for sheet-direct data)
         currentStep = "Fetching Task";
         task = await getNextTask();
-        const TOPIC = task.idea || "Daily Task"; 
         
         // IMMEDIATE LOCK: Set status to Processing
         if (task.rowId > 0) {
@@ -38,18 +37,19 @@ async function runDailyAutomation() {
             await updateSheetStatus(task.rowId, "Processing");
         }
 
-        // Use 'scripts' column if it exists, otherwise fallback to 'idea' from standard service
+        // Title comes from 'idea' column (or 'title'/'topic' headers)
+        // Script comes from 'scripts' column
+        const TOPIC = task.idea || "Daily Task"; 
         const script = task.scripts || task.idea;
         
-        logger.info(`📝 Processing Script: "${script.substring(0, 50)}..."`);
+        // Safety: ensure it's a string and clean it up
+        const cleanScript = String(script).trim();
+        const cleanTitle = String(TOPIC).trim().substring(0, 100);
 
-        // 2. Script (DETERMINED: Use the sheet script directly as requested)
-        currentStep = "Script Processing";
-        // In local support mode, if the sheet contains the full script, we skip generateScript()
-        // unless the user specifically wants AI to expand the idea.
-        // For this 2-col sheet, we use scripts directly.
+        logger.info(`📝 Using Sheet Title: "${cleanTitle}"`);
+        logger.info(`📝 Using Sheet Script: "${cleanScript.substring(0, 50)}..."`);
 
-        // 3. Audio (Cloned Voice)
+        // 2. Audio (Cloned Voice)
         currentStep = "Audio Generation";
         const REF_AUDIO = path.resolve('Base-audio.mp3');
         const GEN_AUDIO = path.join(process.cwd(), 'audio', `daily_voice_${Date.now()}.wav`);
@@ -58,7 +58,7 @@ async function runDailyAutomation() {
 
         // Generate and apply 0.94 slowdown
         const VOICE_INSTRUCT = "Professional technical delivery. Clear and steady.";
-        const rawAudio = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+        const rawAudio = await voiceboxService.generateClonedVoice(cleanScript, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
         const audioPath = path.join(path.dirname(GEN_AUDIO), `slowed_${path.basename(GEN_AUDIO)}`);
         
         await new Promise((res, rej) => {
@@ -102,8 +102,8 @@ async function runDailyAutomation() {
 
         // 7. Supabase Upload
         currentStep = "Supabase Upload";
-        supabaseInfo = await uploadToSupabaseAndGetLink(FINAL_VIDEO, `Daily_${TOPIC}`);
-        const srtUpload = await uploadToSupabaseAndGetLink(srtPath, `Daily_SRT_${TOPIC}`);
+        supabaseInfo = await uploadToSupabaseAndGetLink(FINAL_VIDEO, `Daily_${cleanTitle}`);
+        const srtUpload = await uploadToSupabaseAndGetLink(srtPath, `Daily_SRT_${cleanTitle}`);
 
         // 8. Notification & Sheet Update
         currentStep = "Notifications";
