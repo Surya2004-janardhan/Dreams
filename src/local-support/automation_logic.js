@@ -79,7 +79,7 @@ async function runDailyAutomation() {
         // 6. Final Mix (Add BGM)
         currentStep = "Final Mixing";
         const FINAL_VIDEO = path.resolve('daily_final_output.mp4');
-        const BGM_PATH = path.resolve('bgm.mp3'); // Assumes bgm.mp3 exists
+        const BGM_PATH = path.resolve('Bgm.m4a'); // Assumes Bgm.m4a exists
         
         await new Promise((res, rej) => {
             let command = ffmpeg(SYNCED_VIDEO).input(audioPath);

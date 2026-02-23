@@ -50,7 +50,7 @@ const getNextTask = async (sheetId = null) => {
     );
     // Support for 2-column sheet: "scripts", "status"
     const scriptsColIndex = headers.findIndex(
-      (h) => h && h.toLowerCase().includes("scripts")
+      (h) => h && h.toLowerCase().includes("script")
     );
     const statusIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("status")
