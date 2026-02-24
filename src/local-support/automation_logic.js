@@ -76,25 +76,14 @@ async function runDailyAutomation() {
         const srtRes = await createSubtitlesFromAudio(audioPath);
         const srtPath = srtRes.subtitlesPath;
 
-        // 6. Final Mix (Add BGM)
+        // 6. Final Mix (Speech + Video only)
         currentStep = "Final Mixing";
         const FINAL_VIDEO = path.resolve('daily_final_output.mp4');
-        const BGM_PATH = path.resolve('Bgm.m4a'); // Assumes Bgm.m4a exists
         
         await new Promise((res, rej) => {
-            let command = ffmpeg(SYNCED_VIDEO).input(audioPath);
-            let filter = '[1:a]volume=1.0[speech]';
-            
-            if (fs.existsSync(BGM_PATH)) {
-                command.input(BGM_PATH);
-                filter = '[1:a]volume=1.0[speech];[2:a]volume=0.07[bgm];[speech][bgm]amix=inputs=2:duration=first[a]';
-            } else {
-                filter = '[1:a]volume=1.0[a]';
-            }
-
-            command
-                .complexFilter([filter])
-                .outputOptions(['-map 0:v', '-map [a]', '-c:v copy', '-shortest'])
+            ffmpeg(SYNCED_VIDEO)
+                .input(audioPath)
+                .outputOptions(['-map 0:v', '-map 1:a', '-c:v copy', '-shortest'])
                 .on('end', res)
                 .on('error', rej)
                 .save(FINAL_VIDEO);
