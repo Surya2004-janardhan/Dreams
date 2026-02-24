@@ -62,7 +62,7 @@ async function runDailyAutomation() {
         const audioPath = path.join(path.dirname(GEN_AUDIO), `slowed_${path.basename(GEN_AUDIO)}`);
         
         await new Promise((res, rej) => {
-            ffmpeg(rawAudio).audioFilters('atempo=0.94').on('end', res).on('error', rej).save(audioPath);
+            ffmpeg(rawAudio).audioFilters(['atempo=0.94', 'volume=1.5']).on('end', res).on('error', rej).save(audioPath);
         });
 
         // 4. Lip-Sync
