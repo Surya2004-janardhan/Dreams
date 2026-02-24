@@ -1,7 +1,7 @@
-const wav2lipService = require('./src/services/wav2lipService');
+const wav2lipService = require('../src/services/wav2lipService');
 const path = require('path');
 const fs = require('fs');
-const logger = require('./src/config/logger');
+const logger = require('../src/config/logger');
 
 /**
  * HQ Wav2Lip Test Script

@@ -1,4 +1,4 @@
-const voiceboxService = require('./src/services/voiceboxService');
+const voiceboxService = require('../src/services/voiceboxService');
 const path = require('path');
 const fs = require('fs');
 
@@ -6,7 +6,7 @@ async function testAudio() {
     console.log("🎤 Starting local audio quality test...");
     
     const text = "Application Programming Interfaces, commonly known as APIs, are the silent backbone of modern software architecture. What this means is that they allow different systems to communicate seamlessly, effectively bridging the gap between disparate data sources and user interfaces.";
-    const refAudio = path.resolve('Base-audio.mp3');
+    const refAudio = path.resolve(__dirname, '../assets/Base-audio.mp3');
     const outAudio = path.resolve('test_quality_output.wav');
     
     if (!fs.existsSync(refAudio)) {
