@@ -103,7 +103,7 @@ async function runDailyAutomation() {
         // 7. Supabase Upload
         currentStep = "Supabase Upload";
         supabaseInfo = await uploadToSupabaseAndGetLink(FINAL_VIDEO, `Daily_${cleanTitle}`);
-        const srtUpload = await uploadToSupabaseAndGetLink(srtPath, `Daily_SRT_${cleanTitle}`);
+        // No longer uploading SRT to Supabase - sending via email instead
 
         // 8. Notification & Sheet Update
         currentStep = "Notifications";
@@ -113,8 +113,8 @@ async function runDailyAutomation() {
             await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink);
         }
 
-        // Send specialized download-focused email
-        await sendLocalSupportNotification(task, supabaseInfo.publicLink, srtUpload.publicLink);
+        // Send specialized email with SRT attached
+        await sendLocalSupportNotification(task, supabaseInfo.publicLink, null, srtPath);
 
         logger.info(`✨ DAILY AUTOMATION SUCCESSFUL | Time: ${((Date.now() - sessionStart)/1000).toFixed(2)}s`);
 

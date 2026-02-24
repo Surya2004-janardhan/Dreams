@@ -622,12 +622,13 @@ const sendCarouselPostNotification = async (
 };
 
 /**
- * Send local support success notification with Supabase links
+ * Send local support success notification with Supabase links and attachments
  * @param {Object} taskData - Task information
  * @param {string} videoUrl - Supabase video URL
- * @param {string} srtUrl - Supabase SRT URL
+ * @param {string} srtUrl - Optional Supabase SRT URL (deprecated in favor of attachment)
+ * @param {string} localSrtPath - Local path to the SRT file to attach
  */
-const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl) => {
+const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, localSrtPath) => {
   try {
     const transporter = createTransporter();
     const subject = `📥 Daily Content Ready: ${taskData.idea || "Untitled"}`;
@@ -635,34 +636,31 @@ const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl) => {
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
       <div style="background: #4A90E2; padding: 20px; text-align: center; color: white;">
-        <h2 style="margin: 0;">📦 Content Download Ready</h2>
+        <h2 style="margin: 0;">📦 Content Ready</h2>
       </div>
       
       <div style="padding: 20px;">
         <p>Your daily automation for <strong>"${taskData.idea}"</strong> has completed successfully.</p>
         
         <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">🔗 Download Links</h3>
+          <h3 style="margin-top: 0; color: #333;">🔗 Video Links</h3>
           
           <div style="margin-bottom: 15px;">
             <p style="margin: 0 0 5px 0; font-weight: bold;">🎬 Video File (MP4):</p>
             <a href="${videoUrl}" target="_blank" style="display: inline-block; padding: 10px 15px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
-              Download Video
+              View/Download Video
             </a>
             <p style="font-size: 12px; color: #666; margin-top: 5px; word-break: break-all;">${videoUrl}</p>
           </div>
           
-          <div style="margin-bottom: 5px;">
-            <p style="margin: 0 0 5px 0; font-weight: bold;">📜 Subtitles (SRT):</p>
-            <a href="${srtUrl}" target="_blank" style="display: inline-block; padding: 10px 15px; background: #6c757d; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
-              Download SRT
-            </a>
-            <p style="font-size: 12px; color: #666; margin-top: 5px; word-break: break-all;">${srtUrl}</p>
+          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
+            <p style="margin: 0; font-weight: bold; color: #2c3e50;">📜 Subtitles (SRT):</p>
+            <p style="margin: 5px 0; color: #666;">The subtitle file has been <strong>attached</strong> directly to this email for your convenience.</p>
           </div>
         </div>
 
         <div style="font-size: 13px; color: #666; border-top: 1px solid #eee; padding-top: 15px;">
-          <p><strong>Note:</strong> These links lead to your Supabase storage. You can right-click the buttons and "Save Link As" to download directly.</p>
+          <p><strong>Note:</strong> The video link leads to your Supabase storage. You can right-click the button and "Save Link As" to download it directly.</p>
         </div>
       </div>
       
@@ -677,10 +675,19 @@ const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl) => {
       to: process.env.NOTIFICATION_EMAIL,
       subject: subject,
       html: htmlContent,
+      attachments: []
     };
 
+    // Add SRT attachment if path exists
+    if (localSrtPath && fs.existsSync(localSrtPath)) {
+      mailOptions.attachments.push({
+        filename: path.basename(localSrtPath),
+        path: localSrtPath
+      });
+    }
+
     await transporter.sendMail(mailOptions);
-    logger.info(`✅ Local Support email sent: ${taskData.idea}`);
+    logger.info(`✅ Local Support email sent with attachments for: ${taskData.idea}`);
   } catch (error) {
     logger.error("❌ Failed to send Local Support notification:", error.message);
   }
