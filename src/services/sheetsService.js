@@ -55,22 +55,15 @@ const getNextTask = async (sheetId = null) => {
     const statusIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("status")
     );
-    const ytLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("yt") || 
-         h.toLowerCase().includes("youtube") || 
-         h.toLowerCase() === "links")
-    );
-    const instaLinkIndex = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes("insta") ||
-        h.toLowerCase().includes("instagram")
-    );
-    const fbLinkIndex = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")
-    );
+    // Unified Link Detection (Support both new and legacy schemas)
+    const audioLinkIndex = headers.findIndex((h) => h && h.toLowerCase().includes("audio link"));
+    const videoLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("vedio link") || h.toLowerCase().includes("video link")));
+    const srtLinkIndex = headers.findIndex((h) => h && h.toLowerCase().includes("srt link"));
+    
+    const ytLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube") || h.toLowerCase() === "links"));
+    const instaLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("insta") || h.toLowerCase().includes("instagram")));
+    const fbLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")));
+
     const timestampIndex = headers.findIndex(
       (h) =>
         h &&
@@ -115,15 +108,20 @@ const getNextTask = async (sheetId = null) => {
         console.log(`✅ FOUND PROCESSABLE TASK AT ROW ${i + 1}`);
 
         const taskData = {
-          rowId: i + 1, // Google Sheets is 1-indexed
+          rowId: i + 1,
           sno: row[snoIndex] || "",
-          idea: row[ideaIndex] || row[scriptsColIndex] || "", // Fallback to scripts Col
+          idea: row[ideaIndex] || row[scriptsColIndex] || "",
           scripts: row[scriptsColIndex] || "",
           description: row[descriptionIndex] || "",
           status: row[statusIndex] || "Not Posted",
-          ytLink: row[ytLinkIndex] || "",
-          instaLink: row[instaLinkIndex] || "",
-          fbLink: row[fbLinkIndex] || "",
+          // New Schema Aliases
+          audioLink: row[audioLinkIndex] || row[instaLinkIndex] || "", 
+          videoLink: row[videoLinkIndex] || row[ytLinkIndex] || "",
+          srtLink: row[srtLinkIndex] || row[fbLinkIndex] || "",
+          // Legacy Schema Aliases (for backward compatibility)
+          ytLink: row[ytLinkIndex] || row[videoLinkIndex] || "",
+          instaLink: row[instaLinkIndex] || row[audioLinkIndex] || "",
+          fbLink: row[fbLinkIndex] || row[srtLinkIndex] || "",
           timestamp: row[timestampIndex] || "",
         };
 
@@ -153,9 +151,9 @@ const getNextTask = async (sheetId = null) => {
 const updateSheetStatus = async (
   rowId,
   status,
-  ytLink = "",
-  instaLink = "",
-  fbLink = "",
+  videoLink = "",
+  audioLink = "",
+  srtLink = "",
   sheetId = null
 ) => {
   const targetSheetId = sheetId || process.env.GOOGLE_SHEET_ID;
@@ -192,22 +190,13 @@ const updateSheetStatus = async (
     const statusIndex = headers.findIndex(
       (h) => h && h.toLowerCase().includes("status")
     );
-    const ytLinkIndex = headers.findIndex(
-      (h) =>
-        h &&
-        (h.toLowerCase().includes("yt") || 
-         h.toLowerCase().includes("youtube") || 
-         h.toLowerCase() === "links")
-    );
-    const instaLinkIndex = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes("insta") ||
-        h.toLowerCase().includes("instagram")
-    );
-    const fbLinkIndex = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")
-    );
+    const audioLinkIndex = headers.findIndex((h) => h && h.toLowerCase().includes("audio link"));
+    const videoLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("vedio link") || h.toLowerCase().includes("video link")));
+    const srtLinkIndex = headers.findIndex((h) => h && h.toLowerCase().includes("srt link"));
+    
+    const ytLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("yt") || h.toLowerCase().includes("youtube") || h.toLowerCase() === "links"));
+    const instaLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("insta") || h.toLowerCase().includes("instagram")));
+    const fbLinkIndex = headers.findIndex((h) => h && (h.toLowerCase().includes("fb") || h.toLowerCase().includes("facebook")));
     const timestampIndex = headers.findIndex(
       (h) =>
         h &&
@@ -230,25 +219,39 @@ const updateSheetStatus = async (
       });
     }
 
-    if (ytLink && ytLinkIndex !== -1) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(ytLinkIndex + 1)}${rowId}`,
-        values: [[ytLink]],
-      });
+    // Positional Logic: 
+    // Argument 3: videoLink OR ytLink
+    // Argument 4: audioLink OR instaLink
+    // Argument 5: srtLink OR fbLink
+
+    if (videoLink) {
+      const idx = videoLinkIndex !== -1 ? videoLinkIndex : ytLinkIndex;
+      if (idx !== -1) {
+        updates.push({
+          range: `Sheet1!${getColumnLetter(idx + 1)}${rowId}`,
+          values: [[videoLink]],
+        });
+      }
+    }
+    
+    if (audioLink) {
+      const idx = audioLinkIndex !== -1 ? audioLinkIndex : instaLinkIndex;
+      if (idx !== -1) {
+        updates.push({
+          range: `Sheet1!${getColumnLetter(idx + 1)}${rowId}`,
+          values: [[audioLink]],
+        });
+      }
     }
 
-    if (instaLink && instaLinkIndex !== -1) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(instaLinkIndex + 1)}${rowId}`,
-        values: [[instaLink]],
-      });
-    }
-
-    if (fbLink && fbLinkIndex !== -1) {
-      updates.push({
-        range: `Sheet1!${getColumnLetter(fbLinkIndex + 1)}${rowId}`,
-        values: [[fbLink]],
-      });
+    if (srtLink) {
+      const idx = srtLinkIndex !== -1 ? srtLinkIndex : fbLinkIndex;
+      if (idx !== -1) {
+        updates.push({
+          range: `Sheet1!${getColumnLetter(idx + 1)}${rowId}`,
+          values: [[srtLink]],
+        });
+      }
     }
 
     if (timestampIndex !== -1) {
