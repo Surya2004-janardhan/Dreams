@@ -1,83 +1,94 @@
-# 🎬 Dreams AI Video Maker(Reels/shorts/)
+# 🎬 Dreams AI Video Maker (Short form content maker)
 
-Welcome! This project is a powerful tool that automatically turns your ideas (written in a Google Sheet) into high-quality, professional-looking AI videos for Instagram, YouTube, and Facebook. 
-
-It handles everything: writing the script, cloning your voice, creating beautiful animations, and even making your lips move in sync with the audio.
+Welcome to **Dreams AI**, an end-to-end automated pipeline that transforms simple ideas from a Google Sheet into high-fidelity, voice-cloned, lip-synced AI videos—running entirely on the cloud for $0.
 
 ---
 
-> [!NOTE]
-> This is a **technical prototype** for experimentation. It documents the feasibility of zero-shot voice cloning and programmatic motion graphics in a cloud-automated environment.
+## 🏗️ The Cloud Pipeline: How it Works
+
+The system is designed as a fully automated, hands-off pipeline that executes on cloud runners.
+
+### 🔄 The End-to-End Workflow
+1.  **Trigger**: GitHub Actions wakes up via a **Cron Job** and checks your Google Sheet for rows marked as "Not Posted".
+2.  **Voice Cloning (Voicebox)**: Your personalized AI voice is synthesized using a 30-second reference audio sample (`Base-audio.mp3`).
+3.  **Lip-Synchronization (Wav2Lip)**: The generated audio is synced to a base video (`Base-vedio.mp4`) with sub-pixel precision.
+4.  **Assembly & Mixing**: FFmpeg combines the speech, background music (BGM), and synced video into a final MP4.
+5.  **Distribution**: The final video and subtitles (SRT) are uploaded to **Supabase** storage, and a download link is emailed to you automatically.
 
 ---
 
-## 🌟 Why this is cool
-*   **Your Voice, Your AI**: It uses just 30 seconds of your audio to speak in your voice for any script.
-*   **Smart Visuals**: It doesn't just show static images; it builds dynamic, technical animations that match the topic.
-*   **Fully Automatic**: Once you set it up, you just update a spreadsheet, and the AI does the rest—even uploading the video for you!
+## 💡 My Motivation
+I have always been passionate about content creation, but the high cost of tools and server maintenance often stood in the way. My goal was to build a system that could automate the entire production cycle for **absolutely $0 operating cost**, leveraging free-tier APIs and serverless infrastructure to prove that high-quality AI content doesn't need a massive budget.
+
+The dynamic animations in this project were inspired by the excellent work in [reel-composer](https://github.com/prasannathapa/reel-composer) by **Prasanna Thapa**, which I have refactored and customized to meet the specific requirements of this automated pipeline.
 
 ---
 
-## 🚀 Quick Start (The Easiest Way)
+## 💎 The Power of Zero-Cost Automation
 
-If you have **Docker** installed, you can skip the complex setup and run everything in a "bundle":
+One of the most unique aspects of this system is that it runs **entirely for free** with zero server maintenance costs.
 
-1.  Open your terminal.
-2.  Type: `docker-compose up --build`
-3.  Sit back and watch the AI work!
+### 🚜 Serverless Execution (GitHub Actions)
+Instead of paying for a 24/7 VPS or Cloud Server, we utilize **GitHub Actions** as our "virtual computer":
+*   **Automatic Cron Jobs**: The system uses GitHub's `schedule` feature to wake up at specific times (e.g., 1 AM, 3 AM IST) to process tasks.
+*   **Ephemeral Runners**: Every time a job starts, GitHub spins up a fresh Ubuntu environment, installs dependencies, processes the video, and shuts down—costing you $0.
+*   **Performance Metrics (Ubuntu-Latest)**:
+    *   **Setup (Dependencies + Models)**: ~2-3 mins ⚡
+    *   **Audio Generation**: ~4 mins 🗣️
+    *   **Wav2Lip (Basic Mode)**: ~8 mins 👄
+    *   **Wav2Lip (Premium GAN Mode)**: ~5 hours (for cinematic quality) ✨
+    *   **Final Mixing & Upload**: ~1 min 📤
+
+### 🔌 API Efficiency
+The project is built on the "Free Tier" ecosystem:
+*   **Google Gemini**: Used for intelligent logic and script handling.
+*   **Google Sheets**: Acts as a free, collaborative "Database" and "Admin Panel."
+*   **AssemblyAI**: High-quality transcription using free tier credits.
+*   **Supabase (Free Tier)**: Hosts visual artifacts and final videos temporarily for download.
 
 ---
 
-## 🛠️ Step-by-Step Manual Setup
+## 🛠️ Technical Architecture
 
-If you prefer to run it directly on your computer, follow these 3 simple steps:
-
-### 1. The Basics
-*   **Node.js**: Install version 20 or newer.
-*   **Python**: Install version 3.10.
-*   **FFmpeg**: Make sure this is installed on your system (it's what mixes the audio and video).
-*   **Hardware**: You'll need at least 16GB of RAM. If you have an NVIDIA GPU, everything will run much faster!
-
-### 2. Connect Your Apps (The .env file)
-You'll need a few "keys" to let the AI talk to different services. Create a file named `.env` in the main folder and add these:
-
-| What it's for | Key Name | Where to find it |
+| Component | Technology | Role |
 | :--- | :--- | :--- |
-| **The AI Brain** | `GEMINI_API_KEY` | Get this from Google AI Studio. |
-| **Your Spreadsheet** | `GOOGLE_SHEET_ID` | The ID of the Google Sheet where you write your topics. |
-| **Facebook & IG** | `FACEBOOK_ACCESS_TOKEN` | Created in your Meta Developer portal. |
-| **Voice Size** | `VOICEBOX_MODEL_SIZE` | Use `1.7B` for the best quality. |
-
-### 3. Let's Build!
-1.  Install the project dependencies:
-    ```bash
-    npm install
-    pip install -r voicebox/requirements.txt
-    pip install -r wav2lip/requirements.txt
-    ```
-2.  Install the browser that records the screen:
-    ```bash
-    npx playwright install --with-deps chromium
-    ```
-3.  Start the automation:
-    ```bash
-    node main_automation.js
-    ```
+| **Orchestrator** | Node.js | Manages the sequence, updates sheets, and triggers services. |
+| **AI Brain** | Google Gemini | Intelligent task planning and script processing. |
+| **Voice Engine** | Voicebox (PyTorch) | Zero-shot voice cloning and text-to-speech. |
+| **Sync Engine** | Wav2Lip + GFPGAN | Lip-syncing and face restoration for HD quality. |
+| **Subtitles** | AssemblyAI | Automatic speech-to-text and SRT generation. |
+| **Automation** | GitHub Actions | The "Serverless" engine running the pipeline on a schedule. |
 
 ---
 
-## 📁 What's Inside?
-*   **`main_automation.js`**: The "Boss" that tells everyone what to do.
-*   **`voicebox/`**: The part that learns and speaks in your voice.
-*   **`wav2lip/`**: The "Lip-Sync" engine that makes the video talk.
-*   **`reel-composer/`**: The "Artist" that creates the cool technical animations.
-*   **`final_video/`**: This is where your finished videos go!
+## 🚀 Getting Started
+
+### 1. Prerequisites
+*   **Environment**: Node.js (v20+), Python (3.10), FFmpeg.
+*   **Keys**: You will need a `.env` file containing:
+    *   `GEMINI_API_KEY`, `GOOGLE_SHEET_ID`, `ASSEMBLYAI_API_KEY`, `SUPABASE_URL`, `EMAIL_APP_PASSWORD`.
+
+### 2. Execution
+To trigger the automated pipeline manually or test the cloud logic:
+```bash
+node src/local-support/automation_logic.js
+```
 
 ---
 
-## 💡 Pro Tips
-*   **Simple is better**: When writing topics in your sheet, be clear and direct.
-*   **Reference Audio**: Make sure your `Base-audio.mp3` is clear and doesn't have background noise.
-*   **Lip-Sync Quality**: For the best results, use a video (`Base-vedio.mp4`) where the person is looking directly at the camera.
+## 📂 Project Structure
+*   `src/local-support/`: The core automated pipeline logic.
+*   `voicebox/`: Python-based voice cloning models and inference scripts.
+*   `wav2lip/`: The lip-sync engine including model checkpoints.
+*   `bin/`: Utility scripts for cleanup, testing, and diagnostics.
+*   `.github/workflows/`: Cloud automation schedules (Cron configurations).
 
 ---
+
+## 🤝 Community & Contribution
+Feel free to contribute, open issues, or start a discussion! We are always looking for ways to optimize CPU-based rendering and improve zero-shot voice cloning accuracy.
+
+---
+
+> [!NOTE]  
+> This is a **technical framework** designed for automated digital content creation. It demonstrates the integration of multiple SOTA AI models into a single, cohesive, zero-cost production pipeline.
