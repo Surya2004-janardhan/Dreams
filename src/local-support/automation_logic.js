@@ -92,18 +92,18 @@ async function runDailyAutomation() {
         // 7. Supabase Upload
         currentStep = "Supabase Upload";
         supabaseInfo = await uploadToSupabaseAndGetLink(FINAL_VIDEO, `Daily_${cleanTitle}`);
-        // No longer uploading SRT to Supabase - sending via email instead
+        const audioUpload = await uploadToSupabaseAndGetLink(audioPath, `Daily_Audio_${cleanTitle}`);
+        const srtUpload = await uploadToSupabaseAndGetLink(srtPath, `Daily_SRT_${cleanTitle}`);
 
         // 8. Notification & Sheet Update
         currentStep = "Notifications";
         if (task.rowId > 0) {
-            // Updated for: Title, scripts, status, Links, Timestamp
-            // We put the primary video link in the 'Links' column.
-            await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink);
+            // Update sheet with: status, videoLink, audioLink, srtLink
+            await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink, audioUpload.publicLink, srtUpload.publicLink);
         }
 
-        // Send specialized email with SRT attached
-        await sendLocalSupportNotification(task, supabaseInfo.publicLink, null, srtPath);
+        // Send specialized email with Video link and SRT attached
+        await sendLocalSupportNotification(task, supabaseInfo.publicLink, srtUpload.publicLink, srtPath);
 
         logger.info(`✨ DAILY AUTOMATION SUCCESSFUL | Time: ${((Date.now() - sessionStart)/1000).toFixed(2)}s`);
 

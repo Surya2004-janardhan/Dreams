@@ -3,13 +3,14 @@ name: Daily Local-Support Automation
 on:
   schedule:
     # 1 AM IST = 19:30 UTC
-    - cron: '30 19 * * *'
-    #3 am ist 
-    - cron: '30 21 * * *'
-    # 1 PM IST = 7:30 UTC
+    - cron: '30 1 * * *'
+    - cron: '30 4 * * *'
     - cron: '30 7 * * *'
-    #idk ist
-    - cron: '30 9 * * *'
+    - cron: '30 10 * * *'
+    - cron: '30 13 * * *'
+    - cron: '30 16 * * *'
+    - cron: '30 19 * * *'
+    - cron: '30 22 * * *'
   workflow_dispatch: # Allow manual trigger
 
 jobs:
