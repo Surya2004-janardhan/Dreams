@@ -64,7 +64,7 @@ async function main() {
         let audioPath;
         
         // Configuration for Cloned Voice
-        const REF_AUDIO = path.resolve('Base-audio.mp3'); 
+        const REF_AUDIO = path.resolve(__dirname, '../assets/Base-audio.mp3'); 
         const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
@@ -72,7 +72,7 @@ async function main() {
         }
 
         if (!fs.existsSync(REF_AUDIO)) {
-            logger.warn(`⚠️ Base-audio.mp3 not found in root. Falling back to Gemini TTS.`);
+            logger.warn(`⚠️ Base-audio.mp3 not found in assets. Falling back to Gemini TTS.`);
             const audioResult = await generateAudioWithBatchingStrategy(script);
             audioPath = audioResult.conversationFile;
         } else {
@@ -115,9 +115,9 @@ async function main() {
         logger.info("👄 Step 3: Performing Wav2Lip Sync (Dynamic Talking Head)...");
         const step3Start = Date.now();
         
-        // Use Base-vedio.mp4 from root as the source face for lip-syncing
-        const WAV2LIP_BASE = path.resolve('Base-vedio.mp4'); 
-        const INIT_MERGE = path.resolve('merged_output.mp4');
+        // Use Base-vedio.mp4 from assets as the source face for lip-syncing
+        const WAV2LIP_BASE = path.resolve(__dirname, '../assets/Base-vedio.mp4'); 
+        const INIT_MERGE = path.resolve(__dirname, '../merged_output.mp4');
         
         if (!fs.existsSync(WAV2LIP_BASE)) {
             logger.error(`❌ Base-vedio.mp4 not found in root: ${WAV2LIP_BASE}`);
