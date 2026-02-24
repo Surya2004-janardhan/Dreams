@@ -16,7 +16,7 @@ Your workflow requires 4 secrets to be configured in GitHub:
 | Secret Name                        | Description                        |
 |------------------------------------|------------------------------------|
 | `EMAIL_USER`                       | `studypurp01@gmail.com`            |
-| `EMAIL_PASS`                       | `jxim sdhx jwkr ebtb`              |
+| `EMAIL_PASS`                       | `--- --- --- --- --- `              |
 | `RECIPIENT_EMAIL`                  | `chintalajanardhan2004@gmail.com`  |
 | `GOOGLE_CREDENTIALS_JSON`          | Base6 Google credentials.json file |
 
@@ -121,7 +121,7 @@ Write-Output $encoded
 
 # 2. Add 4 secrets to GitHub (Settings → Secrets and variables → Actions):
 EMAIL_USER=studypurp01@gmail.com
-EMAIL_PASS=jxim sdhx jwkr ebtb
+EMAIL_PASS=---------
 RECIPIENT_EMAIL=chintalajanardhan2004@gmail.com
 GOOGLE_CREDENTIALS_JSON=<paste-the-base64-encoded-string>
 
