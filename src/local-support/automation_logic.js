@@ -67,7 +67,7 @@ async function runDailyAutomation() {
 
         // 4. Lip-Sync
         currentStep = "Wav2Lip Processing";
-        const WAV2LIP_BASE = path.resolve('Base-vedio.mp4');
+        const WAV2LIP_BASE = path.resolve('assets/Base-vedio.mp4');
         const SYNCED_VIDEO = path.resolve('daily_synced.mp4');
         await syncLip(audioPath, WAV2LIP_BASE, SYNCED_VIDEO);
 

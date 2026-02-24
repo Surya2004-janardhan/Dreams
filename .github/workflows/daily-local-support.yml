@@ -34,12 +34,13 @@ jobs:
           # Delete existing pointer files to ensure fresh download
           rm -f wav2lip/checkpoints/wav2lip_gan.pth
           rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
-          rm -f Base-vedio.mp4
+          rm -f assets/Base-vedio.mp4
 
           # Download using gdown (IDs from main automation)
           gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
           gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
-          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O Base-vedio.mp4
+          mkdir -p assets
+          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O assets/Base-vedio.mp4
           wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
 
       - name: Setup Node.js

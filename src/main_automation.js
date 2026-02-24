@@ -6,11 +6,11 @@ const ffmpegPath = require('ffmpeg-static');
 ffmpeg.setFfmpegPath(ffmpegPath);
 require('dotenv').config();
 
-const { getNextTask, updateSheetStatus } = require('./src/services/sheetsService');
-const { generateScript, generateVisualPrompt } = require('./src/services/scriptService');
-const { generateAudioWithBatchingStrategy } = require('./src/services/audioService');
-const { generateSRT } = require('./src/services/newFeaturesService');
-const { createSubtitlesFromAudio } = require('./src/utils/subtitles');
+const { getNextTask, updateSheetStatus } = require('./services/sheetsService');
+const { generateScript, generateVisualPrompt } = require('./services/scriptService');
+const { generateAudioWithBatchingStrategy } = require('./services/audioService');
+const { generateSRT } = require('./services/newFeaturesService');
+const { createSubtitlesFromAudio } = require('./utils/subtitles');
 const { 
     uploadToYouTube, 
     uploadToInstagramWithUrl, 
@@ -19,11 +19,11 @@ const {
     deleteFromSupabase,
     generateUnifiedSocialMediaCaption,
     
-} = require('./src/services/socialMediaService');
-const { sendErrorNotification, sendSuccessNotification } = require('./src/services/emailService');
+} = require('./services/socialMediaService');
+const { sendErrorNotification, sendSuccessNotification } = require('./services/emailService');
 const Groq = require("groq-sdk");
 const logger = require("./src/config/logger");
-const { syncLip } = require('./src/services/wav2lipService');
+const { syncLip } = require('./services/wav2lipService');
 const voiceboxService = require('./src/services/voiceboxService');
 
 async function main() {
