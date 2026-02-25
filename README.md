@@ -36,6 +36,7 @@ Your Google Sheet must have the following headers (case-insensitive):
 ## 📁 Asset Specifications (Requirements)
 
 For the best results, your template assets must follow these constraints:
+**For local use case you must keep the below mentioned three files(exact file names) in the assets directory**
 
 ### 🎬 `assets/Base-vedio.mp4`
 - **Fallback**: If not checked into Git, define `BASE_VIDEO_DRIVE_ID` in GitHub Secrets to download it on-the-fly.
@@ -90,8 +91,8 @@ Follow these steps to run the pipeline on your local machine:
 
 1.  **Clone & Install**:
     ```bash
-    git clone https://github.com/your-repo/dreams-ai.git
-    cd dreams-ai
+    git clone https://github.com/your-repo/dreams.git
+    cd dreams
     npm install
     ```
 2.  **Environment Configuration**:
@@ -100,11 +101,43 @@ Follow these steps to run the pipeline on your local machine:
 3.  **Prepare Assets**:
     - Place your 100s+ template video at `assets/Base-vedio.mp4`.
     - Place your voice sample (audio) at `assets/Base-audio.mp3`.
-4.  **Run Automation**:
+    - Place your background music at `assets/Bgm.m4a`.
+4.  **Run Reel-composer**:
     ```bash
-    # Ensure any local dev server (for composer) is stopped or on port 3000
+    cd reel-composer
+    npm install 
+    npm run dev
+    ```
+5.  **Voicebox Setup**:
+    - You dont have to do anything the base Qwen3-TTS-12Hz-1.7B model is automatically loaded from the system global HuggingFace cache for the first time it is gonna download automatically.
+
+6.  **Wav2lip Setup**:
+    Wav2Lip requires pre-trained models. Run these commands from the root to download them:
+    ```bash
+    # Install gdown if you don't have it
+    pip install gdown
+
+    # Create directories
+    mkdir -p wav2lip/checkpoints
+    mkdir -p wav2lip/face_detection/detection/sfd
+
+    # Download Models (Google Drive)
+    gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
+    gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
+
+    # Download GFPGAN (Direct GitHub Link)
+    curl -L https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -o wav2lip/checkpoints/GFPGANv1.4.pth
+    ```
+7.  **Run Automation**:
+    ```bash
+    # Ensure that all above steps are properly done
     node src/main_automation.js
     ```
+
+## 📝 Notes
+-  You can see the global logs while running the automation if you encounter any issue the detailed logs help you to understand the error or you can raise an issue vai github.
+-  The repo is not so clean and modularized, soon i will make it clean and modularized.
+-  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
 
 ### 🐳 Dockerized Setup (Recommended)
 Run the entire pipeline in a consistent, isolated environment:
