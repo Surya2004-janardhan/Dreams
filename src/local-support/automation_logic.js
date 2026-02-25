@@ -51,7 +51,7 @@ async function runDailyAutomation() {
 
         // 2. Audio (Cloned Voice)
         currentStep = "Audio Generation";
-        const REF_AUDIO = path.resolve('Base-audio.mp3');
+        const REF_AUDIO = path.resolve('assets/Base-audio.mp3');
         const GEN_AUDIO = path.join(process.cwd(), 'audio', `daily_voice_${Date.now()}.wav`);
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
