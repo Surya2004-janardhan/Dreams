@@ -57,3 +57,7 @@ The pipeline is defined in `.github/workflows/reel-automation.yml`.
 1. **Asset Stability**: Ensure `assets/Base-vedio.mp4` is at least 100s long to prevent the lip-sync engine from running out of frames for long scripts.
 2. **Token Expiry**: Regularly check if your Instagram/Facebook access tokens are still valid.
 3. **Runner Limits**: If a video takes too long (e.g., high-quality GFPGAN), the job might time out (~6 hours limit).
+4. **Background Music (BGM)**:
+   - The pipeline expects `assets/Bgm.m4a` (or `.mp3`/`.wav`).
+   - **Default Volume**: Set to **20% (`0.2`)** to ensure primary audio clarity.
+   - **Customization**: To change the volume, modify the `filter: 'volume', options: '0.2'` line in `src/main_automation.js` within the `runCompositor` function.

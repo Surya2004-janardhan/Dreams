@@ -48,6 +48,12 @@ For the best results, your template assets must follow these constraints:
 - **Duration**: **< 10 seconds** (Best for zero-shot voice cloning quality).
 - **Quality**: Crystal clear audio, no background noise, minimal reverb.
 
+### 🎵 `assets/Bgm.m4a`
+- **Purpose**: Background music for the final reel.
+- **Default Volume**: **0.2 (20%)** in the automated pipeline.
+- **Formats Supported**: `.m4a`, `.mp3`, `.wav`.
+- **Casing**: Supported names include `bgm`, `Bgm`, or `BGM`.
+
 ---
 
 ### 🔐 GitHub Actions Secrets (Environment Variables)
