@@ -37,12 +37,25 @@ jobs:
           rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
           rm -f assets/Base-vedio.mp4
 
-          # Download using gdown (IDs from main automation)
-          gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
-          gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
+          # Download using gdown (Attempt with --fuzzy for better robustness)
+          echo "⬇️ Downloading Wav2Lip GAN Model..."
+          gdown --fuzzy 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth || echo "⚠️ gdown failed for GAN model, please check Drive permissions or quota."
+          
+          echo "⬇️ Downloading Face Detection Model..."
+          gdown --fuzzy 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth || echo "⚠️ gdown failed for S3FD model."
+          
           mkdir -p assets
-          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O assets/Base-vedio.mp4
-          wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
+          echo "⬇️ Downloading Base Video..."
+          gdown --fuzzy 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O assets/Base-vedio.mp4 || echo "⚠️ gdown failed for Base Video."
+          
+          echo "⬇️ Downloading GFPGAN Model..."
+          wget -q https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -O wav2lip/checkpoints/GFPGANv1.4.pth
+          
+          # Final validation of critical models
+          if [ ! -s wav2lip/checkpoints/wav2lip_gan.pth ]; then
+            echo "❌ CRITICAL: wav2lip_gan.pth is missing or empty. Pipeline will fail."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
