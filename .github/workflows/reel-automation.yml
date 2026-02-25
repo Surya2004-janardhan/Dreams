@@ -1,0 +1,89 @@
+name: Reels Automation Pipeline
+
+on:
+  schedule:
+    # Runs at 6:00 AM UTC (11:30 AM IST)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install gdown
+        run: pip install gdown
+
+      - name: Download Models and Base Video
+        run: |
+          mkdir -p wav2lip/checkpoints
+          mkdir -p wav2lip/face_detection/detection/sfd
+          mkdir -p assets
+          
+          # Download using gdown to assets folder
+          gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
+          gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
+          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O assets/Base-vedio.mp4
+          wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: |
+          npm install
+          cd reel-composer && npm install
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 xvfb
+
+      - name: Install Python Dependencies
+        run: |
+          pip install -r wav2lip/requirements.txt
+          pip install -r voicebox/requirements.txt
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Reels Automation Pipeline
+        run: |
+          cd reel-composer && npm run dev -- --port 3000 &
+          npx wait-on http://localhost:3000 --timeout 60000
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" node src/main_automation.js
+        env:
+          PORT: 3000
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EMAIL_APP_PASSWORD: ${{ secrets.EMAIL_APP_PASSWORD }}
+          NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
+          FORCE_CPU: 'true'
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-artifacts
+          path: |
+            *.mp4
+            *.srt
+            *.log
+            error_screenshot_*.png
