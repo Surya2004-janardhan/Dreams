@@ -4,6 +4,9 @@
 
 ---
 
+## 💡 Motivation
+> "Ideas arrive at any time; development shouldn't be the bottleneck. Dreams AI bridges the gap between a single-row thought and a multi-platform social media presence, handling the script, voice, visuals, and distribution while you sleep."
+
 ## 🏗️ How it Works
 1.  **Trigger**: GitHub Actions wakes up via a **Cron Job** and checks your Google Sheet for rows marked as "Not Posted".
 2.  **Voice Cloning**: Your personalized AI voice is synthesized using a reference audio sample in `assets/Base-audio.mp3`.
@@ -74,5 +77,64 @@ Add these to your **Settings > Secrets and variables > Actions**.
 
 ---
 
+## 🚀 Setup & Installation
+
+### 🛠️ Local Setup (NPM)
+Follow these steps to run the pipeline on your local machine:
+
+1.  **Clone & Install**:
+    ```bash
+    git clone https://github.com/your-repo/dreams-ai.git
+    cd dreams-ai
+    npm install
+    ```
+2.  **Environment Configuration**:
+    - Create a `.env` file in the root.
+    - Copy keys from [`.env.example`](.env.example) and fill them in.
+3.  **Prepare Assets**:
+    - Place your 100s+ template video at `assets/Base-vedio.mp4`.
+    - Place your voice sample (audio) at `assets/Base-audio.mp3`.
+4.  **Run Automation**:
+    ```bash
+    # Ensure any local dev server (for composer) is stopped or on port 3000
+    node src/main_automation.js
+    ```
+
+### 🐳 Dockerized Setup (Recommended)
+Run the entire pipeline in a consistent, isolated environment:
+
+1.  **Build the Container**:
+    ```bash
+    docker-compose build
+    ```
+2.  **Configure Environment**:
+    - Ensure your `.env` file is populated.
+3.  **Run the Pipeline**:
+    ```bash
+    docker-compose up
+    ```
+    *Note: The container will handle all system dependencies like FFmpeg and Playwright automatically.*
+
+---
+
 ## 📜 Documentation
 For a deep dive into setting up GitHub Actions infrastructure and secrets, see **[.github/workflow.md](.github/workflow.md)**.
+
+## Note
+- This is only a prototype, it is not a production-ready system.
+
+## Tips
+-  Refactor script, captions, descriptions prompts to AI as per your need.
+-  Refactor the visual prompt to AI as per your need.
+-  Refactor sheet service as per your sheet layout.
+-  Modify the email service as per your need. 
+-  Update with new social services if u want to add new platform.
+-  Utilize strong models if you have access to them (e.g. Gemini 3 Pro, GPT-5, etc.).
+
+
+## Contributions
+-  Feel free to open issue or pull request.
+-  Willing to discuss new features or improvements.
+
+## License
+-  This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
