@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs at 6:00 AM UTC (11:30 AM IST) uncomment below to run automatically
     # Add more cron jobs as per your need
-    # - cron: '0 6 * * *'
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
