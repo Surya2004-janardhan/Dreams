@@ -3,8 +3,26 @@
 **Dreams AI** is an end-to-end automated pipeline that transforms Google Sheet ideas into high-fidelity AI videos—running entirely on GitHub Actions for $0 cost.
 
 ---
+**Estimated Run Time for full Automation**
+**Note**: This is an estimated run time and may vary depending on the speed of the GitHub Actions runner and the size of the video.
+**CPU**: 
+- **Script Generation**: 3 minutes
+- **Voice Cloning**: 7 minutes
+- **Lip-Sync**: 4 hours( Advanced GAN)
+- **Composition**: 20 minutes
+- **Upload**: 10 minutes
+- **Total**: 4 hours 40 minutes
+
+**GPU**: 
+- **Script Generation**: 3 minutes
+- **Voice Cloning**: 7 minutes
+- **Lip-Sync**: 20 minutes
+- **Composition**: 20 minutes
+- **Upload**: 10 minutes
+- **Total**: 1 hour 2 minutes
 
 ## 💡 Motivation
+> It all started from a young boy who had intrest in doing content on social media.
 > "Ideas arrive at any time; development shouldn't be the bottleneck. Dreams AI bridges the gap between a single-row thought and a multi-platform social media presence, handling the script, voice, visuals, and distribution while you sleep."
 
 ## 🏗️ How it Works
@@ -140,10 +158,14 @@ Follow these steps to run the pipeline on your local machine:
 ## 📝 Notes
 -  **Mandatory Voicebox**: Gemini TTS support has been removed to ensure a consistent, professional brand voice. You **must** have `Base-audio.mp3` in your assets.
 -  **Fail-Fast Workflow**: If Voicebox synthesis fails, the workflow will stop immediately to avoid generating low-quality content, and you will receive a notification via the configured email service.
+-  **My suggestions**:
 -  You can see the global logs while running the automation if you encounter any issue the detailed logs help you to understand the error or you can raise an issue vai github.
 -  The repo is not so clean and modularized, soon i will make it clean and modularized.
 -  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version of this repo on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
 -  You can customize several sections of this repo as per your requirements.
+
+**Visuals are bottleneck, refactoring the base prompt using strong model wins**
+
 **At any step the automation fails it cleans the directories sends a detailed error message vai email service applies the same if the automation gets success it sends the links of the published content**
 
 ### 🐳 Dockerized Setup (Recommended)
