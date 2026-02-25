@@ -45,7 +45,10 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 
 ## 🚀 Workflow Execution
 
-The pipeline is defined in `.github/workflows/reel-automation.yml`.
+The pipeline is defined in `.github/workflows/reel-automation.yml` and is designed for **Triple-Platform Distribution**:
+- **YouTube Shorts**: Direct upload via OAuth 2.0.
+- **Instagram Reels**: Automated push via Supabase staging and Meta Graph API.
+- **Facebook Reels**: Automated push via Supabase staging and Meta Graph API.
 
 - **Auto-Run**: It triggers every day at **6:00 AM UTC**(CRON jobs are adjustable you can set how you like).
 - **Manual-Run**: 

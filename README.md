@@ -49,11 +49,14 @@ For the best results, your template assets must follow these constraints:
 - **Duration**: **< 10 seconds** (Best for zero-shot voice cloning quality).
 - **Quality**: Crystal clear audio, no background noise, minimal reverb.
 
-### 🎵 `assets/Bgm.m4a`
+### � `assets/Bgm.m4a`
 - **Purpose**: Background music for the final reel.
 - **Default Volume**: **0.2 (20%)** in the automated pipeline.
 - **Formats Supported**: `.m4a`, `.mp3`, `.wav`.
-- **Casing**: Supported names include `bgm`, `Bgm`, or `BGM`.
+
+### �🌟 Publishing Capabilities
+- **Triple-Platform Push**: Automatically uploads unique reels to **YouTube Shorts**, **Instagram Reels**, and **Facebook Reels**.
+- **Deterministic Voice**: Uses **Voicebox** (Qwen3-TTS) as the mandatory audio engine.
 
 ---
 
@@ -135,10 +138,13 @@ Follow these steps to run the pipeline on your local machine:
     ```
 
 ## 📝 Notes
+-  **Mandatory Voicebox**: Gemini TTS support has been removed to ensure a consistent, professional brand voice. You **must** have `Base-audio.mp3` in your assets.
+-  **Fail-Fast Workflow**: If Voicebox synthesis fails, the workflow will stop immediately to avoid generating low-quality content, and you will receive a notification via the configured email service.
 -  You can see the global logs while running the automation if you encounter any issue the detailed logs help you to understand the error or you can raise an issue vai github.
 -  The repo is not so clean and modularized, soon i will make it clean and modularized.
 -  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version of this repo on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
 -  You can customize several sections of this repo as per your requirements.
+**At any step the automation fails it cleans the directories sends a detailed error message vai email service applies the same if the automation gets success it sends the links of the published content**
 
 ### 🐳 Dockerized Setup (Recommended)
 Run the entire pipeline in a consistent, isolated environment:
