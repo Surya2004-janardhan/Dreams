@@ -15,6 +15,18 @@ async function syncLip(audioPath, facePath, outputPath, options = {}) {
     const absAudioPath = path.resolve(audioPath);
     const absFacePath = path.resolve(facePath);
     const absOutputPath = path.resolve(outputPath);
+
+    // GUARD: Check if face video is a tiny stub (e.g., LFS pointer or corrupted)
+    if (fs.existsSync(absFacePath)) {
+        const stats = fs.statSync(absFacePath);
+        if (stats.size < 1000000) { // Less than 1MB is almost certainly a stub/LFS pointer for a video
+            throw new Error(
+                `CRITICAL: Base video at ${facePath} is only ${(stats.size/1024).toFixed(2)} KB. ` +
+                `This is likely a Git LFS pointer or corrupted file. ` +
+                `Please ensure you have pulled the actual file or deleted the stub to allow auto-download.`
+            );
+        }
+    }
     // Use "Elite" Sync Settings: bottom padding for chin + no smoothing for snapping
     const pads = options.pads || [0, 20, 0, 0]; // Extra bottom padding for chin movement
     const nosmooth = options.nosmooth !== undefined ? options.nosmooth : true; // Default to snap for tech content
