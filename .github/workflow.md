@@ -1,6 +1,6 @@
-# ⚙️ GitHub Workflow Setup & Secrets
+# ⚙️ GitHub Actions Setup & Secrets
 
-This document provides a clear guide on configuring the cloud-based automation for Dreams AI.
+This document explains how to set up and manage the GitHub Actions automation for Dreams AI.
 
 ## 🔐 Full Secrets Reference
 

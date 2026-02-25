@@ -19,13 +19,14 @@ Your Google Sheet must have the following headers (case-insensitive):
 
 | Column Header | Description |
 | :--- | :--- |
-| **Title** (or `idea`, `topic`) | The theme/topic for the AI to expand into a script. |
-| **scripts** | (Optional) If provided, the AI uses this text directly instead of generating one. |
-| **status** | Must be `Not Posted` to trigger the pipeline. Will update to `Processing` or `Posted` automatically. |
-| **YT Link** | (Output) Updated with the published YouTube Shorts link. |
-| **Insta Link** | (Output) Updated with the published Instagram Reel link. |
-| **FB Link** | (Output) Updated with the published Facebook Video link. |
-| **Timestamp** | (Output) Updated with the completion time. |
+| **SNO** | Serial Number. |
+| **Idea** | The theme/topic for the AI to expand into a script. |
+| **Description** | Context for the AI to understand the core message. |
+| **Status** | Must be `Not Posted` to trigger. Updates to `Processing` or `Posted`. |
+| **YT Link** | (Output) Updated with the Published YouTube link. |
+| **Insta Link** | (Output) Updated with the Published Instagram Reel link. |
+| **FB Link** | (Output) Updated with the Published Facebook Video link. |
+| **Timestamp** | (Output) Updated with completion time. |
 
 ---
 
@@ -47,7 +48,7 @@ For the best results, your template assets must follow these constraints:
 
 ## 🔐 Environment Variables (All)
 
-Add these to your `.env` for local testing or **GitHub Secrets** for cloud automation.
+Add these to your `.env` for local testing or **GitHub Secrets** for GitHub Actions automation.
 
 ### 🧠 AI & Logic
 - `GEMINI_API_KEY`: Primary key for scripts and logic.
@@ -78,4 +79,4 @@ Add these to your `.env` for local testing or **GitHub Secrets** for cloud autom
 ---
 
 ## 📜 Documentation
-For a deep dive into setting up the cloud infrastructure and secrets, see **[.github/workflow.md](.github/workflow.md)**.
+For a deep dive into setting up GitHub Actions infrastructure and secrets, see **[.github/workflow.md](.github/workflow.md)**.
