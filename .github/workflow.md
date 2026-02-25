@@ -1,43 +1,52 @@
-# ⚙️ GitHub Workflow Setup
+# ⚙️ GitHub Workflow Setup & Secrets
 
-This document explains how to set up and manage the cloud-based automation for Dreams AI.
+This document provides a clear guide on configuring the cloud-based automation for Dreams AI.
 
-## 🚀 Deployment Steps
+## 🔐 Full Secrets Reference
 
-### 1. Google Cloud Setup
-1. Create a **Service Account** in Google Cloud Console.
-2. Enable **Google Sheets API**.
-3. Download the JSON key.
-4. Convert the JSON key to **Base64** string:
-   ```bash
-   [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content "key.json" -Raw)))
-   ```
-5. Save this as `GOOGLE_CREDENTIALS` in GitHub Secrets.
+Add these variables to **Settings > Secrets and variables > Actions > New repository secret**.
 
-### 2. GitHub Secrets Configuration
-Add the following secrets in **Settings > Secrets and variables > Actions**:
+### 1. Google Integration
+- **`GOOGLE_CREDENTIALS`**: 
+  - Base64 encoded JSON key from your Google Service Account.
+  - *How to get*: Create Service Account > Keys > Download JSON > Encode using `[Convert]::ToBase64String`.
+- **`GOOGLE_SHEET_ID`**: The ID of your automation dashboard.
+- **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`**: From Google Cloud Console > Credentials > OAuth 2.0 Client IDs.
+- **`YOUTUBE_REFRESH_TOKEN`**: Generate this using the OAuth Playground or a custom script to allow the runner to upload to YouTube without manual login.
 
-| Secret | Description |
-| :--- | :--- |
-| `GEMINI_API_KEY` | Google Gemini API Key |
-| `SHEET_ID` | Your Google Sheet ID |
-| `GOOGLE_CREDENTIALS` | Base64 encoded Google service account JSON |
-| `SUPABASE_URL` | Your Supabase Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Service Role Key |
-| `ASSEMBLYAI_API_KEY` | API Key for SRT generation |
-| `EMAIL_USER` | Gmail address for notifications |
-| `EMAIL_APP_PASSWORD` | App-specific password for the email |
+### 2. AI & Media
+- **`GEMINI_API_KEY`**: Your Google AI Studio API key.
+- **`ASSEMBLYAI_API_KEY`**: From AssemblyAI dashboard (for auto-subtitles).
 
-### 3. Workflow Activation
-- The main automation workflow is located in `.github/workflows/reels-automation.yml`.
-- It is configured to run on a **schedule** (check the `cron` settings).
-- You can also trigger it manually from the **Actions** tab by selecting the workflow and clicking **Run workflow**.
+### 3. Social Media (Graph API)
+- **`INSTAGRAM_ACCOUNT_ID`**: Get this from your Facebook Page settings (Connected Accounts).
+- **`INSTAGRAM_ACCESS_TOKEN`**: Generate a long-lived token via the Meta for Developers Graph Explorer.
+- **`FACEBOOK_PAGE_ID`**: Your Page ID.
+- **`FACEBOOK_ACCESS_TOKEN`**: A permanent Page Access Token.
 
-## 🛠️ Performance & Scalability
-- **Runner**: Uses `ubuntu-latest`.
-- **Execution Time**: Average 15-20 minutes per video.
-- **Cost**: $0 (leveraging GitHub Actions free minutes and free-tier APIs).
+### 4. Supabase (Storage)
+- **`SUPABASE_URL`**: `https://xyz.supabase.co`
+- **`SUPABASE_SERVICE_ROLE_KEY`**: The secret `service_role` key (bypasses RLS for automated uploads).
+- **`SUPABASE_BUCKET`**: The name of the bucket (e.g., `videos`). Make sure it is public or has appropriate policies.
 
-## 📄 Troubleshooting
-- Check the **Actions Logs** for specific step failures.
-- Ensure your Google Sheet has the correct column headers: `Title`, `scripts`, `status`.
+### 5. Notifications
+- **`EMAIL_USER`**: Your Gmail address.
+- **`EMAIL_APP_PASSWORD`**: Generate this in Google Account > Security > App Passwords.
+- **`NOTIFICATION_EMAIL`**: Where you want the final links delivered.
+
+---
+
+## 🚀 Workflow Execution
+
+The pipeline is defined in `.github/workflows/reel-automation.yml`.
+
+- **Auto-Run**: It triggers every day at **6:00 AM UTC**.
+- **Manual-Run**: 
+  1. Go to the **Actions** tab.
+  2. Select **Reels Automation Pipeline**.
+  3. Click **Run workflow**.
+
+## 🛡️ Best Practices
+1. **Asset Stability**: Ensure `assets/Base-vedio.mp4` is at least 100s long to prevent the lip-sync engine from running out of frames for long scripts.
+2. **Token Expiry**: Regularly check if your Instagram/Facebook access tokens are still valid.
+3. **Runner Limits**: If a video takes too long (e.g., high-quality GFPGAN), the job might time out (~6 hours limit).

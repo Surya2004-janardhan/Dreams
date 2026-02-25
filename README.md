@@ -13,36 +13,69 @@
 
 ---
 
-## 🚀 Quick Setup
+## 📋 Google Sheet Setup
 
-### 1. Repository Setup
-- Clone this repository.
-- Ensure your `assets/` folder contains `Base-audio.mp3` and `Base-vedio.mp4`.
+Your Google Sheet must have the following headers (case-insensitive):
 
-### 2. Environment Configuration
-Create a `.env` file for local testing or add these to **GitHub Secrets**:
-- `GEMINI_API_KEY`: For script and visual generation.
-- `GOOGLE_SHEET_ID`: Your automation dashboard.
-- `GOOGLE_CREDENTIALS`: Search for "Base64 Service Account" in docs.
-- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`: For video storage.
-- `EMAIL_USER` / `EMAIL_APP_PASSWORD`: For status notifications.
-
-### 3. Execution
-The system is designed for **GitHub Actions**. To test manually:
-```bash
-node src/main_automation.js
-```
+| Column Header | Description |
+| :--- | :--- |
+| **Title** (or `idea`, `topic`) | The theme/topic for the AI to expand into a script. |
+| **scripts** | (Optional) If provided, the AI uses this text directly instead of generating one. |
+| **status** | Must be `Not Posted` to trigger the pipeline. Will update to `Processing` or `Posted` automatically. |
+| **YT Link** | (Output) Updated with the published YouTube Shorts link. |
+| **Insta Link** | (Output) Updated with the published Instagram Reel link. |
+| **FB Link** | (Output) Updated with the published Facebook Video link. |
+| **Timestamp** | (Output) Updated with the completion time. |
 
 ---
 
-## 📂 Structure
-- `src/`: Core automation logic and cloud services.
-- `assets/`: Media templates (Reference audio & video).
-- `voicebox/`: Zero-shot voice cloning engine.
-- `wav2lip/`: Precision lip-syncing engine.
-- `.github/workflows/`: Cloud scheduling configurations.
+## 📁 Asset Specifications (Requirements)
+
+For the best results, your template assets must follow these constraints:
+
+### 🎬 `assets/Base-vedio.mp4`
+- **Duration**: **100 seconds minimum** (Ensures enough buffer for long scripts).
+- **Framing**: **Close-up or Half-body** shot.
+- **Stability**: **Fixed frame** (Static camera, neutral background).
+- **Movement**: Natural blinking and slight head movement is okay, but avoid sudden shifts.
+
+### 🎤 `assets/Base-audio.mp3`
+- **Duration**: **< 10 seconds** (Best for zero-shot voice cloning quality).
+- **Quality**: Crystal clear audio, no background noise, minimal reverb.
+
+---
+
+## 🔐 Environment Variables (All)
+
+Add these to your `.env` for local testing or **GitHub Secrets** for cloud automation.
+
+### 🧠 AI & Logic
+- `GEMINI_API_KEY`: Primary key for scripts and logic.
+- `GEMINI_API_KEY_FOR_VISUALS`: (Optional) Key specialized for visual prompt generation.
+- `ASSEMBLYAI_API_KEY`: Required for automatic subtitle (SRT) generation.
+
+### 📊 Google Services
+- `GOOGLE_SHEET_ID`: The ID from your sheet's URL.
+- `GOOGLE_CREDENTIALS`: Service Account JSON (or Base64 encoded JSON for GitHub).
+- `GOOGLE_CLIENT_ID`: OAuth Client ID for YouTube.
+- `GOOGLE_CLIENT_SECRET`: OAuth Client Secret for YouTube.
+- `YOUTUBE_REFRESH_TOKEN`: Permanent OAuth Refresh Token for YouTube uploads.
+
+### 📱 Social Media (Access Tokens)
+- `INSTAGRAM_ACCOUNT_ID`: Your Instagram Business Account ID.
+- `INSTAGRAM_ACCESS_TOKEN`: Long-lived User Access Token.
+- `FACEBOOK_PAGE_ID`: Your target Facebook Page ID.
+- `FACEBOOK_ACCESS_TOKEN`: Permanent Page Access Token.
+
+### 📤 Cloud Storage & Email
+- `SUPABASE_URL`: Your Supabase Project URL.
+- `SUPABASE_SERVICE_ROLE_KEY`: Service Role Key (needed for bucket uploads).
+- `SUPABASE_BUCKET`: Bucket name for video storage (default: `videos`).
+- `EMAIL_USER`: Gmail address used to send notifications.
+- `EMAIL_APP_PASSWORD`: Gmail App Password (NOT your account password).
+- `NOTIFICATION_EMAIL`: The email address that receives the completion links.
 
 ---
 
 ## 📜 Documentation
-For a deep dive into setting up the cloud infrastructure, see **[.github/workflow.md](.github/workflow.md)**.
+For a deep dive into setting up the cloud infrastructure and secrets, see **[.github/workflow.md](.github/workflow.md)**.
