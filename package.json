@@ -17,8 +17,5 @@
     "wait-on": "^9.0.3",
     "winston": "^3.11.0"
   },
-  "devDependencies": {
-    "@playwright/test": "^1.41.2",
-    "playwright": "^1.41.2"
-  }
+  "devDependencies": {}
 }
