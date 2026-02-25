@@ -67,7 +67,7 @@ Add these to your **Settings > Secrets and variables > Actions**.
 | `GEMINI_API_KEY` | Primary key for scripts and logic. |
 | `ASSEMBLYAI_API_KEY` | Required for automatic subtitle (SRT) generation. |
 | `GOOGLE_SHEET_ID` | The ID from your sheet's URL. |
-| `GOOGLE_CREDENTIALS` | Base64 encoded Service Account JSON. |
+| `GOOGLE_CREDENTIALS` | Service Account JSON. |
 | `GOOGLE_CLIENT_ID` | OAuth Client ID for YouTube. |
 | `GOOGLE_CLIENT_SECRET` | OAuth Client Secret for YouTube. |
 | `YOUTUBE_REFRESH_TOKEN` | OAuth Refresh Token for YouTube. |
@@ -86,20 +86,20 @@ Add these to your **Settings > Secrets and variables > Actions**.
 
 ## 🚀 Setup & Installation
 
-### 🛠️ Local Setup (NPM)
+### 🛠️ Local Setup (npm & pip)
 Follow these steps to run the pipeline on your local machine:
 
 1.  **Clone & Install**:
     ```bash
-    git clone https://github.com/your-repo/dreams.git
-    cd dreams
+    git clone https://github.com/Surya2004-janardhan/Dreams.git
+    cd Dreams
     npm install
     ```
 2.  **Environment Configuration**:
     - Create a `.env` file in the root.
     - Copy keys from [`.env.example`](.env.example) and fill them in.
 3.  **Prepare Assets**:
-    - Place your 100s+ template video at `assets/Base-vedio.mp4`.
+    - Place your 100s+ template video at `assets/Base-vedio.mp4` .
     - Place your voice sample (audio) at `assets/Base-audio.mp3`.
     - Place your background music at `assets/Bgm.m4a`.
 4.  **Run Reel-composer**:
@@ -137,7 +137,8 @@ Follow these steps to run the pipeline on your local machine:
 ## 📝 Notes
 -  You can see the global logs while running the automation if you encounter any issue the detailed logs help you to understand the error or you can raise an issue vai github.
 -  The repo is not so clean and modularized, soon i will make it clean and modularized.
--  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
+-  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version of this repo on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
+-  You can customize several sections of this repo as per your requirements.
 
 ### 🐳 Dockerized Setup (Recommended)
 Run the entire pipeline in a consistent, isolated environment:

@@ -16,10 +16,10 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 ### 2. Google Integration
 - **`GOOGLE_CREDENTIALS`**: 
   - Base64 encoded JSON key from your Google Service Account.
-  - *How to get*: Create Service Account > Keys > Download JSON > Encode using `[Convert]::ToBase64String`.
-- **`GOOGLE_SHEET_ID`**: The ID of your automation dashboard.
+  - *How to get*: Create Service Account > Keys > Download JSON.
+- **`GOOGLE_SHEET_ID`**: The ID of your sheet containing the content ideas(Not the full URL). If you restrict the file to be private ensure you give editor access to the email that is present in the above GOOGLE_CREDENTIALS.
 - **`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`**: From Google Cloud Console > Credentials > OAuth 2.0 Client IDs.
-- **`YOUTUBE_REFRESH_TOKEN`**: Generate this using the OAuth Playground or a custom script to allow the runner to upload to YouTube without manual login.
+- **`YOUTUBE_REFRESH_TOKEN`**: Generate this using the OAuth Playground make sure you have youtube related all permissions enabled in the OAuth Playground.
 
 ### 2. AI & Media
 - **`GEMINI_API_KEY`**: Your Google AI Studio API key.
@@ -34,11 +34,11 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 ### 4. Supabase (Storage)
 - **`SUPABASE_URL`**: `https://xyz.supabase.co`
 - **`SUPABASE_SERVICE_ROLE_KEY`**: The secret `service_role` key (bypasses RLS for automated uploads).
-- **`SUPABASE_BUCKET`**: The name of the bucket (e.g., `videos`). Make sure it is public or has appropriate policies.
+- **`SUPABASE_BUCKET`**: The name of the bucket (e.g., `videos`). Make sure it is public or has appropriate policies(create a bucket named `videos` in your supabase storage).
 
 ### 5. Notifications
-- **`EMAIL_USER`**: Your Gmail address.
-- **`EMAIL_APP_PASSWORD`**: Generate this in Google Account > Security > App Passwords.
+- **`EMAIL_USER`**: Your Gmail address(make sure you use secondary email).
+- **`EMAIL_APP_PASSWORD`**: Generate this in Google Account > Security > App Passwords(make sure you use secondary email).
 - **`NOTIFICATION_EMAIL`**: Where you want the final links delivered.
 
 ---
@@ -47,7 +47,7 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 
 The pipeline is defined in `.github/workflows/reel-automation.yml`.
 
-- **Auto-Run**: It triggers every day at **6:00 AM UTC**.
+- **Auto-Run**: It triggers every day at **6:00 AM UTC**(CRON jobs are adjustable you can set how you like).
 - **Manual-Run**: 
   1. Go to the **Actions** tab.
   2. Select **Reels Automation Pipeline**.
