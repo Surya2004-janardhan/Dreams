@@ -22,9 +22,9 @@ const {
 } = require('./services/socialMediaService');
 const { sendErrorNotification, sendSuccessNotification } = require('./services/emailService');
 const Groq = require("groq-sdk");
-const logger = require("./src/config/logger");
+const logger = require("./config/logger");
 const { syncLip } = require('./services/wav2lipService');
-const voiceboxService = require('./src/services/voiceboxService');
+const voiceboxService = require('./services/voiceboxService');
 
 async function main() {
     logger.info("🚀 STARTING REELS AUTOMATION PIPELINE");
@@ -65,7 +65,7 @@ async function main() {
         
         // Configuration for Cloned Voice
         const REF_AUDIO = path.resolve(__dirname, '../assets/Base-audio.mp3'); 
-        const GEN_AUDIO = path.join(__dirname, 'audio', `cloned_voice_${Date.now()}.wav`);
+        const GEN_AUDIO = path.join(__dirname, '../audio', `cloned_voice_${Date.now()}.wav`);
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) {
             fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
