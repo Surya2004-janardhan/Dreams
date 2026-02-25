@@ -51,7 +51,7 @@ async function runDailyAutomation() {
 
         // 2. Audio (Cloned Voice)
         currentStep = "Audio Generation";
-        const REF_AUDIO = path.resolve('assets/Base-audio.mp3');
+        const REF_AUDIO = path.join(__dirname, '../../assets/Base-audio.mp3');
         const GEN_AUDIO = path.join(process.cwd(), 'audio', `daily_voice_${Date.now()}.wav`);
         
         if (!fs.existsSync(path.dirname(GEN_AUDIO))) fs.mkdirSync(path.dirname(GEN_AUDIO), { recursive: true });
@@ -67,7 +67,7 @@ async function runDailyAutomation() {
 
         // 4. Lip-Sync
         currentStep = "Wav2Lip Processing";
-        const WAV2LIP_BASE = path.resolve('assets/Base-vedio.mp4');
+        const WAV2LIP_BASE = path.join(__dirname, '../../assets/Base-vedio.mp4');
         const SYNCED_VIDEO = path.resolve('daily_synced.mp4');
         await syncLip(audioPath, WAV2LIP_BASE, SYNCED_VIDEO);
 

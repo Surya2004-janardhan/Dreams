@@ -299,7 +299,7 @@ async function runCompositor(vPath, sPath, vPrompt) {
         
         outer: for (const name of bgmNames) {
             for (const ext of bgmExtensions) {
-                const potentialPath = path.resolve(`${name}${ext}`);
+                const potentialPath = path.resolve(__dirname, `../assets/${name}${ext}`);
                 if (fs.existsSync(potentialPath)) {
                     bgmSrc = potentialPath;
                     console.log(`🎵 Found BGM: ${path.basename(bgmSrc)}`);

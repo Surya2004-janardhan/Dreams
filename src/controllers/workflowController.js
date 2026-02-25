@@ -271,7 +271,7 @@ const runCompleteWorkflow = async (taskData) => {
     // Step 4: Get base video (without audio)
     logger.info("🎬 Step 4: Preparing base video");
     currentWorkflow.currentStep = "video/prepare";
-    const baseVideoPath = path.join("assets", "Base-vedio.mp4");
+    const baseVideoPath = path.join(__dirname, "../../assets/Base-vedio.mp4");
     if (!fs.existsSync(baseVideoPath)) {
       throw new Error("Base video not found: assets/Base-vedio.mp4");
     }
