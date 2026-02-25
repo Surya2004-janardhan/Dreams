@@ -10,7 +10,6 @@ const getModel = () => {
     const keys = [
         process.env.GEMINI_API_KEY,
         process.env.GEMINI_API_KEY_FOR_VISUALS,
-        process.env.GEMINI_API_KEY_FOR_AUDIO,
         process.env.GEMINI_API_KEY_FOR_T2T
     ].filter(Boolean);
     const uniqueKeys = [...new Set(keys)];

@@ -8,7 +8,6 @@ require('dotenv').config();
 
 const { getNextTask, updateSheetStatus } = require('./services/sheetsService');
 const { generateScript, generateVisualPrompt } = require('./services/scriptService');
-const { generateAudioWithBatchingStrategy } = require('./services/audioService');
 const { generateSRT } = require('./services/newFeaturesService');
 const { createSubtitlesFromAudio } = require('./utils/subtitles');
 const { 
@@ -72,32 +71,24 @@ async function main() {
         }
 
         if (!fs.existsSync(REF_AUDIO)) {
-            logger.warn(`⚠️ Base-audio.mp3 not found in assets. Falling back to Gemini TTS.`);
-            const audioResult = await generateAudioWithBatchingStrategy(script);
-            audioPath = audioResult.conversationFile;
-        } else {
-            try {
-                // Single-pass synthesis with professional technical educator instructions
-                const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear. Speak naturally with brief pauses at punctuation.";
-                const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
-                
-                // NEW: Implement 0.94 slowdown via FFmpeg
-                const slowedAudio = path.join(path.dirname(GEN_AUDIO), `slowed_${path.basename(GEN_AUDIO)}`);
-                console.log(`⏳ Applying 0.94x slowdown to audio...`);
-                await new Promise((res, rej) => {
-                    ffmpeg(rawAudioPath)
-                        .audioFilters('atempo=0.94')
-                        .on('end', res)
-                        .on('error', rej)
-                        .save(slowedAudio);
-                });
-                audioPath = slowedAudio;
-            } catch (vError) {
-                logger.error(`❌ Voicebox failed: ${vError.message}. Falling back to Gemini TTS.`);
-                const audioResult = await generateAudioWithBatchingStrategy(script);
-                audioPath = audioResult.conversationFile;
-            }
+            throw new Error(`CRITICAL: Base-audio.mp3 not found in assets. Voicebox requires this reference file.`);
         }
+
+        // Single-pass synthesis with professional technical educator instructions
+        const VOICE_INSTRUCT = "Steady, authoritative technical educational delivery. Professional and clear. Speak naturally with brief pauses at punctuation.";
+        const rawAudioPath = await voiceboxService.generateClonedVoice(script, REF_AUDIO, GEN_AUDIO, null, VOICE_INSTRUCT);
+        
+        // NEW: Implement 0.94 slowdown via FFmpeg
+        const slowedAudio = path.join(path.dirname(GEN_AUDIO), `slowed_${path.basename(GEN_AUDIO)}`);
+        console.log(`⏳ Applying 0.94x slowdown to audio...`);
+        await new Promise((res, rej) => {
+            ffmpeg(rawAudioPath)
+                .audioFilters('atempo=0.94')
+                .on('end', res)
+                .on('error', rej)
+                .save(slowedAudio);
+        });
+        audioPath = slowedAudio;
         
         /* GEMINI TTS FALLBACK (Commented out)
         if (fs.existsSync(CACHE_AUDIO)) {
