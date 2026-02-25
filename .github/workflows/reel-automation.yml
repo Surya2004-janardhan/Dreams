@@ -27,7 +27,14 @@ jobs:
           # Download using gdown to assets folder
           gdown 1mF-3k82JnizTvP9R2PWLPsGfOEBa82pr -O wav2lip/checkpoints/wav2lip_gan.pth
           gdown 1hxwNL1lzclbRnyugv1q8rmk6JlqumOoh -O wav2lip/face_detection/detection/sfd/s3fd.pth
-          gdown 1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1 -O assets/Base-vedio.mp4
+          # Conditional Download: Only download if not already in assets (prevents redundant DL if checked into Git)
+          if [ ! -f assets/Base-vedio.mp4 ]; then
+            echo "🎬 Base video not found in assets, downloading..."
+            gdown ${{ secrets.BASE_VIDEO_DRIVE_ID || '1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1' }} -O assets/Base-vedio.mp4
+          else
+            echo "✅ Base video already exists in assets, skipping download."
+          fi
+          
           wget https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth -P wav2lip/checkpoints/
 
       - name: Setup Node.js

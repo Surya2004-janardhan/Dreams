@@ -6,7 +6,14 @@ This document explains how to set up and manage the GitHub Actions automation fo
 
 Add these variables to **Settings > Secrets and variables > Actions > New repository secret**.
 
-### 1. Google Integration
+### 1. External Media & Models
+- **`BASE_VIDEO_DRIVE_ID`**: 
+  - The Google Drive ID of your template video.
+  - *Requirement*: 100s+ duration, fixed frame, close-up/half-body.
+  - *Fallback*: The workflow only downloads this if `assets/Base-vedio.mp4` is missing from the repo. This is recommended to keep the repository size small.
+  - *Recommendation*: Use of this secret helps bypass GitHub's 100MB file limit for repos.
+
+### 2. Google Integration
 - **`GOOGLE_CREDENTIALS`**: 
   - Base64 encoded JSON key from your Google Service Account.
   - *How to get*: Create Service Account > Keys > Download JSON > Encode using `[Convert]::ToBase64String`.
