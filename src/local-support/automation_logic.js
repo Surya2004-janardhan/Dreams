@@ -102,8 +102,15 @@ async function runDailyAutomation() {
             await updateSheetStatus(task.rowId, "Local Support Posted", supabaseInfo.publicLink, audioUpload.publicLink, srtUpload.publicLink);
         }
 
-        // Send specialized email with Video link and SRT attached
-        await sendLocalSupportNotification(task, supabaseInfo.publicLink, srtUpload.publicLink, srtPath);
+        // Send specialized email with Video/Audio/SRT links and attachments
+        await sendLocalSupportNotification(
+            task, 
+            supabaseInfo.publicLink, 
+            srtUpload.publicLink, 
+            audioUpload.publicLink,
+            srtPath,
+            audioPath
+        );
 
         logger.info(`✨ DAILY AUTOMATION SUCCESSFUL | Time: ${((Date.now() - sessionStart)/1000).toFixed(2)}s`);
 

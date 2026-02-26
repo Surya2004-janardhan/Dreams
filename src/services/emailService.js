@@ -628,7 +628,16 @@ const sendCarouselPostNotification = async (
  * @param {string} srtUrl - Optional Supabase SRT URL (deprecated in favor of attachment)
  * @param {string} localSrtPath - Local path to the SRT file to attach
  */
-const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, localSrtPath) => {
+/**
+ * Send local support success notification with Supabase links and attachments
+ * @param {Object} taskData - Task information
+ * @param {string} videoUrl - Supabase video URL
+ * @param {string} srtUrl - Supabase SRT URL
+ * @param {string} audioUrl - Supabase Audio URL
+ * @param {string} localSrtPath - Local path to the SRT file
+ * @param {string} localAudioPath - Local path to the Audio file
+ */
+const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, audioUrl, localSrtPath, localAudioPath) => {
   try {
     const transporter = createTransporter();
     const subject = `📥 Daily Content Ready: ${taskData.idea || "Untitled"}`;
@@ -643,24 +652,34 @@ const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, localSrt
         <p>Your daily automation for <strong>"${taskData.idea}"</strong> has completed successfully.</p>
         
         <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #333;">🔗 Video Links</h3>
+          <h3 style="margin-top: 0; color: #333;">🔗 Cloud Storage Links (Supabase)</h3>
           
-          <div style="margin-bottom: 15px;">
-            <p style="margin: 0 0 5px 0; font-weight: bold;">🎬 Video File (MP4):</p>
-            <a href="${videoUrl}" target="_blank" style="display: inline-block; padding: 10px 15px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
-              View/Download Video
+          <div style="margin-bottom: 20px;">
+            <p style="margin: 0 0 10px 0; font-weight: bold;">🎬 Final Video (MP4):</p>
+            <a href="${videoUrl}" target="_blank" style="display: inline-block; padding: 12px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              Download Video
             </a>
-            <p style="font-size: 12px; color: #666; margin-top: 5px; word-break: break-all;">${videoUrl}</p>
+            <p style="font-size: 11px; color: #888; margin-top: 8px; word-break: break-all;">${videoUrl}</p>
           </div>
           
-          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
-            <p style="margin: 0; font-weight: bold; color: #2c3e50;">📜 Subtitles (SRT):</p>
-            <p style="margin: 5px 0; color: #666;">The subtitle file has been <strong>attached</strong> directly to this email for your convenience.</p>
+          <div style="margin-bottom: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+            <p style="margin: 0 0 5px 0; font-weight: bold;">🎵 Audio Backup:</p>
+            <a href="${audioUrl}" style="color: #4A90E2; text-decoration: none;">View Audio File</a>
+          </div>
+
+          <div style="margin-bottom: 0px; border-top: 1px solid #eee; padding-top: 15px;">
+            <p style="margin: 0 0 5px 0; font-weight: bold;">📜 Subtitles (SRT):</p>
+            <a href="${srtUrl}" style="color: #4A90E2; text-decoration: none;">View SRT File</a>
           </div>
         </div>
 
+        <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 5px solid #ffc107;">
+          <h3 style="margin-top: 0; color: #856404; font-size: 16px;">📎 Direct Attachments</h3>
+          <p style="margin: 5px 0; font-size: 14px;">The <strong>SRT</strong> and <strong>Audio</strong> files are also attached directly to this email for offline use.</p>
+        </div>
+
         <div style="font-size: 13px; color: #666; border-top: 1px solid #eee; padding-top: 15px;">
-          <p><strong>Note:</strong> The video link leads to your Supabase storage. You can right-click the button and "Save Link As" to download it directly.</p>
+          <p><strong>Note:</strong> You can right-click the "Download Video" button and select "Save Link As..." if the video plays in your browser instead of downloading.</p>
         </div>
       </div>
       
@@ -678,7 +697,7 @@ const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, localSrt
       attachments: []
     };
 
-    // Add SRT attachment if path exists
+    // Add SRT attachment
     if (localSrtPath && fs.existsSync(localSrtPath)) {
       mailOptions.attachments.push({
         filename: path.basename(localSrtPath),
@@ -686,8 +705,16 @@ const sendLocalSupportNotification = async (taskData, videoUrl, srtUrl, localSrt
       });
     }
 
+    // Add Audio attachment
+    if (localAudioPath && fs.existsSync(localAudioPath)) {
+      mailOptions.attachments.push({
+        filename: path.basename(localAudioPath),
+        path: localAudioPath
+      });
+    }
+
     await transporter.sendMail(mailOptions);
-    logger.info(`✅ Local Support email sent with attachments for: ${taskData.idea}`);
+    logger.info(`✅ Local Support email sent with detailed links/attachments for: ${taskData.idea}`);
   } catch (error) {
     logger.error("❌ Failed to send Local Support notification:", error.message);
   }
