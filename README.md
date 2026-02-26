@@ -203,6 +203,9 @@ For a deep dive into setting up GitHub Actions infrastructure and secrets, see *
 -  Update with new social services if u want to add a new platform.
 -  Utilize strong models if you have access to them (e.g. Gemini 3 Pro, GPT-5, etc.).
 
+## Thanks
+-  Thanks to the developers of Wav2Lip, Voicebox.
+-  Special thanks to the repo [https://github.com/prasannathapa/reel-composer] creator prasannathapa inspired me to merge my own old version with reel-composer.
 
 ## Contributions
 -  Feel free to open an issue or a pull request.
