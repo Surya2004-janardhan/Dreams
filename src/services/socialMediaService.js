@@ -4,6 +4,7 @@ const path = require("path");
 const axios = require("axios");
 const { google } = require("googleapis");
 const { createClient } = require("@supabase/supabase-js");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Load environment variables
 require("dotenv").config();
@@ -1234,13 +1235,13 @@ const generateTopicExplanation = async (
  */
 const generateUnifiedSocialMediaCaption = async (title) => {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("No Groq API key available");
+      throw new Error("No Gemini API key available");
     }
 
-    // Use Groq's fast model
-    const modelName = "llama-3.3-70b-versatile";
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     // Generate a simple, meaningful explanation about the title
     const theoryPrompt = `Topic: ${title}
@@ -1253,81 +1254,24 @@ RULES:
 - Focus on what the topic is and why it's useful.
 - No bullet points, no bold text, no icons, no jargon.
 - No introductory filler like "In this video..." or "Here is...".
-- ENTIRE explanation must be under 80 words.`
-    const theoryResponse = await axios.post(
-      `https://api.groq.com/openai/v1/chat/completions`,
-      {
-        model: modelName,
-        messages: [
-          {
-            role: "user",
-            content: theoryPrompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000, // 30 second timeout
-      }
-    );
+- ENTIRE explanation must be under 80 words.`;
 
-    const theory = theoryResponse.data.choices[0].message.content.trim();
+    const theoryResult = await model.generateContent(theoryPrompt);
+    const theory = theoryResult.response.text().trim();
 
     // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate exactly 15 highly real-time current engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}".Dont keep extra speical characters. Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5 #hashtag6 #hashtag7 #hashtag8 #hashtag9 #hashtag10 #hashtag11 #hashtag12 #hashtag13 #hashtag14 #hashtag15`;
+    const hashtagPrompt = `Generate exactly 15 highly real-time current engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}". Dont keep extra special characters. Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 ... #hashtag15`;
 
-    const hashtagResponse = await axios.post(
-      `https://api.groq.com/openai/v1/chat/completions`,
-      {
-        model: modelName,
-        messages: [
-          {
-            role: "user",
-            content: hashtagPrompt,
-          },
-        ],
-        temperature: 0.8,
-        max_tokens: 200,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 30000,
-      }
-    );
-
-    const hashtags = hashtagResponse.data.choices[0].message.content.trim();
+    const hashtagResult = await model.generateContent(hashtagPrompt);
+    const hashtags = hashtagResult.response.text().trim();
 
     // Generate 5 LLM-friendly keywords without #
     const keywordPrompt = `Topic: ${title}
 Task: Generate exactly 5 raw keywords (no hashtags, no special characters, no explanations) that define this topic for LLM crawlers.
 Format: word1, word2, word3, word4, word5`;
 
-    const keywordResponse = await axios.post(
-      `https://api.groq.com/openai/v1/chat/completions`,
-      {
-        model: modelName,
-        messages: [{ role: "user", content: keywordPrompt }],
-        temperature: 0.5,
-        max_tokens: 100,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 15000,
-      }
-    );
-
-    const rawKeywords = keywordResponse.data.choices[0].message.content.trim();
+    const keywordResult = await model.generateContent(keywordPrompt);
+    const rawKeywords = keywordResult.response.text().trim();
     const bracketedKeywords = `[${rawKeywords.split(',').map(s => s.trim()).join(', ')}]`;
 
     // Create the unified caption
@@ -1343,7 +1287,7 @@ ${bracketedKeywords}
 👥 Tag a friend who needs to learn this!
 📚 Follow for more educational content!`;
 
-    logger.info(`✅ Generated unified caption for: ${title}`);
+    logger.info(`✅ Generated unified caption via Gemini for: ${title}`);
     logger.info(`📏 Caption length: ${unifiedCaption.length} characters`);
 
     return {
@@ -1353,16 +1297,7 @@ ${bracketedKeywords}
       title: title,
     };
   } catch (error) {
-    logger.error(
-      "❌ Failed to generate unified caption with Groq:",
-      error.response?.status,
-      error.response?.statusText
-    );
-
-    // Check if it's a quota exceeded error
-    if (error.response?.status === 429) {
-      logger.warn("🚨 Groq API quota exceeded - using fallback captions");
-    }
+    logger.error("❌ Failed to generate unified caption with Gemini:", error.message);
 
     // Fallback caption with dynamic content based on title
     const fallbackTheory = `This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively. Whether you're learning for education or professional development, this content provides clear explanations and actionable information.`;
