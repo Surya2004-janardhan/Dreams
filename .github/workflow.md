@@ -34,7 +34,7 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 ### 4. Supabase (Storage)
 - **`SUPABASE_URL`**: `https://xyz.supabase.co`
 - **`SUPABASE_SERVICE_ROLE_KEY`**: The secret `service_role` key (bypasses RLS for automated uploads).
-- **`SUPABASE_BUCKET`**: The name of the bucket (e.g., `videos`). Make sure it is public or has appropriate policies(create a bucket named `videos` in your supabase storage).
+- **`SUPABASE_BUCKET`**: Defaults to `videos`. **IMPORTANT**: You MUST create a bucket named `videos` in your Supabase storage and ensure it is public or has appropriate RLS policies for video hosting.
 
 ### 5. Notifications
 - **`EMAIL_USER`**: Your Gmail address(make sure you use secondary email).

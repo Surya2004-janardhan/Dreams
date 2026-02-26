@@ -75,6 +75,7 @@ For the best results, your template assets must follow these constraints:
 ### �🌟 Publishing Capabilities
 - **Triple-Platform Push**: Automatically uploads unique reels to **YouTube Shorts**, **Instagram Reels**, and **Facebook Reels**.
 - **Deterministic Voice**: Uses **Voicebox** (Qwen3-TTS) as the mandatory audio engine.
+- **Supabase Staging**: Requires a storage bucket named `videos` for temporary hosting during Meta uploads.
 
 ---
 
