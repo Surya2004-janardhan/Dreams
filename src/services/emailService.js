@@ -20,11 +20,18 @@ const sendSuccessNotification = async (taskData, results) => {
   try {
     const transporter = createTransporter();
 
-    const subject = `✅ Content Created Successfully: ${taskData.idea}`;
+    // Check for partial success (some URLs missing)
+    const isPartial = !results.youtubeUrl || !results.instagramUrl || !results.facebookUrl;
+    const statusEmoji = isPartial ? "⚠️" : "✅";
+    const statusText = isPartial ? "Partially Published" : "Content Created Successfully";
+    
+    const subject = `${statusEmoji} ${statusText}: ${taskData.idea}`;
 
     const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #28a745;">🎉 Content Creation Success!</h2>
+      <h2 style="color: ${isPartial ? '#ffc107' : '#28a745'};">
+        ${isPartial ? '⚠️ Partial Success Notification' : '🎉 Content Creation Success!'}
+      </h2>
       
       <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
         <h3>Content Details:</h3>
