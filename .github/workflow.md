@@ -43,6 +43,14 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 
 ---
 
+### 6. Advanced Optimization
+- **`USE_PREMIUM_WAV2LIP`**: Set to `true` to enable **GFPGAN** restoration. 
+    - **Pros**: Significant boost in facial clarity and lip sync sharpness.
+    - **Cons**: Dramatically increases processing time on GitHub Actions (CPU). Use with caution for long videos.
+- **`FORCE_CPU`**: Set to `true` to ensure standard library compatibility on runners.
+
+---
+
 ## 🚀 Workflow Execution
 
 The pipeline is defined in `.github/workflows/reel-automation.yml` and is designed for **Triple-Platform Distribution**:

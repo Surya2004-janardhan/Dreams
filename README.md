@@ -4,7 +4,8 @@
 
 ---
 **Estimated Run Time for full Automation**
-**Note**: This is an estimated run time and may vary depending on the speed of the GitHub Actions runner and the size of the video.
+**Note**: This is an estimated run time and may vary depending on the speed of the GitHub Actions runner and the size of the video. Normal Lip-Sync takes only 20-25 minutes but the repo workflow has advanced GAN to increase the final vedio output quality which takes more time on CPU.
+
 **CPU**: 
 - **Script Generation**: 3 minutes
 - **Voice Cloning**: 7 minutes
@@ -76,6 +77,7 @@ For the best results, your template assets must follow these constraints:
 - **Triple-Platform Push**: Automatically uploads unique reels to **YouTube Shorts**, **Instagram Reels**, and **Facebook Reels**.
 - **Deterministic Voice**: Uses **Voicebox** (Qwen3-TTS) as the mandatory audio engine.
 - **Supabase Staging**: Requires a storage bucket named `videos` for temporary hosting during Meta uploads.
+- **Premium Mode Toggle**: Switch between standard Wav2Lip and high-definition **GFPGAN** restoration using the `USE_PREMIUM_WAV2LIP` flag.
 
 ---
 
@@ -103,6 +105,7 @@ Add these to your **Settings > Secrets and variables > Actions**.
 | `EMAIL_USER` | Gmail address for login. |
 | `EMAIL_APP_PASSWORD` | Gmail App Password. |
 | `NOTIFICATION_EMAIL` | Destination for completion links. |
+| `USE_PREMIUM_WAV2LIP` | Set to `true` to enable **GFPGAN** face restoration (High CPU usage). |
 
 ---
 
