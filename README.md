@@ -68,12 +68,12 @@ For the best results, your template assets must follow these constraints:
 - **Duration**: **< 10 seconds** (Best for zero-shot voice cloning quality).
 - **Quality**: Crystal clear audio, no background noise, minimal reverb.
 
-### � `assets/Bgm.m4a`
+### 🎤 `assets/Bgm.m4a`
 - **Purpose**: Background music for the final reel.
 - **Default Volume**: **0.2 (20%)** in the automated pipeline.
 - **Formats Supported**: `.m4a`, `.mp3`, `.wav`.
 
-### �🌟 Publishing Capabilities
+### 🌟 Publishing Capabilities
 - **Triple-Platform Push**: Automatically uploads unique reels to **YouTube Shorts**, **Instagram Reels**, and **Facebook Reels**.
 - **Deterministic Voice**: Uses **Voicebox** (Qwen3-TTS) as the mandatory audio engine.
 - **Supabase Staging**: Requires a storage bucket named `videos` for temporary hosting during Meta uploads.
@@ -125,7 +125,7 @@ Follow these steps to run the pipeline on your local machine:
     - Copy keys from [`.env.example`](.env.example) and fill them in.
 3.  **Prepare Assets**:
     - Place your 100s+ template video at `assets/Base-vedio.mp4` .
-    - Place your voice sample (audio) at `assets/Base-audio.mp3`.
+    - Place your voice sample (audio < 10 seconds clean) at `assets/Base-audio.mp3`.
     - Place your background music at `assets/Bgm.m4a`.
 4.  **Run Reel-composer**:
     ```bash
@@ -134,7 +134,7 @@ Follow these steps to run the pipeline on your local machine:
     npm run dev
     ```
 5.  **Voicebox Setup**:
-    - You dont have to do anything the base Qwen3-TTS-12Hz-1.7B model is automatically loaded from the system global HuggingFace cache for the first time it is gonna download automatically.
+    - You don't have to do anything the base Qwen3-TTS-12Hz-1.7B model is automatically loaded from the system global HuggingFace cache for the first time it is gonna download automatically.
 
 6.  **Wav2lip Setup**:
     Wav2Lip requires pre-trained models. Run these commands from the root to download them:
@@ -155,7 +155,7 @@ Follow these steps to run the pipeline on your local machine:
     ```
 7.  **Run Automation**:
     ```bash
-    # Ensure that all above steps are properly done
+    # Ensure that all the above steps are properly done
     node src/main_automation.js
     ```
 
@@ -163,14 +163,14 @@ Follow these steps to run the pipeline on your local machine:
 -  **Mandatory Voicebox**: Gemini TTS support has been removed to ensure a consistent, professional brand voice. You **must** have `Base-audio.mp3` in your assets.
 -  **Fail-Fast Workflow**: If Voicebox synthesis fails, the workflow will stop immediately to avoid generating low-quality content, and you will receive a notification via the configured email service.
 -  **My suggestions**:
--  You can see the global logs while running the automation if you encounter any issue the detailed logs help you to understand the error or you can raise an issue vai github.
--  The repo is not so clean and modularized, soon i will make it clean and modularized.
--  If you really want deterministic results I recommmend you to use above raw appraoch instead of docker since I have not tried the new version of this repo on Docker yet, feel free to raise an issue particularly for the Docker setup and run.
+-  You can see the global logs while running the automation. If you encounter any issue, the detailed logs help you to understand the error, or you can raise an issue via github.
+-  The repo is not so clean and modularized, and soon I will make it clean and modularized.
+-  If you really want deterministic results, I recommend using the above raw approach instead of Docker, since I have not tried the new version of this repo on Docker yet. Feel free to raise an issue particularly for the Docker setup and run.
 -  You can customize several sections of this repo as per your requirements.
 
-**Visuals are bottleneck, refactoring the base prompt using strong model wins**
+**Visuals are a bottleneck; refactoring the base prompt using a strong model wins**
 
-**At any step the automation fails it cleans the directories sends a detailed error message vai email service applies the same if the automation gets success it sends the links of the published content**
+**At any step if the automation fails, it cleans the directories and sends a detailed error message via email service applies the same if the automation is successful it sends the links of the published content**
 
 ### 🐳 Dockerized Setup (Recommended)
 Run the entire pipeline in a consistent, isolated environment:
@@ -200,13 +200,14 @@ For a deep dive into setting up GitHub Actions infrastructure and secrets, see *
 -  Refactor the visual prompt to AI as per your need.
 -  Refactor sheet service as per your sheet layout.
 -  Modify the email service as per your need. 
--  Update with new social services if u want to add new platform.
+-  Update with new social services if u want to add a new platform.
 -  Utilize strong models if you have access to them (e.g. Gemini 3 Pro, GPT-5, etc.).
 
 
 ## Contributions
--  Feel free to open issue or pull request.
+-  Feel free to open an issue or a pull request.
 -  Willing to discuss new features or improvements.
 
 ## License
+
 -  This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
