@@ -202,18 +202,33 @@ async function main() {
             logger.warn("⚠️ Meta (Instagram/Facebook) upload skipped because Supabase staging failed.");
         }
 
+        let successCount = 0;
         await Promise.allSettled([ytPromise, ...metaPromises]);
-        logger.info(`✅ Step 8 Complete: Uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
-            
-        // Step 9: Update Sheet
-        currentStep = "Updating Sheets & Notifications";
-        if (task.rowId > 0) {
-            logger.info("📊 Step 9: Updating Google Sheets with results...");
-            await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
-        }
+        
+        // Count successes
+        if (links.yt) successCount++;
+        if (links.insta) successCount++;
+        if (links.fb) successCount++;
 
-        // Final Success Email
-        await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
+        logger.info(`✅ Step 8 Complete: ${successCount}/3 uploads finished in ${((Date.now() - step8Start)/1000).toFixed(2)}s`);
+            
+        // Step 9: Update Sheet & Notify
+        currentStep = "Updating Sheets & Notifications";
+        
+        // Critical Logic: If at least one succeeded, we treat it as a success notification pass
+        if (successCount > 0) {
+            if (task.rowId > 0) {
+                logger.info("📊 Step 9: Updating Google Sheets with results...");
+                await updateSheetStatus(task.rowId, "Posted", links.yt, links.insta, links.fb);
+            }
+
+            // Final Success Email (will indicate partial if necessary)
+            await sendSuccessNotification(task, links).catch(e => logger.error(`❌ Email failed: ${e.message}`));
+        } else {
+            // If ALL 3 failed, we treat it as a total failure
+            const error = new Error("All social media uploads failed (YouTube, Instagram, and Facebook). Check logs for details.");
+            throw error; 
+        }
 
         // CRITICAL CLEANUP: Delete from Supabase staging
         if (supabaseInfo && supabaseInfo.success && supabaseInfo.fileName) {

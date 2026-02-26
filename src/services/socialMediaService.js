@@ -1240,38 +1240,33 @@ const generateUnifiedSocialMediaCaption = async (title) => {
       throw new Error("No Gemini API key available");
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Generate a simple, meaningful explanation about the title
-    const theoryPrompt = `Topic: ${title}
-Task: Write a very simple and meaningful explanation for an Instagram audience.
+    // Single consolidated prompt for all components
+    const consolidatedPrompt = `Topic: ${title}
+Task: Generate social media content components.
 
 RULES:
-- Start directly with the explanation.
-- Keep it to 3-5 clear sentences in a single paragraph.
-- Use very simple English that a student can understand.
-- Focus on what the topic is and why it's useful.
-- No bullet points, no bold text, no icons, no jargon.
-- No introductory filler like "In this video..." or "Here is...".
-- ENTIRE explanation must be under 80 words.`;
+- Respond in exactly this format with delimiters:
+THEORY: [A simple 3-5 sentence explanation for students. Under 80 words. No icons. No bold.]
+HASHTAGS: [#hashtag1 #hashtag2 ... #hashtag15 (exactly 15 trending hashtags)]
+KEYWORDS: [word1, word2, word3, word4, word5 (exactly 5 raw defining keywords)]
 
-    const theoryResult = await model.generateContent(theoryPrompt);
-    const theory = theoryResult.response.text().trim();
+- Use simple English.
+- No introductory filler.`;
 
-    // Generate 15 engaging hashtags
-    const hashtagPrompt = `Generate exactly 15 highly real-time current engaging(mostly trending right now) and relevant hashtags for a insta/yt video about "${title}". Dont keep extra special characters. Return ONLY the hashtags separated by spaces, no introductory text, no explanations, no numbering. Format: #hashtag1 #hashtag2 ... #hashtag15`;
+    const result = await model.generateContent(consolidatedPrompt);
+    const responseText = result.response.text().trim();
 
-    const hashtagResult = await model.generateContent(hashtagPrompt);
-    const hashtags = hashtagResult.response.text().trim();
+    // Parse the consolidated response
+    const theoryMatch = responseText.match(/THEORY:\s*(.*)/i);
+    const hashtagsMatch = responseText.match(/HASHTAGS:\s*(.*)/i);
+    const keywordsMatch = responseText.match(/KEYWORDS:\s*(.*)/i);
 
-    // Generate 5 LLM-friendly keywords without #
-    const keywordPrompt = `Topic: ${title}
-Task: Generate exactly 5 raw keywords (no hashtags, no special characters, no explanations) that define this topic for LLM crawlers.
-Format: word1, word2, word3, word4, word5`;
-
-    const keywordResult = await model.generateContent(keywordPrompt);
-    const rawKeywords = keywordResult.response.text().trim();
+    const theory = theoryMatch ? theoryMatch[1].trim() : "Educational content about " + title;
+    const hashtags = hashtagsMatch ? hashtagsMatch[1].trim() : "#education #learning #facts";
+    const rawKeywords = keywordsMatch ? keywordsMatch[1].trim() : title;
     const bracketedKeywords = `[${rawKeywords.split(',').map(s => s.trim()).join(', ')}]`;
 
     // Create the unified caption
@@ -1287,7 +1282,7 @@ ${bracketedKeywords}
 👥 Tag a friend who needs to learn this!
 📚 Follow for more educational content!`;
 
-    logger.info(`✅ Generated unified caption via Gemini for: ${title}`);
+    logger.info(`✅ Generated unified caption via Gemini (consolidated) for: ${title}`);
     logger.info(`📏 Caption length: ${unifiedCaption.length} characters`);
 
     return {
