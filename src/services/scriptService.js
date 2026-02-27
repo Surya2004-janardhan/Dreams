@@ -2,9 +2,10 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-// gemini-2.5-flash only use 2.5 flash fix it
-const MODEL_ID = "gemini-2.5-flash"; // Standard for scripts
-const VISUALS_MODEL_ID = "gemini-3-flash-preview"; // Enhanced for visuals as per user request
+// gemini-1.5-flash only use 1.5 flash fix it
+const MODEL_ID = "gemini-1.5-flash"; // Standard for scripts
+const VISUALS_MODEL_ID = "gemini-3-flash-preview"; // use onyly 3-flash for this ; Enhanced for visuals as per user request
+
 
 const getModel = () => {
     const keys = [
@@ -23,13 +24,15 @@ const getModel = () => {
     };
 };
 
-let { model, keys } = getModel();
+let { keys } = getModel();
 
 /**
  * Helper to retry a function with different API keys on failure.
  */
 async function retryWithFallback(fn, modelId = MODEL_ID) {
     let lastError;
+    
+    // 1. Try Gemini Keys
     for (const key of keys) {
         try {
             const genAI = new GoogleGenerativeAI(key);
@@ -38,7 +41,7 @@ async function retryWithFallback(fn, modelId = MODEL_ID) {
         } catch (e) {
             lastError = e;
             const msg = e.message || "";
-            if (msg.includes("API_KEY_INVALID") || msg.includes("expired") || msg.includes("429")) {
+            if (msg.includes("API_KEY_INVALID") || msg.includes("expired") || msg.includes("429") || msg.includes("fetch")) {
                 logger.warn(`⚠️ Gemini Key failed, trying next... Error: ${msg.substring(0, 50)}`);
                 continue;
             }
@@ -74,36 +77,50 @@ const generateScript = async (topic, description = "") => {
     WORD COUNT: Strictly between 140 and 160 words.
   `;
 
+  let script;
   try {
-    const script = await retryWithFallback(async (m) => {
+    script = await retryWithFallback(async (m) => {
         const result = await m.generateContent(prompt);
         const response = await result.response;
         return response.text().trim();
-    });
-
-    // Aggressive cleanup: remove any lines that look like meta-explanation
-    const lines = script.split('\n');
-    const filteredLines = lines.filter(line => {
-      const lower = line.toLowerCase();
-      if (lower.includes('here is') && lower.includes('script')) return false;
-      if (lower.includes('word count') || lower.includes('words long')) return false;
-      if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
-      return true;
-    });
-
-    let finalScript = filteredLines.join(' ').trim();
-    
-    // Clean up markdown markers and bracketed text
-    finalScript = finalScript.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
-
-    const wordCount = finalScript.split(/\s+/).filter(w => w.length > 0).length;
-    logger.info(`✨ Viral Script generated via Gemini (Word count: ${wordCount})`);
-    
-    return finalScript;
+    }, MODEL_ID);
   } catch (error) {
-    logger.error("❌ Gemini Script generation error:", error.message);
-    throw new Error(`Failed to generate viral script: ${error.message}`);
+    logger.warn(`⚠️ Script Gemini failed, trying Groq fallback...`);
+    if (process.env.GROQ_API_KEY) {
+        try {
+            const Groq = require("groq-sdk");
+            const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+            const chatCompletion = await groq.chat.completions.create({
+                messages: [{ role: "user", content: prompt + "\nRespond with ONLY the script text." }],
+                model: "llama-3.3-70b-versatile",
+            });
+            script = chatCompletion.choices[0].message.content.trim();
+            logger.info("✨ Script generated via Groq fallback");
+        } catch (groqErr) {
+            logger.error("❌ Groq fallback also failed for script:", groqErr.message);
+            throw error; // Throw original Gemini error if Groq also fails
+        }
+    } else {
+        throw error;
+    }
   }
+
+  // Aggressive cleanup: remove any lines that look like meta-explanation
+  const lines = script.split('\n');
+  const filteredLines = lines.filter(line => {
+    const lower = line.toLowerCase();
+    if (lower.includes('here is') && lower.includes('script')) return false;
+    if (lower.includes('word count') || lower.includes('words long')) return false;
+    if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
+    return true;
+  });
+
+  let finalScript = filteredLines.join(' ').trim();
+  finalScript = finalScript.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+
+  const wordCount = finalScript.split(/\s+/).filter(w => w.length > 0).length;
+  logger.info(`✨ Viral Script generated (Word count: ${wordCount})`);
+  return finalScript;
 };
 
 /**
@@ -111,66 +128,54 @@ const generateScript = async (topic, description = "") => {
  */
 const generateVisualPrompt = async (topic, scriptText) => {
     const MAX_RETRIES = 3;
-    let lastError;
+    const prompt = `
+    Task: Create a clear and simple visual plan for a technical reel.
+    Topic: ${topic}
+    Script: ${scriptText}
+    
+    BASE VISUAL PROMPT:
+    "Cinematic abstract visualization of ${topic}, minimalist tech-noir aesthetic, deep obsidian and charcoal color palette, high-contrast lighting with subtle neon accents, sharp macro photography style, sleek matte textures, sophisticated data-driven motion, clean geometric lines, professional studio atmosphere, ultra-modern, zero human figures, zero text."
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            const prompt = `
-            Task: Create a clear and simple visual plan for a technical reel.
-            Topic: ${topic}
-            Script: ${scriptText}
-            
-            BASE VISUAL PROMPT:
-            "Cinematic abstract visualization of ${topic}, minimalist tech-noir aesthetic, deep obsidian and charcoal color palette, high-contrast lighting with subtle neon accents, sharp macro photography style, sleek matte textures, sophisticated data-driven motion, clean geometric lines, professional studio atmosphere, ultra-modern, zero human figures, zero text."
+    VISUAL STRATEGY:
+    - **STYLE**: Clean, modern, and very easy to follow. 
+    - **SIMPLE LANGUAGE**: Describe visuals in simple English.
+    - BACKGROUND: Deep dark background with subtle glowing lines.
+    - COMPONENTS: Technical items should be in clear, glowing boxes.
+    - NO OVERLAP: Make sure no text or icons cover each other.
+    - CONNECTIONS: Clearly describe how lines connect components.
+    - MATCH THE SCRIPT: Visuals must match the words being spoken.
 
-            VISUAL STRATEGY:
-            - **STYLE**: Clean, modern, and very easy to follow. 
-            - **SIMPLE LANGUAGE**: Describe visuals in simple English. Avoid "big words" in your description.
-            - BACKGROUND: Deep dark background with subtle glowing lines.
-            - COMPONENTS: Technical items should be in clear, glowing boxes.
-            - **ANIMATION FOCUS**: Make sure the animations are the main focus of the screen.
-            - NO OVERLAP: Make sure no text or icons cover each other.
-            - CONNECTIONS: Clearly describe how lines connect one box to another (e.g., "draw a line from Box A to Box B").
-            - BALANCE: Keep everything centered and neat. No oversized or tiny icons.
-            - HEADERS: Use simple, bold headings at the very top.
-            - MATCH THE SCRIPT: Visuals must match the words being spoken at that moment.
+    OUTPUT FORMAT:
+    - Exactly 5-6 simple lines describing the visual steps.
+    - Focus on clear actions like "Show a spinning icon".
+    `;
 
-            OUTPUT FORMAT:
-            - Exactly 5-6 simple lines describing the visual steps.
-            - Focus on clear actions like "Show a spinning icon" or "Move the box to the right."
-            `;
-
-            const visualDescription = await retryWithFallback(async (m) => {
-                const result = await m.generateContent(prompt);
-                const response = await result.response;
-                return response.text().trim();
-            }, VISUALS_MODEL_ID);
-
-            // VALIDATION: Ensure prompt is not empty, not too short, and contains no "hallucination markers"
-            const isInvalidType = !visualDescription || visualDescription.length < 50;
-            const hasPlaceholders = /\[PLACEHOLDER\]|\[INSERT.*?\]|TODO|FIXME/i.test(visualDescription);
-            const isTooGeneric = visualDescription.toLowerCase().includes("show a video") && !visualDescription.toLowerCase().includes("icon");
-
-            if (isInvalidType || hasPlaceholders || isTooGeneric) {
-                logger.warn(`⚠️ Visual prompt validation failed (Attempt ${attempt}/${MAX_RETRIES}). Retrying...`);
-                if (attempt < MAX_RETRIES) {
-                    await new Promise(r => setTimeout(r, 2000)); // Grace period before retry
-                    continue;
-                }
-                throw new Error("Visual prompt failed validation after multiple attempts.");
+    try {
+        const visualDescription = await retryWithFallback(async (m) => {
+            const result = await m.generateContent(prompt);
+            const response = await result.response;
+            return response.text().trim();
+        }, VISUALS_MODEL_ID);
+        return visualDescription;
+    } catch (e) {
+        logger.warn(`⚠️ Visual prompt Gemini failed, trying Groq fallback...`);
+        if (process.env.GROQ_API_KEY) {
+            try {
+                const Groq = require("groq-sdk");
+                const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+                const chatCompletion = await groq.chat.completions.create({
+                    messages: [{ role: "user", content: prompt }],
+                    model: "llama-3.3-70b-versatile",
+                });
+                const visualDescription = chatCompletion.choices[0].message.content.trim();
+                logger.info("🎨 Visual prompt generated via Groq fallback");
+                return visualDescription;
+            } catch (groqErr) {
+                logger.error("❌ Groq fallback also failed for visual prompt:", groqErr.message);
             }
-
-            logger.info("🎨 Visual prompt validated and generated successfully.");
-            return visualDescription;
-
-        } catch (e) {
-            lastError = e;
-            logger.error(`❌ Visual prompt error (Attempt ${attempt}/${MAX_RETRIES}): ${e.message}`);
-            if (attempt === MAX_RETRIES) throw e;
-            await new Promise(r => setTimeout(r, 2000));
         }
+        throw e;
     }
-    throw lastError;
 };
 
 module.exports = {

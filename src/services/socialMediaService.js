@@ -1230,34 +1230,78 @@ const generateTopicExplanation = async (
 };
 
 /**
- * Generate unified social media caption using Groq LLM
- * Creates the same lengthy caption for all 3 platforms
+ * Generate unified social media caption using Gemini with Groq fallback
  */
 const generateUnifiedSocialMediaCaption = async (title) => {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("No Gemini API key available");
-    }
+  const geminiKeys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_FOR_VISUALS,
+    process.env.GEMINI_API_KEY_FOR_T2T
+  ].filter(Boolean);
+  const uniqueGeminiKeys = [...new Set(geminiKeys)];
 
-const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const groqKey = process.env.GROQ_API_KEY;
 
-    // Single consolidated prompt for all components
-    const consolidatedPrompt = `Topic: ${title}
-Task: Generate social media content components.
+  let responseText = null;
+  let methodUsed = "";
 
-RULES:
-- Respond in exactly this format with delimiters:
+  // 1. Try Gemini
+  if (uniqueGeminiKeys.length > 0) {
+    for (const key of uniqueGeminiKeys) {
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+            const prompt = `Topic: ${title}
+Task: Generate social media content components. Components:
 THEORY: [A simple 3-5 sentence explanation for students. Under 80 words. No icons. No bold.]
 HASHTAGS: [#hashtag1 #hashtag2 ... #hashtag15 (exactly 15 trending hashtags)]
 KEYWORDS: [word1, word2, word3, word4, word5 (exactly 5 raw defining keywords)]
+Format strictly. Simple English. No filler.`;
 
-- Use simple English.
-- No introductory filler.`;
+            const result = await model.generateContent(prompt);
+            if (result && result.response) {
+                responseText = result.response.text().trim();
+                methodUsed = "Gemini";
+                break;
+            }
+        } catch (e) {
+            logger.warn(`⚠️ Caption Gemini failed: ${e.message.substring(0, 50)}`);
+        }
+    }
+  }
 
-    const result = await model.generateContent(consolidatedPrompt);
-    const responseText = result.response.text().trim();
+  // 2. Try Groq as fallback
+  if (!responseText && groqKey) {
+    try {
+        const Groq = require("groq-sdk");
+        const groq = new Groq({ apiKey: groqKey });
+        
+        const prompt = `Topic: ${title}
+Task: Generate components for a social media post about this topic.
+Format:
+THEORY: [Explanation]
+HASHTAGS: [#tag1 #tag2 ...]
+KEYWORDS: [word1, word2, ...]
+
+Rules: 15 hashtags, 5 keywords, theory under 80 words. Simple English.`;
+
+        const chatCompletion = await groq.chat.completions.create({
+            messages: [{ role: "user", content: prompt }],
+            model: "llama-3.3-70b-versatile", // Updated from decommissioned llama3-8b-8192
+        });
+        
+        responseText = chatCompletion.choices[0].message.content.trim();
+        methodUsed = "Groq";
+    } catch (e) {
+        logger.error(`❌ Groq fallback failed: ${e.message}`);
+    }
+  }
+
+  try {
+    if (!responseText) {
+        throw new Error("All AI platforms failed to generate content.");
+    }
 
     // Parse the consolidated response
     const theoryMatch = responseText.match(/THEORY:\s*(.*)/i);
@@ -1282,9 +1326,7 @@ ${bracketedKeywords}
 👥 Tag a friend who needs to learn this!
 📚 Follow for more educational content!`;
 
-    logger.info(`✅ Generated unified caption via Gemini (consolidated) for: ${title}`);
-    logger.info(`📏 Caption length: ${unifiedCaption.length} characters`);
-
+    logger.info(`✅ Generated unified caption via ${methodUsed} for: ${title}`);
     return {
       caption: unifiedCaption,
       theory: theory,
@@ -1292,23 +1334,12 @@ ${bracketedKeywords}
       title: title,
     };
   } catch (error) {
-    logger.error("❌ Failed to generate unified caption with Gemini:", error.message);
+    logger.error("❌ Final caption failure, using hardcoded fallback:", error.message);
 
-    // Fallback caption with dynamic content based on title
-    const fallbackTheory = `This fascinating topic explores fundamental concepts and practical applications in this field. Discover key principles, real-world examples, and valuable insights that will help you understand and apply this knowledge effectively. Whether you're learning for education or professional development, this content provides clear explanations and actionable information.`;
-
-    const fallbackHashtags =
-      "#education #learning #knowledge #tutorial #educational #facts #tips #guide #explained #howto #viral #trending #fyp #explore #discover";
-
-    const fallbackCaption = `${title}
-
-${fallbackTheory}
-
-${fallbackHashtags}
-
-❤️ Like • 💬 Comment • 🔄 Share • 
-👥 Tag a friend who needs to learn this!
-📚 Follow for more educational content!`;
+    // Final Fallback
+    const fallbackTheory = `This topic explores fundamental concepts and practical applications in this field.`;
+    const fallbackHashtags = "#education #learning #knowledge #tutorial #educational #facts";
+    const fallbackCaption = `${title}\n\n${fallbackTheory}\n\n${fallbackHashtags}\n\n❤️ Like • 📚 Follow!`;
 
     return {
       caption: fallbackCaption,
