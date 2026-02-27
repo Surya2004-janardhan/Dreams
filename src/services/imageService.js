@@ -8,7 +8,7 @@ const axios = require("axios");
  * IMAGE SERVICE - Using Gemini API
  *
  * Purpose: Generate title images via Google Gemini API
- * Model: gemini-1.5-flash
+ * Model: gemini-2.0-flash
  * Method: Direct image generation with text prompt
  * Response: Image file (PNG)
  */
@@ -89,7 +89,7 @@ const generateImageWithGemini = async (prompt, outputDir = null) => {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       generationConfig: {
         responseModalities: ["image"],
         temperature: 0.7,

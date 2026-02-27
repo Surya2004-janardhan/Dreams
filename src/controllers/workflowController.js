@@ -60,7 +60,7 @@ const generateGeminiTTS = async (text, voice = "male") => {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
   });
 
   // Map to Gemini Voices - Male: Charon, Female: Kore
@@ -112,7 +112,7 @@ const generateSRTFromAudio = async (audioPath) => {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   // Read audio file
   const audioBuffer = fs.readFileSync(audioPath);
@@ -183,7 +183,7 @@ const generateSRTFromAudio = async (audioPath) => {
 // Generate reel content using the new service
 const generateReelContent = async (topic, srtContent, apiKey) => {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
   const prompt = `Create an educational video animation that complements a single-narrator explanation about: "${topic}"
 

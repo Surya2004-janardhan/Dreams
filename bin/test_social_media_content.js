@@ -34,7 +34,7 @@ Return only the 5 points as a JSON array of strings, like this:
 ["Point 1 here", "Point 2 here", "Point 3 here", "Point 4 here", "Point 5 here"]`;
 
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
       {
         contents: [
           {

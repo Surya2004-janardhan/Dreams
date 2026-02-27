@@ -2,8 +2,8 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const logger = require("../config/logger");
 
 // Initialize Gemini
-// gemini-1.5-flash only use 1.5 flash fix it
-const MODEL_ID = "gemini-1.5-flash"; // Standard for scripts
+// gemini-2.0-flash only use 1.5 flash fix it
+const MODEL_ID = "gemini-2.0-flash"; // Standard for scripts
 const VISUALS_MODEL_ID = "gemini-3-flash-preview"; // use onyly 3-flash for this ; Enhanced for visuals as per user request
 
 

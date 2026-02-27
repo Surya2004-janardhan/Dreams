@@ -59,7 +59,7 @@ const generateSRTFromBaseVideo = async (apiKey) => {
     const audioBase64 = audioBuffer.toString("base64");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const result = await model.generateContent([
       "Transcribe this audio to SRT format with accurate timestamps. Include speaker identification if multiple speakers are detected.",
@@ -118,7 +118,7 @@ const generateReelContentAI = async (
   topic,
   srtData,
   apiKey,
-  modelName = "gemini-1.5-flash",
+  modelName = "gemini-2.0-flash",
 ) => {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model });
@@ -162,7 +162,7 @@ const generateReelContent = async (req, res) => {
   const {
     topic,
     apiKey,
-    modelName = "gemini-1.5-flash",
+    modelName = "gemini-2.0-flash",
     backgroundMusic,
     subtitleSettings,
   } = req.body;

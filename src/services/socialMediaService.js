@@ -1250,7 +1250,7 @@ const generateUnifiedSocialMediaCaption = async (title) => {
     for (const key of uniqueGeminiKeys) {
         try {
             const genAI = new GoogleGenerativeAI(key);
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
             const prompt = `Topic: ${title}
 Task: Generate social media content components. Components:

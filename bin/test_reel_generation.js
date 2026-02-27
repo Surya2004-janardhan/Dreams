@@ -10,7 +10,7 @@ async function testReelGeneration() {
       {
         topic: "The Future of Artificial Intelligence",
         apiKey: process.env.GEMINI_API_KEY || "your-api-key-here",
-        modelName: "gemini-1.5-flash",
+        modelName: "gemini-2.0-flash",
       },
     );
 
