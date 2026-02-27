@@ -23,6 +23,7 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 
 ### 2. AI & Media
 - **`GEMINI_API_KEY`**: Your Google AI Studio API key.
+- **`GEMINI_API_KEY_FOR_VISUALS`**: Your Google AI Studio API key from another project(ACTS as FALLBACK to GEMINI services)
 - **`ASSEMBLYAI_API_KEY`**: From AssemblyAI dashboard (for auto-subtitles).
 - **`GROQ_API_KEY`**: Your Groq API key(FALLBACK FOR SCRIPT AND CAPTION SERVICE).
 
