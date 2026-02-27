@@ -24,6 +24,7 @@ Add these variables to **Settings > Secrets and variables > Actions > New reposi
 ### 2. AI & Media
 - **`GEMINI_API_KEY`**: Your Google AI Studio API key.
 - **`ASSEMBLYAI_API_KEY`**: From AssemblyAI dashboard (for auto-subtitles).
+- **`GROQ_API_KEY`**: Your Groq API key(FALLBACK FOR SCRIPT AND CAPTION SERVICE).
 
 ### 3. Social Media (Graph API)
 - **`INSTAGRAM_ACCOUNT_ID`**: Get this from your Facebook Page settings (Connected Accounts).

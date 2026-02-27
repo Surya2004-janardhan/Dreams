@@ -89,6 +89,7 @@ Add these to your **Settings > Secrets and variables > Actions**.
 | :--- | :--- |
 | `BASE_VIDEO_DRIVE_ID` | Google Drive ID of your base video (e.g., `1Tc0...`). |
 | `GEMINI_API_KEY` | Primary key for scripts and logic. |
+| `GROQ_API_KEY` | **Fallback key** for script and caption generation. |
 | `ASSEMBLYAI_API_KEY` | Required for automatic subtitle (SRT) generation. |
 | `GOOGLE_SHEET_ID` | The ID from your sheet's URL. |
 | `GOOGLE_CREDENTIALS` | Service Account JSON. |
@@ -170,7 +171,15 @@ Follow these steps to run the pipeline on your local machine:
 
 **Visuals are a bottleneck; refactoring the base prompt using a strong model wins**
 
-**At any step if the automation fails, it cleans the directories and sends a detailed error message via email service applies the same if the automation is successful it sends the links of the published content**
+### 🛡️ AI API Resilience (Groq Fallback)
+The system is built to be "Self-Healing." If your Gemini API keys are expired, hit rate limits, or encounter network issues:
+1. It will automatically retry with any other available Gemini keys.
+2. If all Gemini keys fail, it will switch to **Groq (Llama 3.3)** as a secondary provider for Scripts, Visual Prompts, and Social Captions.
+3. This ensures your automation pipeline never stops mid-run.
+
+*See the `api_resilience` workflow for more details.*
+
+---
 
 ### 🐳 Dockerized Setup (Recommended)
 Run the entire pipeline in a consistent, isolated environment:
