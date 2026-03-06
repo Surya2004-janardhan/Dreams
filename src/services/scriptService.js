@@ -4,7 +4,7 @@ const logger = require("../config/logger");
 // Initialize Gemini
 // gemini-2.0-flash only use 1.5 flash fix it
 const MODEL_ID = "gemini-2.5-flash"; // User requested 2.5 flash dont change
-const VISUALS_MODEL_ID = "gemini-2.5-pro";  // user requested 2.5 pro dont change
+const VISUALS_MODEL_ID = "gemini-2.5-flash";  // user requested 2.5 pro dont change
 
 // gemini-3.1-flash-lite-preview
 // gemini-2.5-pro
