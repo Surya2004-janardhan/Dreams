@@ -23,6 +23,61 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 /**
+ * Build YouTube OAuth client and force a token refresh preflight.
+ * This makes refresh-token failures explicit before upload starts.
+ */
+const createYouTubeOAuthClient = async () => {
+  let clientId = process.env.GOOGLE_CLIENT_ID;
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  // Fallback for users who only configured GOOGLE_CREDENTIALS JSON.
+  if ((!clientId || !clientSecret) && process.env.GOOGLE_CREDENTIALS) {
+    try {
+      const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+      clientId = clientId || creds.client_id;
+      clientSecret = clientSecret || creds.client_secret;
+    } catch (error) {
+      logger.warn("⚠️ GOOGLE_CREDENTIALS is not valid JSON; cannot fallback for YouTube OAuth client.");
+    }
+  }
+
+  const refreshToken = process.env.YOUTUBE_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error(
+      "Missing YouTube OAuth env values. Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN"
+    );
+  }
+
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+
+  // Log when library rotates/updates access tokens.
+  oauth2Client.on("tokens", (tokens) => {
+    if (tokens.access_token) {
+      logger.info("🔄 YouTube OAuth access token refreshed automatically.");
+    }
+    if (tokens.refresh_token) {
+      logger.warn("⚠️ Google returned a new refresh token. Update YOUTUBE_REFRESH_TOKEN to avoid future token invalidation.");
+    }
+  });
+
+  // Force preflight refresh so invalid refresh tokens fail early with a clear error.
+  try {
+    await oauth2Client.getAccessToken();
+    logger.info("✅ YouTube OAuth refresh-token preflight passed.");
+  } catch (error) {
+    const apiMessage =
+      error?.response?.data?.error_description ||
+      error?.response?.data?.error ||
+      error.message;
+    throw new Error(`YouTube OAuth refresh failed: ${apiMessage}`);
+  }
+
+  return oauth2Client;
+};
+
+/**
  * Generate hashtags and captions for social media
  */
 const generateSocialMediaContent = (title, description) => {
@@ -281,16 +336,7 @@ const uploadToYouTube = async (videoPath, title, description) => {
     logger.info(`📹 Video path: ${videoPath}`);
     logger.info(`📝 Title: ${title}`);
 
-    // Create OAuth2 client directly
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-    );
-
-    // Set refresh token for automatic token refresh
-    oauth2Client.setCredentials({
-      refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
-    });
+    const oauth2Client = await createYouTubeOAuthClient();
 
     // Create YouTube client
     const youtube = google.youtube({

@@ -18,9 +18,9 @@ async function testOAuth2YouTubeUpload() {
       refresh_token: process.env.YOUTUBE_REFRESH_TOKEN,
     });
 
-    // Test token refresh
+    // Test token refresh via access-token preflight
     console.log("🔄 Testing token refresh...");
-    const tokens = await oauth2Client.refreshAccessToken();
+    await oauth2Client.getAccessToken();
     console.log("✅ Token refresh successful!");
 
     // Create YouTube client
