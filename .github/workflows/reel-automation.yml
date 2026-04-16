@@ -36,7 +36,7 @@ jobs:
 
           if [ ! -f assets/Base-vedio.mp4 ] || [ "$FILE_SIZE" -lt 1000000 ]; then
             echo "🎬 Base video missing or stub detected (Size: $FILE_SIZE bytes), downloading..."
-            gdown ${{ secrets.BASE_VIDEO_DRIVE_ID || '1Tc0WV7_liOqpJTzaQYm82i9CQH_r6XG1' }} -O assets/Base-vedio.mp4
+            gdown ${{ secrets.BASE_VIDEO_DRIVE_ID || '1a61Tl2yvmlWAHKmRZmzh3gwFNXqnBhYL' }} -O assets/Base-vedio.mp4
           else
             echo "✅ Base video exists and seems valid (Size: $FILE_SIZE bytes), skipping download."
           fi
