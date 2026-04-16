@@ -347,7 +347,9 @@ async function main() {
 
 async function prependCoverIntro(inputVideoPath) {
   const coverPath = path.resolve(__dirname, "../assets/cover.png");
-  const coverDurationSec = Number(process.env.COVER_INTRO_DURATION_SEC || "1");
+  const coverDurationSec = Number(
+    process.env.COVER_INTRO_DURATION_SEC || "0.5",
+  );
   const delayMs = Math.max(0, Math.round(coverDurationSec * 1000));
 
   if (!fs.existsSync(coverPath)) {
