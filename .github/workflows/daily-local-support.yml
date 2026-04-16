@@ -16,7 +16,7 @@ on:
 jobs:
   automate:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p wav2lip/checkpoints
           mkdir -p wav2lip/face_detection/detection/sfd
-          
+
           # Delete existing pointer files to ensure fresh download
           rm -f wav2lip/checkpoints/wav2lip_gan.pth
           rm -f wav2lip/face_detection/detection/sfd/s3fd.pth
@@ -47,14 +47,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
 
       - name: Install System Dependencies
         run: |
@@ -82,6 +82,6 @@ jobs:
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL_LOCAL }}
           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
-          USE_PREMIUM_WAV2LIP: 'true'
-          FORCE_CPU: 'true'
+          USE_PREMIUM_WAV2LIP: "true"
+          FORCE_CPU: "true"
         run: node src/local-support/automation_logic.js
