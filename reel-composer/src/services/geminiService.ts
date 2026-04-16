@@ -294,22 +294,47 @@ export const generateReelContent = async (
     required: ["html", "layoutConfig"]
   };
 
-  const model = genAI.getGenerativeModel({
-    model: modelName,
-    systemInstruction: systemInstruction
-  });
+  const fallbackOrder = [modelName, 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  const modelCandidates = Array.from(new Set(fallbackOrder.filter(Boolean)));
+
+  let resultJson: any = null;
+  let lastError: any = null;
+
+  for (const candidateModel of modelCandidates) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: candidateModel,
+        systemInstruction: systemInstruction
+      });
+
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: responseSchema,
+        } as any,
+      });
+
+      const response = await result.response;
+      resultJson = JSON.parse(response.text() || "{}");
+      if (!resultJson?.html || !resultJson?.layoutConfig) {
+        throw new Error(`Invalid model output from ${candidateModel}`);
+      }
+
+      if (candidateModel !== modelName) {
+        console.warn(`Model fallback succeeded: ${candidateModel} (requested: ${modelName})`);
+      }
+      break;
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`Model attempt failed (${candidateModel}):`, err?.message || err);
+    }
+  }
 
   try {
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-      } as any,
-    });
-
-    const response = await result.response;
-    const resultJson = JSON.parse(response.text() || "{}");
+    if (!resultJson) {
+      throw lastError || new Error("All model attempts failed.");
+    }
 
     // --- REEL HELPER API INJECTION ---
     // Instead of just a shim, we inject a robust helper library to prevent common AI mistakes.
