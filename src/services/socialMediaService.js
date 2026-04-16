@@ -37,7 +37,9 @@ const createYouTubeOAuthClient = async () => {
       clientId = clientId || creds.client_id;
       clientSecret = clientSecret || creds.client_secret;
     } catch (error) {
-      logger.warn("⚠️ GOOGLE_CREDENTIALS is not valid JSON; cannot fallback for YouTube OAuth client.");
+      logger.warn(
+        "⚠️ GOOGLE_CREDENTIALS is not valid JSON; cannot fallback for YouTube OAuth client.",
+      );
     }
   }
 
@@ -45,7 +47,7 @@ const createYouTubeOAuthClient = async () => {
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error(
-      "Missing YouTube OAuth env values. Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN"
+      "Missing YouTube OAuth env values. Required: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN",
     );
   }
 
@@ -58,7 +60,9 @@ const createYouTubeOAuthClient = async () => {
       logger.info("🔄 YouTube OAuth access token refreshed automatically.");
     }
     if (tokens.refresh_token) {
-      logger.warn("⚠️ Google returned a new refresh token. Update YOUTUBE_REFRESH_TOKEN to avoid future token invalidation.");
+      logger.warn(
+        "⚠️ Google returned a new refresh token. Update YOUTUBE_REFRESH_TOKEN to avoid future token invalidation.",
+      );
     }
   });
 

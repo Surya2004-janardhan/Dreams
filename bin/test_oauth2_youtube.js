@@ -10,7 +10,7 @@ async function testOAuth2YouTubeUpload() {
     // Create OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      process.env.GOOGLE_CLIENT_SECRET,
     );
 
     // Set refresh token
@@ -39,7 +39,7 @@ async function testOAuth2YouTubeUpload() {
     console.log("✅ YouTube API working!");
     console.log(
       "📊 Channel Title:",
-      channelResponse.data.items[0].snippet.title
+      channelResponse.data.items[0].snippet.title,
     );
     console.log("🆔 Channel ID:", channelResponse.data.items[0].id);
 
@@ -66,7 +66,7 @@ async function testFullUpload() {
     // Create OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      process.env.GOOGLE_CLIENT_SECRET,
     );
 
     oauth2Client.setCredentials({
@@ -100,7 +100,7 @@ async function testFullUpload() {
     console.log("🆔 Video ID:", response.data.id);
     console.log(
       "🔗 Video URL:",
-      `https://www.youtube.com/watch?v=${response.data.id}`
+      `https://www.youtube.com/watch?v=${response.data.id}`,
     );
   } catch (error) {
     console.error("❌ Test upload failed:", error.message);
