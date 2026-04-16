@@ -90,6 +90,7 @@ jobs:
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL_LOCAL }}
           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          INSTAGRAM_REEL_THUMB_OFFSET_MS: "500"
           COVER_INTRO_DURATION_SEC: "1"
           USE_PREMIUM_WAV2LIP: "true"
           FORCE_CPU: "true"

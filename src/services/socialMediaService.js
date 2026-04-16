@@ -23,6 +23,28 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 /**
+ * Pick Instagram reel thumbnail frame (milliseconds).
+ * Uses explicit env var first, otherwise the midpoint of the cover intro duration.
+ */
+const getInstagramThumbOffsetMs = () => {
+  const raw = process.env.INSTAGRAM_REEL_THUMB_OFFSET_MS;
+  if (raw !== undefined && raw !== null && raw !== "") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.round(parsed);
+    }
+    logger.warn(
+      `⚠️ Invalid INSTAGRAM_REEL_THUMB_OFFSET_MS='${raw}', falling back to cover intro midpoint.`,
+    );
+  }
+
+  const coverIntroSec = Number(process.env.COVER_INTRO_DURATION_SEC || "1");
+  const safeCoverIntroSec =
+    Number.isFinite(coverIntroSec) && coverIntroSec > 0 ? coverIntroSec : 1;
+  return Math.round((safeCoverIntroSec * 1000) / 2);
+};
+
+/**
  * Build YouTube OAuth client and force a token refresh preflight.
  * This makes refresh-token failures explicit before upload starts.
  */
@@ -452,14 +474,18 @@ const uploadToInstagram = async (videoPath, title, description) => {
 
     // Step 2: Create Reels Container using Instagram Graph API v23.0
     const containerUrl = `https://graph.facebook.com/v23.0/${accountId}/media`;
+    const thumbOffsetMs = getInstagramThumbOffsetMs();
     const containerParams = {
       media_type: "REELS",
       video_url: publicVideoUrl,
       caption: finalCaption,
+      thumb_offset: thumbOffsetMs,
       access_token: accessToken,
     };
 
-    logger.info("📦 Creating Reels container...");
+    logger.info(
+      `📦 Creating Reels container (thumb_offset=${thumbOffsetMs}ms)...`,
+    );
     const containerResponse = await axios.post(containerUrl, containerParams);
     const containerId = containerResponse.data.id;
     logger.info(`✅ Reels container created. Container ID: ${containerId}`);
@@ -599,14 +625,18 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
 
     // Step 1: Create Reels Container using Instagram Graph API v23.0
     const containerUrl = `https://graph.facebook.com/v23.0/${accountId}/media`;
+    const thumbOffsetMs = getInstagramThumbOffsetMs();
     const containerParams = {
       media_type: "REELS",
       video_url: videoUrl,
       caption: finalCaption,
+      thumb_offset: thumbOffsetMs,
       access_token: accessToken,
     };
 
-    logger.info("🎬 Creating Instagram Reels container...");
+    logger.info(
+      `🎬 Creating Instagram Reels container (thumb_offset=${thumbOffsetMs}ms)...`,
+    );
     const containerResponse = await axios.post(containerUrl, containerParams);
     const containerId = containerResponse.data.id;
 
