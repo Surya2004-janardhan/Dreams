@@ -4,7 +4,6 @@ const path = require("path");
 const axios = require("axios");
 const { google } = require("googleapis");
 const { createClient } = require("@supabase/supabase-js");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Load environment variables
 require("dotenv").config();
@@ -127,14 +126,14 @@ ${allHashtags.join(" ")}`;
 const generateAISocialMediaContent = async (
   title,
   description,
-  scriptContent = ""
+  scriptContent = "",
 ) => {
   try {
     // First, generate educational explanation about the topic
     const topicExplanation = await generateTopicExplanation(
       title,
       description,
-      scriptContent
+      scriptContent,
     );
 
     // Get topic-related emoji
@@ -267,7 +266,7 @@ ${facebookHashtagString}`;
   } catch (error) {
     logger.error(
       "❌ AI content generation failed, using template:",
-      error.message
+      error.message,
     );
     return generateSocialMediaContent(title, description);
   }
@@ -285,7 +284,7 @@ const uploadToYouTube = async (videoPath, title, description) => {
     // Create OAuth2 client directly
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
+      process.env.GOOGLE_CLIENT_SECRET,
     );
 
     // Set refresh token for automatic token refresh
@@ -374,7 +373,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
     const finalCaption = unifiedContent.caption;
 
     logger.info(
-      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`
+      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`,
     );
 
     // Required environment variables
@@ -383,14 +382,14 @@ const uploadToInstagram = async (videoPath, title, description) => {
 
     if (!accessToken || !accountId) {
       throw new Error(
-        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required"
+        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required",
       );
     }
 
     // Step 1: Upload to Supabase and get public link
     const supabaseResult = await uploadToSupabaseAndGetLink(
       videoPath,
-      "Instagram Reel"
+      "Instagram Reel",
     );
     if (!supabaseResult.success) {
       throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
@@ -435,7 +434,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
         logger.info(
           `🚀 Publishing Instagram Reel (attempt ${
             retryCount + 1
-          }/${maxRetries})...`
+          }/${maxRetries})...`,
         );
         publishResponse = await axios.post(publishUrl, publishParams);
 
@@ -447,13 +446,13 @@ const uploadToInstagram = async (videoPath, title, description) => {
         retryCount++;
         if (retryCount < maxRetries) {
           logger.warn(
-            `⚠️ Publish attempt ${retryCount} failed, retrying in 35 seconds...`
+            `⚠️ Publish attempt ${retryCount} failed, retrying in 35 seconds...`,
           );
           logger.warn(
             `Error: ${
               publishError.response?.data?.error?.message ||
               publishError.message
-            }`
+            }`,
           );
           await new Promise((resolve) => setTimeout(resolve, 35000));
         } else {
@@ -482,7 +481,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
       }
     } catch (error) {
       logger.warn(
-        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`
+        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`,
       );
     }
 
@@ -509,7 +508,7 @@ const uploadToInstagram = async (videoPath, title, description) => {
     // Clean up Supabase file on error
     if (uploadedFileName) {
       logger.warn(
-        "🧹 Cleaning up Supabase file due to Instagram upload failure..."
+        "🧹 Cleaning up Supabase file due to Instagram upload failure...",
       );
       await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
     }
@@ -533,7 +532,7 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
     const finalCaption = unifiedContent.caption;
 
     logger.info(
-      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`
+      `📝 Using unified caption for Instagram (${finalCaption.length} chars)`,
     );
 
     // Required environment variables
@@ -542,7 +541,7 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
 
     if (!accessToken || !accountId) {
       throw new Error(
-        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required"
+        "INSTAGRAM_ACCESS_TOKEN and INSTAGRAM_ACCOUNT_ID environment variables are required",
       );
     }
 
@@ -562,7 +561,7 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
     const containerId = containerResponse.data.id;
 
     logger.info(
-      `✅ Instagram Reels container created. Container ID: ${containerId}`
+      `✅ Instagram Reels container created. Container ID: ${containerId}`,
     );
 
     // Step 2: Wait for Instagram to process the media
@@ -585,7 +584,7 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
         logger.info(
           `🚀 Publishing Instagram Reel (attempt ${
             retryCount + 1
-          }/${maxRetries})...`
+          }/${maxRetries})...`,
         );
         publishResponse = await axios.post(publishUrl, publishParams);
 
@@ -597,13 +596,13 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
         retryCount++;
         if (retryCount < maxRetries) {
           logger.warn(
-            `⚠️ Publish attempt ${retryCount} failed, retrying in 25 seconds...`
+            `⚠️ Publish attempt ${retryCount} failed, retrying in 25 seconds...`,
           );
           logger.warn(
             `Error: ${
               publishError.response?.data?.error?.message ||
               publishError.message
-            }`
+            }`,
           );
           await new Promise((resolve) => setTimeout(resolve, 25000));
         } else {
@@ -632,7 +631,7 @@ const uploadToInstagramWithUrl = async (videoUrl, title, description) => {
       }
     } catch (error) {
       logger.warn(
-        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`
+        `⚠️ Could not get official permalink, using constructed URL: ${error.message}`,
       );
     }
 
@@ -672,7 +671,7 @@ const uploadToFacebook = async (videoPath, title, description) => {
     const finalCaption = unifiedContent.caption;
 
     logger.info(
-      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`
+      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`,
     );
 
     // Required environment variables
@@ -681,14 +680,14 @@ const uploadToFacebook = async (videoPath, title, description) => {
 
     if (!accessToken || !pageId) {
       throw new Error(
-        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required"
+        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required",
       );
     }
 
     // Step 1: Upload to Supabase and get public link
     const supabaseResult = await uploadToSupabaseAndGetLink(
       videoPath,
-      "Facebook Video"
+      "Facebook Video",
     );
     if (!supabaseResult.success) {
       throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
@@ -706,7 +705,7 @@ const uploadToFacebook = async (videoPath, title, description) => {
 
     if (!pageAccessToken) {
       throw new Error(
-        "Could not obtain page access token. Make sure you're a page admin."
+        "Could not obtain page access token. Make sure you're a page admin.",
       );
     }
 
@@ -761,7 +760,7 @@ const uploadToFacebook = async (videoPath, title, description) => {
     // Clean up Supabase file on error
     if (uploadedFileName) {
       logger.warn(
-        "🧹 Cleaning up Supabase file due to Facebook upload failure..."
+        "🧹 Cleaning up Supabase file due to Facebook upload failure...",
       );
       await deleteFromSupabase(uploadedFileName, SUPABASE_BUCKET);
     }
@@ -787,7 +786,7 @@ const uploadToFacebookWithUrl = async (videoUrl, title, description) => {
     const finalCaption = unifiedContent.caption;
 
     logger.info(
-      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`
+      `📝 Using unified caption for Facebook (${finalCaption.length} chars)`,
     );
 
     // Required environment variables
@@ -796,7 +795,7 @@ const uploadToFacebookWithUrl = async (videoUrl, title, description) => {
 
     if (!accessToken || !pageId) {
       throw new Error(
-        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required"
+        "FACEBOOK_ACCESS_TOKEN and FACEBOOK_PAGE_ID environment variables are required",
       );
     }
 
@@ -809,7 +808,7 @@ const uploadToFacebookWithUrl = async (videoUrl, title, description) => {
 
     if (!pageAccessToken) {
       throw new Error(
-        "Could not obtain page access token. Make sure you're a page admin."
+        "Could not obtain page access token. Make sure you're a page admin.",
       );
     }
 
@@ -870,7 +869,7 @@ const uploadToBothPlatforms = async (
   videoPath,
   title,
   description,
-  scriptContent = ""
+  scriptContent = "",
 ) => {
   let uploadedFileName = null;
 
@@ -883,11 +882,11 @@ const uploadToBothPlatforms = async (
 
     // Step 1: Upload video to Supabase once (shared for Instagram and Facebook)
     logger.info(
-      "☁️ Uploading video to Supabase (shared for Instagram & Facebook)..."
+      "☁️ Uploading video to Supabase (shared for Instagram & Facebook)...",
     );
     const supabaseResult = await uploadToSupabaseAndGetLink(
       videoPath,
-      "Social Media Video"
+      "Social Media Video",
     );
     if (!supabaseResult.success) {
       throw new Error(`Supabase upload failed: ${supabaseResult.error}`);
@@ -916,7 +915,7 @@ const uploadToBothPlatforms = async (
       results.instagram = await uploadToInstagramWithUrl(
         sharedVideoUrl,
         title,
-        description
+        description,
       );
     } catch (error) {
       logger.error("Instagram upload failed:", error);
@@ -928,7 +927,7 @@ const uploadToBothPlatforms = async (
       results.facebook = await uploadToFacebookWithUrl(
         sharedVideoUrl,
         title,
-        description
+        description,
       );
     } catch (error) {
       logger.error("Facebook upload failed:", error);
@@ -986,7 +985,7 @@ const uploadToBothPlatforms = async (
       (uploadSummary.partialSuccess || uploadSummary.allFailed)
     ) {
       logger.info(
-        "📁 Keeping Supabase file for potential retry (partial success or all failed)..."
+        "📁 Keeping Supabase file for potential retry (partial success or all failed)...",
       );
     }
 
@@ -1013,7 +1012,7 @@ const uploadToSupabaseAndGetLink = async (videoPath, title) => {
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error(
-        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required"
+        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required",
       );
     }
 
@@ -1023,7 +1022,7 @@ const uploadToSupabaseAndGetLink = async (videoPath, title) => {
 
     logger.info(`📁 Uploading file: ${fileName}`);
     logger.info(
-      `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`
+      `📊 File size: ${(fileStats.size / (1024 * 1024)).toFixed(2)} MB`,
     );
 
     // Check file size limit (Supabase free tier limit is ~50MB)
@@ -1031,9 +1030,9 @@ const uploadToSupabaseAndGetLink = async (videoPath, title) => {
     if (fileStats.size > maxFileSizeMB * 1024 * 1024) {
       throw new Error(
         `File size ${(fileStats.size / (1024 * 1024)).toFixed(
-          2
+          2,
         )} MB exceeds Supabase limit of ${maxFileSizeMB} MB. ` +
-          `Consider compressing the video or using a different storage solution.`
+          `Consider compressing the video or using a different storage solution.`,
       );
     }
 
@@ -1110,7 +1109,7 @@ const getInstagramPermalink = async (mediaId, instagramAccessToken) => {
     const facebookAccessToken = process.env.FACEBOOK_ACCESS_TOKEN;
     if (!facebookAccessToken) {
       logger.warn(
-        "⚠️ No Facebook access token available for permalink, using constructed URL"
+        "⚠️ No Facebook access token available for permalink, using constructed URL",
       );
       return `https://instagram.com/reel/${mediaId}`;
     }
@@ -1216,7 +1215,7 @@ const getTopicEmoji = (title, description) => {
 const generateTopicExplanation = async (
   title,
   description,
-  scriptContent = ""
+  scriptContent = "",
 ) => {
   try {
     // Generate a comprehensive 70-word explanation of the topic (without repeating the title)
@@ -1230,77 +1229,51 @@ const generateTopicExplanation = async (
 };
 
 /**
- * Generate unified social media caption using Gemini with Groq fallback
+ * Generate unified social media caption using Groq only
  */
 const generateUnifiedSocialMediaCaption = async (title) => {
-  const geminiKeys = [
-    process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY_FOR_VISUALS,
-    process.env.GEMINI_API_KEY_FOR_T2T
-  ].filter(Boolean);
-  const uniqueGeminiKeys = [...new Set(geminiKeys)];
-
   const groqKey = process.env.GROQ_API_KEY;
 
-  let responseText = null;
-  let methodUsed = "";
-
-  // 1. Try Gemini
-  if (uniqueGeminiKeys.length > 0) {
-    for (const key of uniqueGeminiKeys) {
-        try {
-            const genAI = new GoogleGenerativeAI(key);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-            const prompt = `Topic: ${title}
-Task: Generate social media content components. Components:
-THEORY: [A simple 3-5 sentence explanation for students. Under 80 words. No icons. No bold.]
-HASHTAGS: [#hashtag1 #hashtag2 ... #hashtag15 (exactly 15 trending hashtags)]
-KEYWORDS: [word1, word2, word3, word4, word5 (exactly 5 raw defining keywords)]
-Format strictly. Simple English. No filler.`;
-
-            const result = await model.generateContent(prompt);
-            if (result && result.response) {
-                responseText = result.response.text().trim();
-                methodUsed = "Gemini";
-                break;
-            }
-        } catch (e) {
-            logger.warn(`⚠️ Caption Gemini failed: ${e.message.substring(0, 50)}`);
-        }
-    }
+  if (!groqKey) {
+    logger.warn("⚠️ GROQ_API_KEY is missing for caption service.");
   }
 
-  // 2. Try Groq as fallback
-  if (!responseText && groqKey) {
+  let responseText = null;
+  const methodUsed = "Groq";
+
+  if (groqKey) {
     try {
-        const Groq = require("groq-sdk");
-        const groq = new Groq({ apiKey: groqKey });
-        
-        const prompt = `Topic: ${title}
+      const Groq = require("groq-sdk");
+      const groq = new Groq({ apiKey: groqKey });
+
+      const prompt = `Topic: ${title}
 Task: Generate components for a social media post about this topic.
 Format:
 THEORY: [Explanation]
-HASHTAGS: [#tag1 #tag2 ...]
-KEYWORDS: [word1, word2, ...]
+HASHTAGS: [#tag1 #tag2 ... #tag15]
+KEYWORDS: [word1, word2, word3, word4, word5]
 
-Rules: 15 hashtags, 5 keywords, theory under 80 words. Simple English.`;
+Rules:
+- Exactly 15 hashtags
+- Exactly 5 keywords
+- Theory under 80 words
+- Simple English
+- No markdown`;
 
-        const chatCompletion = await groq.chat.completions.create({
-            messages: [{ role: "user", content: prompt }],
-            model: "llama-3.3-70b-versatile", // Updated from decommissioned llama3-8b-8192
-        });
-        
-        responseText = chatCompletion.choices[0].message.content.trim();
-        methodUsed = "Groq";
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: "llama-3.3-70b-versatile",
+      });
+
+      responseText = chatCompletion.choices[0].message.content.trim();
     } catch (e) {
-        logger.error(`❌ Groq fallback failed: ${e.message}`);
+      logger.error(`❌ Groq caption generation failed: ${e.message}`);
     }
   }
 
   try {
     if (!responseText) {
-        throw new Error("All AI platforms failed to generate content.");
+      throw new Error("All AI platforms failed to generate content.");
     }
 
     // Parse the consolidated response
@@ -1308,10 +1281,17 @@ Rules: 15 hashtags, 5 keywords, theory under 80 words. Simple English.`;
     const hashtagsMatch = responseText.match(/HASHTAGS:\s*(.*)/i);
     const keywordsMatch = responseText.match(/KEYWORDS:\s*(.*)/i);
 
-    const theory = theoryMatch ? theoryMatch[1].trim() : "Educational content about " + title;
-    const hashtags = hashtagsMatch ? hashtagsMatch[1].trim() : "#education #learning #facts";
+    const theory = theoryMatch
+      ? theoryMatch[1].trim()
+      : "Educational content about " + title;
+    const hashtags = hashtagsMatch
+      ? hashtagsMatch[1].trim()
+      : "#education #learning #facts";
     const rawKeywords = keywordsMatch ? keywordsMatch[1].trim() : title;
-    const bracketedKeywords = `[${rawKeywords.split(',').map(s => s.trim()).join(', ')}]`;
+    const bracketedKeywords = `[${rawKeywords
+      .split(",")
+      .map((s) => s.trim())
+      .join(", ")}]`;
 
     // Create the unified caption
     const unifiedCaption = `${title}
@@ -1334,11 +1314,15 @@ ${bracketedKeywords}
       title: title,
     };
   } catch (error) {
-    logger.error("❌ Final caption failure, using hardcoded fallback:", error.message);
+    logger.error(
+      "❌ Final caption failure, using hardcoded fallback:",
+      error.message,
+    );
 
     // Final Fallback
     const fallbackTheory = `This topic explores fundamental concepts and practical applications in this field.`;
-    const fallbackHashtags = "#education #learning #knowledge #tutorial #educational #facts";
+    const fallbackHashtags =
+      "#education #learning #knowledge #tutorial #educational #facts";
     const fallbackCaption = `${title}\n\n${fallbackTheory}\n\n${fallbackHashtags}\n\n❤️ Like • 📚 Follow!`;
 
     return {
@@ -1366,4 +1350,3 @@ module.exports = {
   generateTopicExplanation,
   generateUnifiedSocialMediaCaption,
 };
-
