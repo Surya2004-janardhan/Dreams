@@ -70,6 +70,14 @@ jobs:
           pip install -r voicebox/requirements.txt
           pip install -r wav2lip/requirements.txt
 
+      - name: Validate Required Cover Asset
+        run: |
+          if [ ! -f assets/cover.png ]; then
+            echo "❌ Missing required file: assets/cover.png"
+            exit 1
+          fi
+          echo "✅ Found assets/cover.png"
+
       - name: Run Daily Automation
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -82,6 +90,7 @@ jobs:
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL_LOCAL }}
           ASSEMBLYAI_API_KEY: ${{ secrets.ASSEMBLYAI_API_KEY }}
           SUPABASE_BUCKET: ${{ secrets.SUPABASE_BUCKET }}
+          COVER_INTRO_DURATION_SEC: "1"
           USE_PREMIUM_WAV2LIP: "true"
           FORCE_CPU: "true"
         run: node src/local-support/automation_logic.js

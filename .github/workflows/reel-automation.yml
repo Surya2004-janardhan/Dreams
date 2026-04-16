@@ -73,6 +73,14 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install chromium --with-deps
 
+      - name: Validate Required Cover Asset
+        run: |
+          if [ ! -f assets/cover.png ]; then
+            echo "❌ Missing required file: assets/cover.png"
+            exit 1
+          fi
+          echo "✅ Found assets/cover.png"
+
       - name: Run Reels Automation Pipeline
         run: |
           cd reel-composer && npm run dev -- --port 3000 &
@@ -98,6 +106,7 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
           FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
           FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
+          COVER_INTRO_DURATION_SEC: "1"
           USE_PREMIUM_WAV2LIP: ${{ secrets.USE_PREMIUM_WAV2LIP }}
           FORCE_CPU: "true"
 
