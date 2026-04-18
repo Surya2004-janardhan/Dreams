@@ -4,26 +4,26 @@ const logger = require("../config/logger");
 // Initialize Gemini
 // gemini-2.0-flash only use 1.5 flash fix it
 const MODEL_ID = "gemini-2.5-flash"; // User requested 2.5 flash dont change
-const VISUALS_MODEL_ID = "gemini-2.5-flash";  // user requested 2.5 pro dont change
+const VISUALS_MODEL_ID = "gemini-2.5-pro"; // user requested 2.5 pro dont change
 
 // gemini-3.1-flash-lite-preview
 // gemini-2.5-pro
 
 const getModel = () => {
-    const keys = [
-        process.env.GEMINI_API_KEY,
-        process.env.GEMINI_API_KEY_FOR_VISUALS,
-        process.env.GEMINI_API_KEY_FOR_T2T
-    ].filter(Boolean);
-    const uniqueKeys = [...new Set(keys)];
-    
-    // Default to the first key for the initial instance
-    const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
-    const initialGenAI = new GoogleGenerativeAI(initialKey);
-    return { 
-        model: initialGenAI.getGenerativeModel({ model: MODEL_ID }),
-        keys: uniqueKeys 
-    };
+  const keys = [
+    process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_FOR_VISUALS,
+    process.env.GEMINI_API_KEY_FOR_T2T,
+  ].filter(Boolean);
+  const uniqueKeys = [...new Set(keys)];
+
+  // Default to the first key for the initial instance
+  const initialKey = uniqueKeys[0] || process.env.GEMINI_API_KEY;
+  const initialGenAI = new GoogleGenerativeAI(initialKey);
+  return {
+    model: initialGenAI.getGenerativeModel({ model: MODEL_ID }),
+    keys: uniqueKeys,
+  };
 };
 
 let { keys } = getModel();
@@ -32,25 +32,32 @@ let { keys } = getModel();
  * Helper to retry a function with different API keys on failure.
  */
 async function retryWithFallback(fn, modelId = MODEL_ID) {
-    let lastError;
-    
-    // 1. Try Gemini Keys
-    for (const key of keys) {
-        try {
-            const genAI = new GoogleGenerativeAI(key);
-            const currentModel = genAI.getGenerativeModel({ model: modelId });
-            return await fn(currentModel);
-        } catch (e) {
-            lastError = e;
-            const msg = e.message || "";
-            if (msg.includes("API_KEY_INVALID") || msg.includes("expired") || msg.includes("429") || msg.includes("fetch")) {
-                logger.warn(`⚠️ Gemini Key failed, trying next... Error: ${msg.substring(0, 50)}`);
-                continue;
-            }
-            throw e; 
-        }
+  let lastError;
+
+  // 1. Try Gemini Keys
+  for (const key of keys) {
+    try {
+      const genAI = new GoogleGenerativeAI(key);
+      const currentModel = genAI.getGenerativeModel({ model: modelId });
+      return await fn(currentModel);
+    } catch (e) {
+      lastError = e;
+      const msg = e.message || "";
+      if (
+        msg.includes("API_KEY_INVALID") ||
+        msg.includes("expired") ||
+        msg.includes("429") ||
+        msg.includes("fetch")
+      ) {
+        logger.warn(
+          `⚠️ Gemini Key failed, trying next... Error: ${msg.substring(0, 50)}`,
+        );
+        continue;
+      }
+      throw e;
     }
-    throw lastError;
+  }
+  throw lastError;
 }
 
 /**
@@ -82,45 +89,60 @@ const generateScript = async (topic, description = "") => {
   let script;
   try {
     script = await retryWithFallback(async (m) => {
-        const result = await m.generateContent(prompt);
-        const response = await result.response;
-        return response.text().trim();
+      const result = await m.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim();
     }, MODEL_ID);
   } catch (error) {
     logger.warn(`⚠️ Script Gemini failed, trying Groq fallback...`);
     if (process.env.GROQ_API_KEY) {
-        try {
-            const Groq = require("groq-sdk");
-            const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-            const chatCompletion = await groq.chat.completions.create({
-                messages: [{ role: "user", content: prompt + "\nRespond with ONLY the script text." }],
-                model: "llama-3.3-70b-versatile",
-            });
-            script = chatCompletion.choices[0].message.content.trim();
-            logger.info("✨ Script generated via Groq fallback");
-        } catch (groqErr) {
-            logger.error("❌ Groq fallback also failed for script:", groqErr.message);
-            throw error; // Throw original Gemini error if Groq also fails
-        }
+      try {
+        const Groq = require("groq-sdk");
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: "user",
+              content: prompt + "\nRespond with ONLY the script text.",
+            },
+          ],
+          model: "llama-3.3-70b-versatile",
+        });
+        script = chatCompletion.choices[0].message.content.trim();
+        logger.info("✨ Script generated via Groq fallback");
+      } catch (groqErr) {
+        logger.error(
+          "❌ Groq fallback also failed for script:",
+          groqErr.message,
+        );
+        throw error; // Throw original Gemini error if Groq also fails
+      }
     } else {
-        throw new Error(`Script generation failed. Gemini unavailable (${error.message}) and GROQ_API_KEY is missing for fallback.`);
+      throw new Error(
+        `Script generation failed. Gemini unavailable (${error.message}) and GROQ_API_KEY is missing for fallback.`,
+      );
     }
   }
 
   // Aggressive cleanup: remove any lines that look like meta-explanation
-  const lines = script.split('\n');
-  const filteredLines = lines.filter(line => {
+  const lines = script.split("\n");
+  const filteredLines = lines.filter((line) => {
     const lower = line.toLowerCase();
-    if (lower.includes('here is') && lower.includes('script')) return false;
-    if (lower.includes('word count') || lower.includes('words long')) return false;
-    if (lower.startsWith('note:') || lower.startsWith('script:')) return false;
+    if (lower.includes("here is") && lower.includes("script")) return false;
+    if (lower.includes("word count") || lower.includes("words long"))
+      return false;
+    if (lower.startsWith("note:") || lower.startsWith("script:")) return false;
     return true;
   });
 
-  let finalScript = filteredLines.join(' ').trim();
-  finalScript = finalScript.replace(/\[.*?\]/g, '').replace(/\*+/g, '').replace(/Hook:|Gap:|Value:|Loop:/gi, '').trim();
+  let finalScript = filteredLines.join(" ").trim();
+  finalScript = finalScript
+    .replace(/\[.*?\]/g, "")
+    .replace(/\*+/g, "")
+    .replace(/Hook:|Gap:|Value:|Loop:/gi, "")
+    .trim();
 
-  const wordCount = finalScript.split(/\s+/).filter(w => w.length > 0).length;
+  const wordCount = finalScript.split(/\s+/).filter((w) => w.length > 0).length;
   logger.info(`✨ Viral Script generated (Word count: ${wordCount})`);
   return finalScript;
 };
@@ -129,8 +151,8 @@ const generateScript = async (topic, description = "") => {
  * Generates a high-fidelity visual animation storyboard prompt for technical reels.
  */
 const generateVisualPrompt = async (topic, scriptText) => {
-    const MAX_RETRIES = 3;
-    const prompt = `
+  const MAX_RETRIES = 3;
+  const prompt = `
     Task: Create a clear and simple visual plan for a technical reel.
     Topic: ${topic}
     Script: ${scriptText}
@@ -152,37 +174,43 @@ const generateVisualPrompt = async (topic, scriptText) => {
     - Focus on clear actions like "Show a spinning icon".
     `;
 
-    try {
-        const visualDescription = await retryWithFallback(async (m) => {
-            const result = await m.generateContent(prompt);
-            const response = await result.response;
-            return response.text().trim();
-        }, VISUALS_MODEL_ID);
+  try {
+    const visualDescription = await retryWithFallback(async (m) => {
+      const result = await m.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim();
+    }, VISUALS_MODEL_ID);
+    return visualDescription;
+  } catch (e) {
+    logger.warn(`⚠️ Visual prompt Gemini failed, trying Groq fallback...`);
+    if (process.env.GROQ_API_KEY) {
+      try {
+        const Groq = require("groq-sdk");
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        const chatCompletion = await groq.chat.completions.create({
+          messages: [{ role: "user", content: prompt }],
+          model: "llama-3.3-70b-versatile",
+        });
+        const visualDescription =
+          chatCompletion.choices[0].message.content.trim();
+        logger.info("🎨 Visual prompt generated via Groq fallback");
         return visualDescription;
-    } catch (e) {
-        logger.warn(`⚠️ Visual prompt Gemini failed, trying Groq fallback...`);
-        if (process.env.GROQ_API_KEY) {
-            try {
-                const Groq = require("groq-sdk");
-                const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-                const chatCompletion = await groq.chat.completions.create({
-                    messages: [{ role: "user", content: prompt }],
-                    model: "llama-3.3-70b-versatile",
-                });
-                const visualDescription = chatCompletion.choices[0].message.content.trim();
-                logger.info("🎨 Visual prompt generated via Groq fallback");
-                return visualDescription;
-            } catch (groqErr) {
-                logger.error("❌ Groq fallback also failed for visual prompt:", groqErr.message);
-            }
-        } else {
-            throw new Error(`Visual prompt generation failed. Gemini unavailable (${e.message}) and GROQ_API_KEY is missing for fallback.`);
-        }
-        throw e;
+      } catch (groqErr) {
+        logger.error(
+          "❌ Groq fallback also failed for visual prompt:",
+          groqErr.message,
+        );
+      }
+    } else {
+      throw new Error(
+        `Visual prompt generation failed. Gemini unavailable (${e.message}) and GROQ_API_KEY is missing for fallback.`,
+      );
     }
+    throw e;
+  }
 };
 
 module.exports = {
   generateScript,
-  generateVisualPrompt
+  generateVisualPrompt,
 };
