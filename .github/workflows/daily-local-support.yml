@@ -81,6 +81,7 @@ jobs:
       - name: Run Daily Automation
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GOOGLE_SHEET_ID: ${{ secrets.SHEET_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

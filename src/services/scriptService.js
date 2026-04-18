@@ -103,7 +103,7 @@ const generateScript = async (topic, description = "") => {
             throw error; // Throw original Gemini error if Groq also fails
         }
     } else {
-        throw error;
+        throw new Error(`Script generation failed. Gemini unavailable (${error.message}) and GROQ_API_KEY is missing for fallback.`);
     }
   }
 
@@ -175,6 +175,8 @@ const generateVisualPrompt = async (topic, scriptText) => {
             } catch (groqErr) {
                 logger.error("❌ Groq fallback also failed for visual prompt:", groqErr.message);
             }
+        } else {
+            throw new Error(`Visual prompt generation failed. Gemini unavailable (${e.message}) and GROQ_API_KEY is missing for fallback.`);
         }
         throw e;
     }
