@@ -182,30 +182,7 @@ const generateVisualPrompt = async (topic, scriptText) => {
     }, VISUALS_MODEL_ID);
     return visualDescription;
   } catch (e) {
-    logger.warn(`⚠️ Visual prompt Gemini failed, trying Groq fallback...`);
-    if (process.env.GROQ_API_KEY) {
-      try {
-        const Groq = require("groq-sdk");
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const chatCompletion = await groq.chat.completions.create({
-          messages: [{ role: "user", content: prompt }],
-          model: "llama-3.3-70b-versatile",
-        });
-        const visualDescription =
-          chatCompletion.choices[0].message.content.trim();
-        logger.info("🎨 Visual prompt generated via Groq fallback");
-        return visualDescription;
-      } catch (groqErr) {
-        logger.error(
-          "❌ Groq fallback also failed for visual prompt:",
-          groqErr.message,
-        );
-      }
-    } else {
-      throw new Error(
-        `Visual prompt generation failed. Gemini unavailable (${e.message}) and GROQ_API_KEY is missing for fallback.`,
-      );
-    }
+    logger.error(`❌ Visual prompt Gemini failed: ${e.message}`);
     throw e;
   }
 };
