@@ -401,3 +401,517 @@ Think of it as four engines chained together:
 
 Everything else (config, cleanup, workflows, bin scripts) exists to keep these four engines running repeatedly in unattended automation mode.
 
+==========================================
+META INSTAGRAM GRAPH API SETUP GUIDE
+(Flashes Project - Final Working Setup)
+==========================================
+
+GOAL
+-----
+Use ONLY the official Meta Graph API to publish Instagram and Facebook posts.
+
+No private APIs.
+No Selenium.
+No Playwright.
+No unofficial Instagram endpoints.
+
+==========================================
+WHAT WAS WRONG EARLIER
+==========================================
+
+1. We were troubleshooting the wrong flow.
+
+I initially focused on:
+
+    API Setup with Instagram Login
+
+because Meta's UI prominently shows it.
+
+That flow is primarily for:
+- Instagram Login
+- Messaging
+- Comments
+- Instagram authentication
+
+It is NOT the flow my publishing code (Dreams project) uses.
+
+------------------------------------------
+
+2. We kept getting:
+
+    Insufficient Developer Role
+
+This error came from the Instagram Login flow.
+
+It was NOT because:
+❌ App Roles
+❌ Business Manager
+❌ Facebook Page
+❌ Admin Access
+
+We verified all of these were already correct.
+
+------------------------------------------
+
+3. We also thought permissions were missing.
+
+Initially:
+
+Graph API Explorer
+did not show
+
+instagram_basic
+instagram_content_publish
+
+because those permissions had never been added through:
+
+API Setup with Facebook Login
+
+==========================================
+WHAT WAS ALREADY CORRECT
+==========================================
+
+✔ Facebook Page existed
+
+Page ID
+
+1217085101494727
+
+------------------------------------------
+
+✔ Instagram Professional Account existed
+
+@flashes24.7
+
+------------------------------------------
+
+✔ Instagram linked to Facebook Page
+
+Verified.
+
+------------------------------------------
+
+✔ Business Portfolio
+
+Flashes Flash
+
+had Full Access.
+
+------------------------------------------
+
+✔ App Administrator
+
+Flashes Flash
+
+was Administrator.
+
+------------------------------------------
+
+✔ Page Access Token worked
+
+GET /me/accounts
+
+returned
+
+Page ID
+Page Access Token
+
+successfully.
+
+==========================================
+THE ACTUAL FIX
+==========================================
+
+Step 1
+
+Go to
+
+Use Cases
+
+↓
+
+Manage messaging & content on Instagram
+
+↓
+
+Customize
+
+------------------------------------------
+
+Step 2
+
+IGNORE
+
+API setup with Instagram login
+
+for publishing.
+
+Instead use
+
+API setup with Facebook login
+
+because Graph API publishing uses Facebook Login.
+
+==========================================
+STEP 3
+==========================================
+
+Inside
+
+API setup with Facebook login
+
+click
+
+Add required content permissions
+
+This automatically added:
+
+instagram_basic
+
+instagram_content_publish
+
+pages_show_list
+
+pages_read_engagement
+
+business_management
+
+==========================================
+STEP 4
+==========================================
+
+Open
+
+Permissions and Features
+
+Verify these permissions exist.
+
+Mine finally showed
+
+Ready for testing
+
+for
+
+instagram_basic
+
+instagram_business_basic
+
+instagram_business_content_publish
+
+business_management
+
+==========================================
+STEP 5
+==========================================
+
+Open
+
+Graph API Explorer
+
+https://developers.facebook.com/tools/explorer/
+
+==========================================
+STEP 6
+==========================================
+
+Generate User Token
+
+with permissions
+
+instagram_basic
+
+instagram_content_publish
+
+pages_show_list
+
+pages_read_engagement
+
+pages_manage_posts
+
+business_management
+
+==========================================
+STEP 7
+==========================================
+
+Verify permissions
+
+GET
+
+/me/permissions
+
+Mine returned
+
+instagram_basic
+
+instagram_content_publish
+
+pages_show_list
+
+pages_read_engagement
+
+pages_manage_posts
+
+business_management
+
+public_profile
+
+All
+
+status
+
+granted
+
+==========================================
+STEP 8
+==========================================
+
+Get Page
+
+GET
+
+/me/accounts
+
+Response returned
+
+Page ID
+
+1217085101494727
+
+and
+
+Page Access Token
+
+==========================================
+STEP 9
+==========================================
+
+VERY IMPORTANT
+
+Use
+
+PAGE ACCESS TOKEN
+
+NOT
+
+User Access Token
+
+for Instagram publishing.
+
+==========================================
+STEP 10
+==========================================
+
+Run
+
+GET
+
+/{PAGE_ID}?fields=instagram_business_account
+
+Mine returned
+
+{
+    "instagram_business_account": {
+        "id":"17841441862040968"
+    }
+}
+
+SUCCESS
+
+==========================================
+FINAL CONFIG
+==========================================
+
+Facebook Page ID
+
+1217085101494727
+
+------------------------------------------
+
+Instagram Business Account ID
+
+17841441862040968
+
+------------------------------------------
+
+Access Token
+
+Page Access Token
+
+NOT
+
+User Token
+
+==========================================
+OFFICIAL GRAPH API FLOW
+==========================================
+
+User Login
+
+↓
+
+User Access Token
+
+↓
+
+GET /me/accounts
+
+↓
+
+Page Access Token
+
+↓
+
+GET
+/{page-id}?fields=instagram_business_account
+
+↓
+
+Instagram Business Account ID
+
+↓
+
+POST
+/{ig-user-id}/media
+
+↓
+
+POST
+/{ig-user-id}/media_publish
+
+↓
+
+GET
+/{media-id}?fields=permalink
+
+==========================================
+REQUIRED PERMISSIONS
+==========================================
+
+instagram_basic
+
+instagram_content_publish
+
+pages_show_list
+
+pages_read_engagement
+
+pages_manage_posts
+
+business_management
+
+==========================================
+REQUIRED IDS
+==========================================
+
+FACEBOOK_PAGE_ID
+
+1217085101494727
+
+------------------------------------------
+
+INSTAGRAM_ACCOUNT_ID
+
+17841441862040968
+
+==========================================
+TOKENS
+==========================================
+
+For Instagram Graph API
+
+Always use
+
+PAGE ACCESS TOKEN
+
+obtained from
+
+GET /me/accounts
+
+==========================================
+OFFICIAL ENDPOINTS
+==========================================
+
+Create Container
+
+POST
+
+/{ig-user-id}/media
+
+------------------------------------------
+
+Publish
+
+POST
+
+/{ig-user-id}/media_publish
+
+------------------------------------------
+
+Permalink
+
+GET
+
+/{media-id}?fields=permalink
+
+------------------------------------------
+
+Get Page
+
+GET
+
+/me/accounts
+
+------------------------------------------
+
+Get Instagram ID
+
+GET
+
+/{page-id}?fields=instagram_business_account
+
+==========================================
+WHAT MY DREAMS PROJECT USES
+==========================================
+
+Official Meta Graph API
+
+https://graph.facebook.com/v23.0
+
+Endpoints
+
+POST /{ig-user-id}/media
+
+POST /{ig-user-id}/media_publish
+
+GET /{media-id}?fields=permalink
+
+NO PRIVATE API
+
+NO SCRAPING
+
+NO PLAYWRIGHT
+
+NO SELENIUM
+
+NO REVERSE ENGINEERING
+
+==========================================
+LESSON LEARNED
+==========================================
+
+If the goal is Instagram publishing:
+
+DO NOT troubleshoot the
+"Instagram Login" flow first.
+
+Instead:
+
+1. Configure "API setup with Facebook login".
+2. Add the required Graph API permissions.
+3. Generate a User Access Token with those permissions.
+4. Use /me/accounts to obtain a Page Access Token.
+5. Use the Page Access Token to retrieve the Instagram Business Account ID.
+6. Publish through the Instagram Graph API.
+
+That is the official Meta-recommended publishing flow and matches the implementation used in the Dreams project.
